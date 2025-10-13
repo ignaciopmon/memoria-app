@@ -1,3 +1,4 @@
+// components/deck-card.tsx
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,19 +34,15 @@ export function DeckCard({ deck }: DeckCardProps) {
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
 
-const handleDelete = async () => {
+  const handleDelete = async () => {
     setIsDeleting(true)
     const supabase = createClient()
-
     try {
-      // Soft delete: set the 'deleted_at' timestamp
       const { error } = await supabase
         .from("decks")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", deck.id)
-
       if (error) throw error
-
       router.refresh()
     } catch (error) {
       console.error("Error sending deck to trash:", error)
@@ -73,7 +70,7 @@ const handleDelete = async () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete deck?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. All cards associated with this deck will be deleted.
+                  This action will move the deck and all its cards to the trash. You can restore them later.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -81,7 +78,7 @@ const handleDelete = async () => {
                 <AlertDialogAction
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive hover:bg-destructive/90"
                 >
                   {isDeleting ? "Deleting..." : "Delete"}
                 </AlertDialogAction>
@@ -90,18 +87,18 @@ const handleDelete = async () => {
           </AlertDialog>
         </div>
       </CardHeader>
-      <CardContent className="flex-1">
+      <CardContent className="flex flex-1 flex-col justify-between">
         <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
           <BookOpen className="h-4 w-4" />
           <span>{deck.cardCount} cards</span>
         </div>
-<div className="flex gap-2">
+
+        {/* === SECCIÓN DE BOTONES CORREGIDA === */}
+        <div className="flex flex-col gap-2">
           {deck.cardCount > 0 && (
-            <>
+            <div className="flex gap-2">
               <Button asChild className="flex-1" variant="outline">
-                <Link href={`/practice/${deck.id}`}>
-                  Practice
-                </Link>
+                <Link href={`/practice/${deck.id}`}>Practice</Link>
               </Button>
               <Button asChild className="flex-1">
                 <Link href={`/study/${deck.id}`}>
@@ -109,12 +106,14 @@ const handleDelete = async () => {
                   Study
                 </Link>
               </Button>
-            </>
+            </div>
           )}
-          <Button asChild className={deck.cardCount > 0 ? "w-full mt-2" : "flex-1"} variant={deck.cardCount > 0 ? "ghost" : "outline"}>
+          <Button asChild className="w-full" variant={deck.cardCount > 0 ? "ghost" : "outline"}>
             <Link href={`/deck/${deck.id}`}>View Cards</Link>
           </Button>
         </div>
+        {/* === FIN DE LA SECCIÓN CORREGIDA === */}
+
       </CardContent>
     </Card>
   )
