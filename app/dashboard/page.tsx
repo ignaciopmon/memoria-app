@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Brain, BookOpen } from "lucide-react"
 import { CreateDeckDialog } from "@/components/create-deck-dialog"
 import { DeckCard } from "@/components/deck-card"
+import Link from "next/link" // <--- ¡AQUÍ ESTÁ LA LÍNEA QUE FALTABA!
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -39,26 +40,25 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-<header className="border-b">
-  <div className="container mx-auto flex h-16 items-center justify-between px-4">
-    <div className="flex items-center gap-2">
-      <Brain className="h-6 w-6" />
-      <span className="text-xl font-bold">Memoria</span>
-    </div>
-    <div className="flex items-center gap-4">
-      <span className="text-sm text-muted-foreground">{user.email}</span>
-      {/* AÑADE ESTE BOTÓN/ENLACE */}
-      <Button variant="ghost" size="sm" asChild>
-        <Link href="/settings">Settings</Link>
-      </Button>
-      <form action="/auth/signout" method="post">
-        <Button variant="ghost" size="sm" type="submit">
-          Sign Out
-        </Button>
-      </form>
-    </div>
-  </div>
-</header>
+      <header className="border-b">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <Brain className="h-6 w-6" />
+            <span className="text-xl font-bold">Memoria</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground">{user.email}</span>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/settings">Settings</Link>
+            </Button>
+            <form action="/auth/signout" method="post">
+              <Button variant="ghost" size="sm" type="submit">
+                Sign Out
+              </Button>
+            </form>
+          </div>
+        </div>
+      </header>
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8">
