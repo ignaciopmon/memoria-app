@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Brain, ArrowLeft, CheckCircle } from "lucide-react"
@@ -25,6 +25,13 @@ interface StudySessionProps {
   }>
 }
 
+interface UserSettings {
+    again_interval_minutes: number
+    hard_interval_days: number
+    good_interval_days: number
+    easy_interval_days: number
+}
+
 type Rating = 1 | 2 | 3 | 4
 
 export function StudySession({ deck, initialCards }: StudySessionProps) {
@@ -32,38 +39,61 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .single()
+        setUserSettings(data)
+      }
+    }
+    fetchSettings()
+  }, [])
 
   const currentCard = cards[currentIndex]
   const progress = (currentIndex / cards.length) * 100 || 0
   const isComplete = currentIndex >= cards.length
 
-  // SM-2 Algorithm implementation
   const calculateNextReview = (card: (typeof cards)[0], rating: Rating) => {
     let { ease_factor, interval, repetitions } = card
 
-    if (rating === 1) {
-      // Again - Reset the card
-      repetitions = 0
-      interval = 0
-    } else {
-      // Update ease factor based on rating
-      ease_factor = Math.max(1.3, ease_factor + (0.1 - (4 - rating) * (0.08 + (4 - rating) * 0.02)))
+    const settings = {
+        again: userSettings?.again_interval_minutes ?? 1,
+        hard: userSettings?.hard_interval_days ?? 1,
+        good: userSettings?.good_interval_days ?? 3,
+        easy: userSettings?.easy_interval_days ?? 7,
+    }
 
+    if (rating < 3) { // Again or Hard
+      repetitions = 0
+      interval = rating === 1 ? 0 : 1 // Reset for 'Again', start fresh for 'Hard'
+    } else { // Good or Easy
       if (repetitions === 0) {
-        interval = 1
+        interval = settings.good
       } else if (repetitions === 1) {
-        interval = 6
+        interval = settings.easy
       } else {
         interval = Math.round(interval * ease_factor)
       }
-
       repetitions += 1
     }
 
-    // Calculate next review date
+    ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02)))
+
     const nextReviewDate = new Date()
-    nextReviewDate.setDate(nextReviewDate.getDate() + interval)
+    if (rating === 1) {
+        nextReviewDate.setMinutes(nextReviewDate.getMinutes() + settings.again)
+    } else {
+        nextReviewDate.setDate(nextReviewDate.getDate() + interval)
+    }
 
     return {
       ease_factor,
@@ -82,7 +112,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     try {
       const updates = calculateNextReview(currentCard, rating)
 
-      // Update card with new SRS values
       const { error: updateError } = await supabase
         .from("cards")
         .update({
@@ -93,7 +122,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
       if (updateError) throw updateError
 
-      // Record the review
       const { error: reviewError } = await supabase.from("card_reviews").insert({
         card_id: currentCard.id,
         rating,
@@ -101,7 +129,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
       if (reviewError) throw reviewError
 
-      // Move to next card
       setCurrentIndex((prev) => prev + 1)
       setShowAnswer(false)
     } catch (error) {
@@ -110,6 +137,15 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const getIntervalText = (rating: Rating): string => {
+    if (!userSettings) return "" // Return empty string while settings are loading
+    if (rating === 1) return `< ${userSettings.again_interval_minutes}m`
+    if (rating === 2) return `${userSettings.hard_interval_days}d`
+    if (rating === 3) return `${userSettings.good_interval_days}d`
+    if (rating === 4) return `> ${userSettings.easy_interval_days}d`
+    return ""
   }
 
   if (cards.length === 0) {
@@ -123,7 +159,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
             </div>
           </div>
         </header>
-
         <main className="flex flex-1 items-center justify-center">
           <div className="container mx-auto max-w-2xl px-4 text-center">
             <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-500" />
@@ -149,13 +184,12 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
             </div>
           </div>
         </header>
-
         <main className="flex flex-1 items-center justify-center">
           <div className="container mx-auto max-w-2xl px-4 text-center">
             <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-500" />
             <h1 className="mb-2 text-3xl font-bold">Session complete!</h1>
             <p className="mb-6 text-muted-foreground">
-              You have reviewed {cards.length} card{cards.length !== 1 ? "s" : ""}
+              You have reviewed {cards.length} card{cards.length !== 1 ? "s" : ""}.
             </p>
             <div className="flex justify-center gap-4">
               <Button asChild variant="outline">
@@ -204,7 +238,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                 <p className="mb-2 text-xs font-medium text-muted-foreground">QUESTION</p>
                 <h2 className="text-balance text-2xl font-semibold">{currentCard.front}</h2>
               </div>
-
               {showAnswer && (
                 <div className="border-t pt-6 text-center">
                   <p className="mb-2 text-xs font-medium text-muted-foreground">ANSWER</p>
@@ -231,7 +264,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   disabled={isSubmitting}
                 >
                   <span className="text-lg font-semibold">Again</span>
-                  <span className="text-xs text-muted-foreground">&lt; 1 day</span>
+                  <span className="text-xs text-muted-foreground">{getIntervalText(1)}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -240,7 +273,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   disabled={isSubmitting}
                 >
                   <span className="text-lg font-semibold">Hard</span>
-                  <span className="text-xs text-muted-foreground">1-3 days</span>
+                  <span className="text-xs text-muted-foreground">{getIntervalText(2)}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -249,7 +282,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   disabled={isSubmitting}
                 >
                   <span className="text-lg font-semibold">Good</span>
-                  <span className="text-xs text-muted-foreground">3-7 days</span>
+                  <span className="text-xs text-muted-foreground">{getIntervalText(3)}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -258,7 +291,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   disabled={isSubmitting}
                 >
                   <span className="text-lg font-semibold">Easy</span>
-                  <span className="text-xs text-muted-foreground">&gt; 7 days</span>
+                  <span className="text-xs text-muted-foreground">{getIntervalText(4)}</span>
                 </Button>
               </div>
             </div>

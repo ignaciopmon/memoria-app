@@ -39,22 +39,26 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <Brain className="h-6 w-6" />
-            <span className="text-xl font-bold">Memoria</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">{user.email}</span>
-            <form action="/auth/signout" method="post">
-              <Button variant="ghost" size="sm" type="submit">
-                Sign Out
-              </Button>
-            </form>
-          </div>
-        </div>
-      </header>
+<header className="border-b">
+  <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <div className="flex items-center gap-2">
+      <Brain className="h-6 w-6" />
+      <span className="text-xl font-bold">Memoria</span>
+    </div>
+    <div className="flex items-center gap-4">
+      <span className="text-sm text-muted-foreground">{user.email}</span>
+      {/* AÑADE ESTE BOTÓN/ENLACE */}
+      <Button variant="ghost" size="sm" asChild>
+        <Link href="/settings">Settings</Link>
+      </Button>
+      <form action="/auth/signout" method="post">
+        <Button variant="ghost" size="sm" type="submit">
+          Sign Out
+        </Button>
+      </form>
+    </div>
+  </div>
+</header>
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8">
