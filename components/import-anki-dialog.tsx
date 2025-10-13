@@ -20,7 +20,7 @@ interface ImportAnkiDialogProps {
   deckId: string
 }
 
-interface AnkiCard {
+interface TxtCard {
   front: string
   back: string
 }
@@ -32,83 +32,24 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
   const [error, setError] = useState<string | null>(null)
   const [importSuccess, setImportSuccess] = useState(false)
   const [importedCount, setImportedCount] = useState(0)
-  const [previewCards, setPreviewCards] = useState<AnkiCard[]>([])
+  const [previewCards, setPreviewCards] = useState<TxtCard[]>([])
   const router = useRouter()
 
-  const stripHtml = (html: string): string => {
-    // Remove HTML tags and decode entities
-    const tmp = document.createElement("DIV")
-    tmp.innerHTML = html
-    return tmp.textContent || tmp.innerText || ""
-  }
-
-  const parseAnkiFile = async (file: File): Promise<AnkiCard[]> => {
-    try {
-      // Dynamically import JSZip and sql.js
-      const JSZip = (await import("jszip")).default
-      const initSqlJs = (await import("sql.js")).default
-
-      // Unzip the file
-      const zip = await JSZip.loadAsync(file)
-
-      // Find the database file (can be collection.anki2, collection.anki21, or collection.anki21b)
-      const dbFile = zip.file("collection.anki2") || zip.file("collection.anki21") || zip.file("collection.anki21b")
-
-      if (!dbFile) {
-        throw new Error("No se encontró la base de datos de Anki en el archivo")
-      }
-
-      // Get the database as array buffer
-      const dbData = await dbFile.async("uint8array")
-
-      // Initialize SQL.js
-      const SQL = await initSqlJs({
-        locateFile: (file) => `https://sql.js.org/dist/${file}`,
-      })
-
-      // Open the database
-      const db = new SQL.Database(dbData)
-
-      // Query notes and cards
-      // Anki schema: notes table has id, flds (fields separated by \x1f)
-      const result = db.exec(`
-        SELECT notes.flds 
-        FROM notes
-        INNER JOIN cards ON notes.id = cards.nid
-        LIMIT 1000
-      `)
-
-      if (!result.length || !result[0].values.length) {
-        throw new Error("No se encontraron tarjetas en el archivo de Anki")
-      }
-
-      // Parse the fields
-      const cards: AnkiCard[] = []
-      for (const row of result[0].values) {
-        const fields = (row[0] as string).split("\x1f")
-
-        if (fields.length >= 2) {
-          cards.push({
-            front: stripHtml(fields[0]),
-            back: stripHtml(fields[1]),
-          })
-        } else if (fields.length === 1) {
-          // Single field card - use it for both front and back
-          cards.push({
-            front: stripHtml(fields[0]),
-            back: stripHtml(fields[0]),
-          })
+  const parseTxtFile = (text: string): TxtCard[] => {
+    const lines = text.split('\n');
+    const cards: TxtCard[] = [];
+    for (const line of lines) {
+      // Anki usa un tabulador para separar el anverso del reverso
+      const parts = line.split('\t');
+      if (parts.length >= 2) {
+        const front = parts[0].trim();
+        const back = parts[1].trim();
+        if (front && back) {
+          cards.push({ front, back });
         }
       }
-
-      db.close()
-      return cards
-    } catch (err) {
-      console.error("[v0] Error parsing Anki file:", err)
-      throw new Error(
-        "Error al procesar el archivo de Anki: " + (err instanceof Error ? err.message : "Error desconocido"),
-      )
     }
+    return cards;
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,8 +57,8 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
     if (!selectedFile) return
 
     const fileName = selectedFile.name.toLowerCase()
-    if (!fileName.endsWith(".apkg") && !fileName.endsWith(".colpkg")) {
-      setError("Por favor selecciona un archivo .apkg o .colpkg válido")
+    if (!fileName.endsWith(".txt")) {
+      setError("Por favor selecciona un archivo .txt válido")
       return
     }
 
@@ -126,13 +67,26 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
     setIsLoading(true)
 
     try {
-      const cards = await parseAnkiFile(selectedFile)
-      setPreviewCards(cards)
-      setError(null)
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const cards = parseTxtFile(text);
+            if (cards.length === 0) {
+                setError("No se encontraron tarjetas válidas. Asegúrate de que el formato sea 'Frente [tabulador] Reverso' en cada línea.");
+            } else {
+                setPreviewCards(cards);
+                setError(null);
+            }
+            setIsLoading(false);
+        };
+        reader.onerror = () => {
+            setError("Error al leer el archivo.");
+            setIsLoading(false);
+        };
+        reader.readAsText(selectedFile);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al procesar el archivo")
       setPreviewCards([])
-    } finally {
       setIsLoading(false)
     }
   }
@@ -186,13 +140,13 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
       <DialogTrigger asChild>
         <Button variant="outline">
           <FileUp className="mr-2 h-4 w-4" />
-          Importar Anki
+          Importar TXT
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Importar desde Anki</DialogTitle>
-          <DialogDescription>Sube un archivo .apkg o .colpkg de Anki para importar tus tarjetas</DialogDescription>
+          <DialogTitle>Importar desde Anki (.txt)</DialogTitle>
+          <DialogDescription>Sube un archivo .txt exportado desde Anki para importar tus tarjetas.</DialogDescription>
         </DialogHeader>
 
         {importSuccess ? (
@@ -209,16 +163,16 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
               <div className="grid gap-2">
                 <div className="flex items-center gap-2">
                   <input
-                    id="anki-file"
+                    id="anki-txt-file"
                     type="file"
-                    accept=".apkg,.colpkg"
+                    accept=".txt"
                     onChange={handleFileChange}
                     className="hidden"
                   />
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => document.getElementById("anki-file")?.click()}
+                    onClick={() => document.getElementById("anki-txt-file")?.click()}
                     className="w-full"
                     disabled={isLoading}
                   >
@@ -230,13 +184,13 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
                     ) : (
                       <>
                         <Upload className="mr-2 h-4 w-4" />
-                        {file ? file.name : "Seleccionar archivo .apkg o .colpkg"}
+                        {file ? file.name : "Seleccionar archivo .txt"}
                       </>
                     )}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Soporta archivos .apkg (mazos individuales) y .colpkg (colecciones completas)
+                  El archivo debe ser de texto plano (.txt) con cada tarjeta en una línea, separando el frente y el reverso con un tabulador.
                 </p>
               </div>
 
