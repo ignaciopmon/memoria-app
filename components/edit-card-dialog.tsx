@@ -57,7 +57,7 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
       setOpen(false)
       router.refresh()
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error updating card")
+      setError(error instanceof Error ? error.message : "Error updating the card")
     } finally {
       setIsLoading(false)
     }
@@ -74,7 +74,7 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Edit card</DialogTitle>
-            <DialogDescription>Modify the content of this card</DialogDescription>
+            <DialogDescription>Modify the content of this card.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -92,7 +92,7 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
               <Label htmlFor="back">Back (Answer) *</Label>
               <Textarea
                 id="back"
-                placeholder="E.g., The process by which plants convert sunlight into chemical energy"
+                placeholder="E.g., The process by which plants convert sunlight into chemical energy."
                 value={back}
                 onChange={(e) => setBack(e.target.value)}
                 required

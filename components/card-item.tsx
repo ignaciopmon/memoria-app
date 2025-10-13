@@ -48,7 +48,7 @@ export function CardItem({ card }: CardItemProps) {
       router.refresh()
     } catch (error) {
       console.error("[v0] Error deleting card:", error)
-      alert("Error al eliminar la tarjeta")
+      alert("Error deleting the card")
     } finally {
       setIsDeleting(false)
     }
@@ -60,7 +60,7 @@ export function CardItem({ card }: CardItemProps) {
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 space-y-4">
             <div>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">FRENTE</p>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
               <p className="text-base">{card.front}</p>
             </div>
             <div>
@@ -68,7 +68,7 @@ export function CardItem({ card }: CardItemProps) {
                 onClick={() => setShowBack(!showBack)}
                 className="mb-1 text-xs font-medium text-muted-foreground hover:text-foreground"
               >
-                REVERSO {showBack ? "▼" : "▶"}
+                BACK {showBack ? "▼" : "▶"}
               </button>
               {showBack && <p className="text-base text-muted-foreground">{card.back}</p>}
             </div>
@@ -83,19 +83,19 @@ export function CardItem({ card }: CardItemProps) {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>¿Eliminar tarjeta?</AlertDialogTitle>
+                  <AlertDialogTitle>Delete card?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Esta acción no se puede deshacer. Se eliminará permanentemente esta tarjeta.
+                    This action cannot be undone. This will permanently delete this card.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDelete}
                     disabled={isDeleting}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    {isDeleting ? "Eliminando..." : "Eliminar"}
+                    {isDeleting ? "Deleting..." : "Delete"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
