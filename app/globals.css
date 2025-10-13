@@ -53,9 +53,9 @@
 
 /* === NUEVO TEMA PASTEL CON FONDO SUAVE === */
 .pastel {
-  --background: oklch(0.985 0.006 90); /* Color crema muy suave */
+  --background: oklch(84.41% 0.05036 85.118); /* Color crema muy suave */
   --foreground: oklch(0.3 0.03 85);   /* Marrón suave para el texto */
-  --card: oklch(1 0 0);                /* Las tarjetas se mantienen blancas para contrastar */
+  --card: oklch(1 0 0);                /* Tarjetas blancas para contraste */
   --card-foreground: oklch(0.3 0.03 85);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.3 0.03 85);

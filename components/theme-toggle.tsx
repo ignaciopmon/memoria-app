@@ -1,8 +1,7 @@
-// components/theme-toggle.tsx
 "use client"
 
 import * as React from "react"
-import { Moon, Sun, Paintbrush } from "lucide-react" // <-- 1. Importamos el nuevo icono
+import { Moon, Sun, Paintbrush } from "lucide-react"
 import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
@@ -15,25 +14,21 @@ import {
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = React.useState(false)
 
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // 2. Función para mostrar el icono correcto según el tema activo
   const renderIcon = () => {
-    if (!mounted) {
-      return <Sun className="h-[1.2rem] w-[1.2rem]" />
+    // En el servidor o antes de cargar, muestra un icono por defecto
+    if (typeof window === 'undefined' || !theme) {
+        return <Sun className="h-[1.2rem] w-[1.2rem]" />
     }
+
     switch (theme) {
       case "light":
         return <Sun className="h-[1.2rem] w-[1.2rem]" />
       case "dark":
         return <Moon className="h-[1.2rem] w-[1.2rem]" />
       case "pastel":
-        return <Paintbrush className="h-[1.2rem] w-[1.2rem]" /> // <-- 3. Icono de brocha para pastel
-      default: // Para "system" u otros
+        return <Paintbrush className="h-[1.2rem] w-[1.2rem]" />
+      default: // Para "system"
         return <Sun className="h-[1.2rem] w-[1.2rem]" />
     }
   }
