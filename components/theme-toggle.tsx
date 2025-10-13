@@ -1,5 +1,5 @@
 "use client"
-
+    
 import * as React from "react"
 import { Moon, Sun, Paintbrush } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -14,13 +14,16 @@ import {
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const renderIcon = () => {
-    // En el servidor o antes de cargar, muestra un icono por defecto
-    if (typeof window === 'undefined' || !theme) {
-        return <Sun className="h-[1.2rem] w-[1.2rem]" />
+    if (!mounted) {
+      return <Sun className="h-[1.2rem] w-[1.2rem]" />
     }
-
     switch (theme) {
       case "light":
         return <Sun className="h-[1.2rem] w-[1.2rem]" />
@@ -28,7 +31,7 @@ export function ThemeToggle() {
         return <Moon className="h-[1.2rem] w-[1.2rem]" />
       case "pastel":
         return <Paintbrush className="h-[1.2rem] w-[1.2rem]" />
-      default: // Para "system"
+      default: // System u otro
         return <Sun className="h-[1.2rem] w-[1.2rem]" />
     }
   }

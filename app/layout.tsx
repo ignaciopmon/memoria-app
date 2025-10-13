@@ -18,6 +18,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
+    // La clave está aquí: el ThemeProvider envuelve <html> y tiene el suppressHydrationWarning
     <html lang="en" suppressHydrationWarning>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <ThemeProvider
