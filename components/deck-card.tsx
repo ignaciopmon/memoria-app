@@ -45,7 +45,7 @@ export function DeckCard({ deck }: DeckCardProps) {
       router.refresh()
     } catch (error) {
       console.error("[v0] Error deleting deck:", error)
-      alert("Error al eliminar el mazo")
+      alert("Error deleting deck")
     } finally {
       setIsDeleting(false)
     }
@@ -57,7 +57,7 @@ export function DeckCard({ deck }: DeckCardProps) {
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <CardTitle className="line-clamp-1">{deck.name}</CardTitle>
-            <CardDescription className="line-clamp-2">{deck.description || "Sin descripción"}</CardDescription>
+            <CardDescription className="line-clamp-2">{deck.description || "No description"}</CardDescription>
           </div>
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -67,19 +67,19 @@ export function DeckCard({ deck }: DeckCardProps) {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>¿Eliminar mazo?</AlertDialogTitle>
+                <AlertDialogTitle>Delete deck?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Esta acción no se puede deshacer. Se eliminarán todas las tarjetas asociadas a este mazo.
+                  This action cannot be undone. All cards associated with this deck will be deleted.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
                   disabled={isDeleting}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
-                  {isDeleting ? "Eliminando..." : "Eliminar"}
+                  {isDeleting ? "Deleting..." : "Delete"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -89,17 +89,17 @@ export function DeckCard({ deck }: DeckCardProps) {
       <CardContent className="flex-1">
         <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
           <BookOpen className="h-4 w-4" />
-          <span>{deck.cardCount} tarjetas</span>
+          <span>{deck.cardCount} cards</span>
         </div>
         <div className="flex gap-2">
           <Button asChild className="flex-1 bg-transparent" variant="outline">
-            <Link href={`/deck/${deck.id}`}>Ver Tarjetas</Link>
+            <Link href={`/deck/${deck.id}`}>View Cards</Link>
           </Button>
           {deck.cardCount > 0 && (
             <Button asChild className="flex-1">
               <Link href={`/study/${deck.id}`}>
                 <Play className="mr-2 h-4 w-4" />
-                Estudiar
+                Study
               </Link>
             </Button>
           )}

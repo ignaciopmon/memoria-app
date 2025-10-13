@@ -51,7 +51,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
             <span className="text-sm text-muted-foreground">{user.email}</span>
             <form action="/auth/signout" method="post">
               <Button variant="ghost" size="sm" type="submit">
-                Cerrar sesión
+                Log Out
               </Button>
             </form>
           </div>
@@ -64,14 +64,14 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
             <Button variant="ghost" asChild className="mb-4">
               <Link href="/dashboard">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Volver al Dashboard
+                Back to Dashboard
               </Link>
             </Button>
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-3xl font-bold">{deck.name}</h1>
                 {deck.description && <p className="text-muted-foreground">{deck.description}</p>}
-                <p className="mt-2 text-sm text-muted-foreground">{cards?.length || 0} tarjetas</p>
+                <p className="mt-2 text-sm text-muted-foreground">{cards?.length || 0} cards</p>
               </div>
               <div className="flex gap-2">
                 <ImportCSVDialog deckId={id} />
@@ -85,9 +85,9 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <Plus className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-semibold">No hay tarjetas todavía</h3>
+                <h3 className="mb-2 text-lg font-semibold">No cards yet</h3>
                 <p className="mb-4 text-center text-sm text-muted-foreground">
-                  Crea tu primera tarjeta o importa desde un archivo CSV
+                  Create your first card or import from a file
                 </p>
                 <div className="flex gap-2">
                   <ImportCSVDialog deckId={id} />

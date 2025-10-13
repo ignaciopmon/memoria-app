@@ -56,7 +56,7 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
       setOpen(false)
       router.refresh()
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error al crear la tarjeta")
+      setError(error instanceof Error ? error.message : "Error creating card")
     } finally {
       setIsLoading(false)
     }
@@ -67,21 +67,21 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
-          Nueva Tarjeta
+          New Card
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Crear nueva tarjeta</DialogTitle>
-            <DialogDescription>Añade una nueva tarjeta de estudio a este mazo</DialogDescription>
+            <DialogTitle>Create new card</DialogTitle>
+            <DialogDescription>Add a new study card to this deck</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="front">Frente (Pregunta) *</Label>
+              <Label htmlFor="front">Front (Question) *</Label>
               <Textarea
                 id="front"
-                placeholder="Ej: ¿Qué es la fotosíntesis?"
+                placeholder="E.g., What is photosynthesis?"
                 value={front}
                 onChange={(e) => setFront(e.target.value)}
                 required
@@ -89,10 +89,10 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="back">Reverso (Respuesta) *</Label>
+              <Label htmlFor="back">Back (Answer) *</Label>
               <Textarea
                 id="back"
-                placeholder="Ej: Proceso por el cual las plantas convierten la luz solar en energía química"
+                placeholder="E.g., The process by which plants convert sunlight into chemical energy"
                 value={back}
                 onChange={(e) => setBack(e.target.value)}
                 required
@@ -103,10 +103,10 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
-              Cancelar
+              Cancel
             </Button>
             <Button type="submit" disabled={isLoading || !front.trim() || !back.trim()}>
-              {isLoading ? "Creando..." : "Crear Tarjeta"}
+              {isLoading ? "Creating..." : "Create Card"}
             </Button>
           </DialogFooter>
         </form>

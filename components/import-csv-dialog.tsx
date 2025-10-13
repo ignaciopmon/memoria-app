@@ -40,7 +40,7 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
     if (!selectedFile) return
 
     if (!selectedFile.name.endsWith(".csv")) {
-      setError("Por favor selecciona un archivo CSV válido")
+      setError("Please select a valid CSV file")
       return
     }
 
@@ -69,7 +69,7 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
 
   const handleImport = async () => {
     if (!csvData.length || frontColumn === "" || backColumn === "") {
-      setError("Por favor selecciona las columnas para frente y reverso")
+      setError("Please select columns for front and back")
       return
     }
 
@@ -97,7 +97,7 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
       const validCards = cardsToInsert.filter((card) => card.front.trim() && card.back.trim())
 
       if (validCards.length === 0) {
-        setError("No se encontraron tarjetas válidas en el archivo CSV")
+        setError("No valid cards found in the CSV file")
         setIsLoading(false)
         return
       }
@@ -121,7 +121,7 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
         setImportedCount(0)
       }, 2000)
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error al importar las tarjetas")
+      setError(error instanceof Error ? error.message : "Error importing cards")
     } finally {
       setIsLoading(false)
     }
@@ -134,30 +134,30 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
       <DialogTrigger asChild>
         <Button variant="outline">
           <FileUp className="mr-2 h-4 w-4" />
-          Importar CSV
+          Import CSV
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Importar tarjetas desde CSV</DialogTitle>
+          <DialogTitle>Import cards from CSV</DialogTitle>
           <DialogDescription>
-            Sube un archivo CSV y selecciona las columnas para el frente y reverso de las tarjetas
+            Upload a CSV file and select the columns for the front and back of the cards
           </DialogDescription>
         </DialogHeader>
 
         {importSuccess ? (
           <div className="flex flex-col items-center justify-center py-8">
             <CheckCircle className="mb-4 h-16 w-16 text-green-500" />
-            <h3 className="mb-2 text-lg font-semibold">¡Importación exitosa!</h3>
+            <h3 className="mb-2 text-lg font-semibold">Import successful!</h3>
             <p className="text-muted-foreground">
-              Se importaron {importedCount} tarjeta{importedCount !== 1 ? "s" : ""}
+              Imported {importedCount} card{importedCount !== 1 ? "s" : ""}
             </p>
           </div>
         ) : (
           <>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="csv-file">Archivo CSV</Label>
+                <Label htmlFor="csv-file">CSV File</Label>
                 <div className="flex items-center gap-2">
                   <input id="csv-file" type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
                   <Button
@@ -167,26 +167,26 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
                     className="w-full"
                   >
                     <Upload className="mr-2 h-4 w-4" />
-                    {file ? file.name : "Seleccionar archivo CSV"}
+                    {file ? file.name : "Select CSV file"}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  El archivo debe tener al menos dos columnas: una para el frente y otra para el reverso
+                  The file must have at least two columns: one for the front and one for the back
                 </p>
               </div>
 
               {csvData.length > 0 && (
                 <>
                   <div className="grid gap-2">
-                    <Label htmlFor="front-column">Columna para el Frente</Label>
+                    <Label htmlFor="front-column">Column for Front</Label>
                     <Select value={frontColumn} onValueChange={setFrontColumn}>
                       <SelectTrigger id="front-column">
-                        <SelectValue placeholder="Selecciona una columna" />
+                        <SelectValue placeholder="Select a column" />
                       </SelectTrigger>
                       <SelectContent>
                         {columns.map((col, idx) => (
                           <SelectItem key={idx} value={idx.toString()}>
-                            Columna {idx + 1}: {col || "(vacía)"}
+                            Column {idx + 1}: {col || "(empty)"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -194,15 +194,15 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="back-column">Columna para el Reverso</Label>
+                    <Label htmlFor="back-column">Column for Back</Label>
                     <Select value={backColumn} onValueChange={setBackColumn}>
                       <SelectTrigger id="back-column">
-                        <SelectValue placeholder="Selecciona una columna" />
+                        <SelectValue placeholder="Select a column" />
                       </SelectTrigger>
                       <SelectContent>
                         {columns.map((col, idx) => (
                           <SelectItem key={idx} value={idx.toString()}>
-                            Columna {idx + 1}: {col || "(vacía)"}
+                            Column {idx + 1}: {col || "(empty)"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -210,19 +210,19 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
                   </div>
 
                   <div className="rounded-md border p-3">
-                    <p className="mb-2 text-sm font-medium">Vista previa</p>
+                    <p className="mb-2 text-sm font-medium">Preview</p>
                     <div className="space-y-2 text-sm">
                       {csvData.slice(1, 4).map((row, idx) => (
                         <div key={idx} className="rounded-sm bg-muted p-2">
-                          <p className="text-xs text-muted-foreground">Frente:</p>
-                          <p className="mb-1">{row[Number.parseInt(frontColumn)] || "(vacío)"}</p>
-                          <p className="text-xs text-muted-foreground">Reverso:</p>
-                          <p>{row[Number.parseInt(backColumn)] || "(vacío)"}</p>
+                          <p className="text-xs text-muted-foreground">Front:</p>
+                          <p className="mb-1">{row[Number.parseInt(frontColumn)] || "(empty)"}</p>
+                          <p className="text-xs text-muted-foreground">Back:</p>
+                          <p>{row[Number.parseInt(backColumn)] || "(empty)"}</p>
                         </div>
                       ))}
                       {csvData.length > 4 && (
                         <p className="text-xs text-muted-foreground">
-                          ... y {csvData.length - 4} tarjeta{csvData.length - 4 !== 1 ? "s" : ""} más
+                          ... and {csvData.length - 4} more card{csvData.length - 4 !== 1 ? "s" : ""}
                         </p>
                       )}
                     </div>
@@ -235,14 +235,14 @@ export function ImportCSVDialog({ deckId }: ImportCSVDialogProps) {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
-                Cancelar
+                Cancel
               </Button>
               <Button
                 type="button"
                 onClick={handleImport}
                 disabled={isLoading || !csvData.length || frontColumn === "" || backColumn === ""}
               >
-                {isLoading ? "Importando..." : "Importar Tarjetas"}
+                {isLoading ? "Importing..." : "Import Cards"}
               </Button>
             </DialogFooter>
           </>

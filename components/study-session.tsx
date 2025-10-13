@@ -106,7 +106,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       setShowAnswer(false)
     } catch (error) {
       console.error("[v0] Error submitting rating:", error)
-      alert("Error al guardar la respuesta")
+      alert("Error saving the response")
     } finally {
       setIsSubmitting(false)
     }
@@ -127,10 +127,10 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
         <main className="flex flex-1 items-center justify-center">
           <div className="container mx-auto max-w-2xl px-4 text-center">
             <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-500" />
-            <h1 className="mb-2 text-3xl font-bold">¡Todo al día!</h1>
-            <p className="mb-6 text-muted-foreground">No hay tarjetas pendientes de revisión en este mazo</p>
+            <h1 className="mb-2 text-3xl font-bold">All caught up!</h1>
+            <p className="mb-6 text-muted-foreground">There are no cards due for review in this deck.</p>
             <Button asChild>
-              <Link href={`/deck/${deck.id}`}>Volver al Mazo</Link>
+              <Link href={`/deck/${deck.id}`}>Back to Deck</Link>
             </Button>
           </div>
         </main>
@@ -153,16 +153,16 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
         <main className="flex flex-1 items-center justify-center">
           <div className="container mx-auto max-w-2xl px-4 text-center">
             <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-500" />
-            <h1 className="mb-2 text-3xl font-bold">¡Sesión completada!</h1>
+            <h1 className="mb-2 text-3xl font-bold">Session complete!</h1>
             <p className="mb-6 text-muted-foreground">
-              Has revisado {cards.length} tarjeta{cards.length !== 1 ? "s" : ""}
+              You have reviewed {cards.length} card{cards.length !== 1 ? "s" : ""}
             </p>
             <div className="flex justify-center gap-4">
               <Button asChild variant="outline">
-                <Link href={`/deck/${deck.id}`}>Ver Mazo</Link>
+                <Link href={`/deck/${deck.id}`}>View Deck</Link>
               </Button>
               <Button asChild>
-                <Link href="/dashboard">Ir al Dashboard</Link>
+                <Link href="/dashboard">Go to Dashboard</Link>
               </Button>
             </div>
           </div>
@@ -201,13 +201,13 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           <Card className="mb-6">
             <CardContent className="p-8">
               <div className="mb-6 text-center">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">PREGUNTA</p>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">QUESTION</p>
                 <h2 className="text-balance text-2xl font-semibold">{currentCard.front}</h2>
               </div>
 
               {showAnswer && (
                 <div className="border-t pt-6 text-center">
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">RESPUESTA</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">ANSWER</p>
                   <p className="text-balance text-xl text-muted-foreground">{currentCard.back}</p>
                 </div>
               )}
@@ -217,12 +217,12 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           {!showAnswer ? (
             <div className="flex justify-center">
               <Button size="lg" onClick={() => setShowAnswer(true)} className="min-w-48">
-                Mostrar Respuesta
+                Show Answer
               </Button>
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-center text-sm text-muted-foreground">¿Qué tan bien recordaste esta tarjeta?</p>
+              <p className="text-center text-sm text-muted-foreground">How well did you remember this card?</p>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Button
                   variant="outline"
@@ -230,8 +230,8 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   onClick={() => handleRating(1)}
                   disabled={isSubmitting}
                 >
-                  <span className="text-lg font-semibold">Otra vez</span>
-                  <span className="text-xs text-muted-foreground">&lt; 1 día</span>
+                  <span className="text-lg font-semibold">Again</span>
+                  <span className="text-xs text-muted-foreground">&lt; 1 day</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -239,8 +239,8 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   onClick={() => handleRating(2)}
                   disabled={isSubmitting}
                 >
-                  <span className="text-lg font-semibold">Difícil</span>
-                  <span className="text-xs text-muted-foreground">1-3 días</span>
+                  <span className="text-lg font-semibold">Hard</span>
+                  <span className="text-xs text-muted-foreground">1-3 days</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -248,8 +248,8 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   onClick={() => handleRating(3)}
                   disabled={isSubmitting}
                 >
-                  <span className="text-lg font-semibold">Bien</span>
-                  <span className="text-xs text-muted-foreground">3-7 días</span>
+                  <span className="text-lg font-semibold">Good</span>
+                  <span className="text-xs text-muted-foreground">3-7 days</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -257,8 +257,8 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   onClick={() => handleRating(4)}
                   disabled={isSubmitting}
                 >
-                  <span className="text-lg font-semibold">Fácil</span>
-                  <span className="text-xs text-muted-foreground">&gt; 7 días</span>
+                  <span className="text-lg font-semibold">Easy</span>
+                  <span className="text-xs text-muted-foreground">&gt; 7 days</span>
                 </Button>
               </div>
             </div>

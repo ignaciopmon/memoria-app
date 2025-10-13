@@ -39,7 +39,7 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
     const lines = text.split('\n');
     const cards: TxtCard[] = [];
     for (const line of lines) {
-      // Anki usa un tabulador para separar el anverso del reverso
+      // Anki uses a tab to separate front and back
       const parts = line.split('\t');
       if (parts.length >= 2) {
         const front = parts[0].trim();
@@ -58,7 +58,7 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
 
     const fileName = selectedFile.name.toLowerCase()
     if (!fileName.endsWith(".txt")) {
-      setError("Por favor selecciona un archivo .txt válido")
+      setError("Please select a valid .txt file")
       return
     }
 
@@ -72,7 +72,7 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
             const text = event.target?.result as string;
             const cards = parseTxtFile(text);
             if (cards.length === 0) {
-                setError("No se encontraron tarjetas válidas. Asegúrate de que el formato sea 'Frente [tabulador] Reverso' en cada línea.");
+                setError("No valid cards found. Ensure the format is 'Front [tab] Back' on each line.");
             } else {
                 setPreviewCards(cards);
                 setError(null);
@@ -80,12 +80,12 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
             setIsLoading(false);
         };
         reader.onerror = () => {
-            setError("Error al leer el archivo.");
+            setError("Error reading the file.");
             setIsLoading(false);
         };
         reader.readAsText(selectedFile);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al procesar el archivo")
+      setError(err instanceof Error ? err.message : "Error processing file")
       setPreviewCards([])
       setIsLoading(false)
     }
@@ -93,7 +93,7 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
 
   const handleImport = async () => {
     if (!previewCards.length) {
-      setError("No hay tarjetas para importar")
+      setError("No cards to import")
       return
     }
 
@@ -129,7 +129,7 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
         setImportedCount(0)
       }, 2000)
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error al importar las tarjetas")
+      setError(error instanceof Error ? error.message : "Error importing cards")
     } finally {
       setIsLoading(false)
     }
@@ -140,21 +140,21 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
       <DialogTrigger asChild>
         <Button variant="outline">
           <FileUp className="mr-2 h-4 w-4" />
-          Importar TXT
+          Import TXT
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Importar desde Anki (.txt)</DialogTitle>
-          <DialogDescription>Sube un archivo .txt exportado desde Anki para importar tus tarjetas.</DialogDescription>
+          <DialogTitle>Import from Anki (.txt)</DialogTitle>
+          <DialogDescription>Upload a .txt file exported from Anki to import your cards.</DialogDescription>
         </DialogHeader>
 
         {importSuccess ? (
           <div className="flex flex-col items-center justify-center py-8">
             <CheckCircle className="mb-4 h-16 w-16 text-green-500" />
-            <h3 className="mb-2 text-lg font-semibold">¡Importación exitosa!</h3>
+            <h3 className="mb-2 text-lg font-semibold">Import successful!</h3>
             <p className="text-muted-foreground">
-              Se importaron {importedCount} tarjeta{importedCount !== 1 ? "s" : ""}
+              Imported {importedCount} card{importedCount !== 1 ? "s" : ""}
             </p>
           </div>
         ) : (
@@ -179,38 +179,38 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
                     {isLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Procesando...
+                        Processing...
                       </>
                     ) : (
                       <>
                         <Upload className="mr-2 h-4 w-4" />
-                        {file ? file.name : "Seleccionar archivo .txt"}
+                        {file ? file.name : "Select .txt file"}
                       </>
                     )}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  El archivo debe ser de texto plano (.txt) con cada tarjeta en una línea, separando el frente y el reverso con un tabulador.
+                  The file must be plain text (.txt) with each card on a new line, separating front and back with a tab.
                 </p>
               </div>
 
               {previewCards.length > 0 && (
                 <div className="rounded-md border p-3">
                   <p className="mb-2 text-sm font-medium">
-                    Vista previa ({previewCards.length} tarjeta{previewCards.length !== 1 ? "s" : ""})
+                    Preview ({previewCards.length} card{previewCards.length !== 1 ? "s" : ""})
                   </p>
                   <div className="space-y-2 text-sm">
                     {previewCards.slice(0, 3).map((card, idx) => (
                       <div key={idx} className="rounded-sm bg-muted p-2">
-                        <p className="text-xs text-muted-foreground">Frente:</p>
+                        <p className="text-xs text-muted-foreground">Front:</p>
                         <p className="mb-1 line-clamp-2">{card.front}</p>
-                        <p className="text-xs text-muted-foreground">Reverso:</p>
+                        <p className="text-xs text-muted-foreground">Back:</p>
                         <p className="line-clamp-2">{card.back}</p>
                       </div>
                     ))}
                     {previewCards.length > 3 && (
                       <p className="text-xs text-muted-foreground">
-                        ... y {previewCards.length - 3} tarjeta{previewCards.length - 3 !== 1 ? "s" : ""} más
+                        ... and {previewCards.length - 3} more card{previewCards.length - 3 !== 1 ? "s" : ""}
                       </p>
                     )}
                   </div>
@@ -222,10 +222,10 @@ export function ImportAnkiDialog({ deckId }: ImportAnkiDialogProps) {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
-                Cancelar
+                Cancel
               </Button>
               <Button type="button" onClick={handleImport} disabled={isLoading || !previewCards.length}>
-                {isLoading ? "Importando..." : "Importar Tarjetas"}
+                {isLoading ? "Importing..." : "Import Cards"}
               </Button>
             </DialogFooter>
           </>

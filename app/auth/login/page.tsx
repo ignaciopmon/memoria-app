@@ -34,7 +34,7 @@ export default function LoginPage() {
       router.push("/dashboard")
       router.refresh()
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error al iniciar sesión")
+      setError(error instanceof Error ? error.message : "Failed to log in")
       setIsLoading(false)
     }
   }
@@ -48,12 +48,12 @@ export default function LoginPage() {
               <Brain className="h-8 w-8" />
               <h1 className="text-2xl font-bold">Memoria</h1>
             </div>
-            <p className="text-sm text-muted-foreground">Aprende más rápido con repetición espaciada</p>
+            <p className="text-sm text-muted-foreground">Learn faster with spaced repetition</p>
           </div>
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">Iniciar sesión</CardTitle>
-              <CardDescription>Ingresa tu email y contraseña para continuar</CardDescription>
+              <CardTitle className="text-2xl">Log In</CardTitle>
+              <CardDescription>Enter your email and password to continue</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
@@ -63,7 +63,7 @@ export default function LoginPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="tu@email.com"
+                    placeholder="you@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -71,7 +71,7 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="password">Contraseña</Label>
+                  <Label htmlFor="password">Password</Label>
                   <Input
                     id="password"
                     type="password"
@@ -83,12 +83,12 @@ export default function LoginPage() {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading} size="lg">
-                  {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
+                  {isLoading ? "Logging in..." : "Log In"}
                 </Button>
                 <div className="text-center text-sm text-muted-foreground">
-                  ¿No tienes cuenta?{" "}
+                  Don't have an account?{" "}
                   <Link href="/auth/signup" className="font-medium text-primary hover:underline">
-                    Regístrate
+                    Sign up
                   </Link>
                 </div>
               </form>

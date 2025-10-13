@@ -49,7 +49,7 @@ export default async function DashboardPage() {
             <span className="text-sm text-muted-foreground">{user.email}</span>
             <form action="/auth/signout" method="post">
               <Button variant="ghost" size="sm" type="submit">
-                Cerrar sesión
+                Sign Out
               </Button>
             </form>
           </div>
@@ -60,8 +60,8 @@ export default async function DashboardPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold">Mis Mazos</h1>
-              <p className="text-muted-foreground">Gestiona tus mazos de tarjetas de estudio</p>
+              <h1 className="text-3xl font-bold">My Decks</h1>
+              <p className="text-muted-foreground">Manage your study flashcard decks</p>
             </div>
             <CreateDeckDialog />
           </div>
@@ -70,9 +70,9 @@ export default async function DashboardPage() {
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-semibold">No tienes mazos todavía</h3>
+                <h3 className="mb-2 text-lg font-semibold">You don't have any decks yet</h3>
                 <p className="mb-4 text-center text-sm text-muted-foreground">
-                  Crea tu primer mazo para comenzar a estudiar
+                  Create your first deck to start studying
                 </p>
                 <CreateDeckDialog />
               </CardContent>

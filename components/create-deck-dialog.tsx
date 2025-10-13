@@ -41,7 +41,7 @@ export function CreateDeckDialog() {
       } = await supabase.auth.getUser()
 
       if (!user) {
-        throw new Error("No estás autenticado")
+        throw new Error("You are not authenticated")
       }
 
       const { data, error } = await supabase
@@ -61,7 +61,7 @@ export function CreateDeckDialog() {
       setOpen(false)
       router.refresh()
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error al crear el mazo")
+      setError(error instanceof Error ? error.message : "Error creating deck")
     } finally {
       setIsLoading(false)
     }
@@ -72,31 +72,31 @@ export function CreateDeckDialog() {
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
-          Nuevo Mazo
+          New Deck
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Crear nuevo mazo</DialogTitle>
-            <DialogDescription>Crea un nuevo mazo para organizar tus tarjetas de estudio</DialogDescription>
+            <DialogTitle>Create new deck</DialogTitle>
+            <DialogDescription>Create a new deck to organize your study cards</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Nombre *</Label>
+              <Label htmlFor="name">Name *</Label>
               <Input
                 id="name"
-                placeholder="Ej: Vocabulario de Inglés"
+                placeholder="E.g., English Vocabulary"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="description">Descripción</Label>
+              <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                placeholder="Describe el contenido de este mazo..."
+                placeholder="Describe the content of this deck..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
@@ -106,10 +106,10 @@ export function CreateDeckDialog() {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
-              Cancelar
+              Cancel
             </Button>
             <Button type="submit" disabled={isLoading || !name.trim()}>
-              {isLoading ? "Creando..." : "Crear Mazo"}
+              {isLoading ? "Creating..." : "Create Deck"}
             </Button>
           </DialogFooter>
         </form>

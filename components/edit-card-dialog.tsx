@@ -57,7 +57,7 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
       setOpen(false)
       router.refresh()
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error al actualizar la tarjeta")
+      setError(error instanceof Error ? error.message : "Error updating card")
     } finally {
       setIsLoading(false)
     }
@@ -73,15 +73,15 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
       <DialogContent className="max-w-2xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Editar tarjeta</DialogTitle>
-            <DialogDescription>Modifica el contenido de esta tarjeta</DialogDescription>
+            <DialogTitle>Edit card</DialogTitle>
+            <DialogDescription>Modify the content of this card</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="front">Frente (Pregunta) *</Label>
+              <Label htmlFor="front">Front (Question) *</Label>
               <Textarea
                 id="front"
-                placeholder="Ej: ¿Qué es la fotosíntesis?"
+                placeholder="E.g., What is photosynthesis?"
                 value={front}
                 onChange={(e) => setFront(e.target.value)}
                 required
@@ -89,10 +89,10 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="back">Reverso (Respuesta) *</Label>
+              <Label htmlFor="back">Back (Answer) *</Label>
               <Textarea
                 id="back"
-                placeholder="Ej: Proceso por el cual las plantas convierten la luz solar en energía química"
+                placeholder="E.g., The process by which plants convert sunlight into chemical energy"
                 value={back}
                 onChange={(e) => setBack(e.target.value)}
                 required
@@ -103,10 +103,10 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
-              Cancelar
+              Cancel
             </Button>
             <Button type="submit" disabled={isLoading || !front.trim() || !back.trim()}>
-              {isLoading ? "Guardando..." : "Guardar Cambios"}
+              {isLoading ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>

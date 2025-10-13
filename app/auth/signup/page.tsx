@@ -29,13 +29,13 @@ export default function SignUpPage() {
     setSuccess(false)
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden")
+      setError("Passwords do not match")
       setIsLoading(false)
       return
     }
 
     if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres")
+      setError("Password must be at least 6 characters long")
       setIsLoading(false)
       return
     }
@@ -56,7 +56,7 @@ export default function SignUpPage() {
         router.refresh()
       }, 2000)
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error al crear la cuenta")
+      setError(error instanceof Error ? error.message : "Failed to create account")
       setIsLoading(false)
     }
   }
@@ -70,19 +70,19 @@ export default function SignUpPage() {
               <Brain className="h-8 w-8" />
               <h1 className="text-2xl font-bold">Memoria</h1>
             </div>
-            <p className="text-sm text-muted-foreground">Aprende más rápido con repetición espaciada</p>
+            <p className="text-sm text-muted-foreground">Learn faster with spaced repetition</p>
           </div>
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">Crear cuenta</CardTitle>
-              <CardDescription>Ingresa tus datos para comenzar</CardDescription>
+              <CardTitle className="text-2xl">Create Account</CardTitle>
+              <CardDescription>Enter your details to get started</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSignUp} className="flex flex-col gap-4">
                 {error && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error}</div>}
                 {success && (
                   <div className="rounded-md bg-green-500/15 p-3 text-sm text-green-600">
-                    Cuenta creada exitosamente. Redirigiendo...
+                    Account created successfully. Redirecting...
                   </div>
                 )}
                 <div className="flex flex-col gap-2">
@@ -90,7 +90,7 @@ export default function SignUpPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="tu@email.com"
+                    placeholder="you@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -98,7 +98,7 @@ export default function SignUpPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="password">Contraseña</Label>
+                  <Label htmlFor="password">Password</Label>
                   <Input
                     id="password"
                     type="password"
@@ -111,7 +111,7 @@ export default function SignUpPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <Input
                     id="confirmPassword"
                     type="password"
@@ -124,12 +124,12 @@ export default function SignUpPage() {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading || success} size="lg">
-                  {isLoading ? "Creando cuenta..." : "Crear cuenta"}
+                  {isLoading ? "Creating account..." : "Create Account"}
                 </Button>
                 <div className="text-center text-sm text-muted-foreground">
-                  ¿Ya tienes cuenta?{" "}
+                  Already have an account?{" "}
                   <Link href="/auth/login" className="font-medium text-primary hover:underline">
-                    Inicia sesión
+                    Log in
                   </Link>
                 </div>
               </form>
