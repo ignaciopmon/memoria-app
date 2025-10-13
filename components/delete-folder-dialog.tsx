@@ -1,29 +1,25 @@
-// components/delete-folder-dialog.tsx
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Trash2 } from "lucide-react"
+import { Loader2, Trash2 } from "lucide-react"
 
 interface DeleteFolderDialogProps {
   folder: { id: string; name: string }
   decksInFolder: Array<{ id: string }>
-  onDelete: () => void // Callback to handle UI update
+  onDelete: (deletedIds: string[]) => void
 }
 
 export function DeleteFolderDialog({ folder, decksInFolder, onDelete }: DeleteFolderDialogProps) {
   const [open, setOpen] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const router = useRouter()
 
   const handleDeleteFolderOnly = async () => {
     setIsProcessing(true)
     const supabase = createClient()
     try {
-      // Mover los mazos a la raíz
       if (decksInFolder.length > 0) {
         const deckIds = decksInFolder.map(d => d.id)
         const { error: updateError } = await supabase
@@ -32,15 +28,14 @@ export function DeleteFolderDialog({ folder, decksInFolder, onDelete }: DeleteFo
           .in("id", deckIds)
         if (updateError) throw updateError
       }
-
-      // Eliminar permanentemente la carpeta (ya que es solo un contenedor)
+      
       const { error: deleteError } = await supabase
         .from("decks")
         .delete()
         .eq("id", folder.id)
       if (deleteError) throw deleteError
 
-      onDelete() // Update UI
+      onDelete([folder.id])
       setOpen(false)
     } catch (error) {
       alert("Error deleting folder.")
@@ -60,7 +55,7 @@ export function DeleteFolderDialog({ folder, decksInFolder, onDelete }: DeleteFo
         .in("id", idsToTrash)
       if (error) throw error
 
-      onDelete() // Update UI
+      onDelete(idsToTrash)
       setOpen(false)
     } catch (error) {
       alert("Error sending items to trash.")
@@ -90,10 +85,12 @@ export function DeleteFolderDialog({ folder, decksInFolder, onDelete }: DeleteFo
         <div className="flex flex-col gap-4 py-4">
           {!isEmpty && (
             <Button variant="outline" onClick={handleDeleteFolderOnly} disabled={isProcessing}>
+              {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete Folder Only (Move {decksInFolder.length} decks to root)
             </Button>
           )}
           <Button variant="destructive" onClick={isEmpty ? handleDeleteFolderOnly : handleDeleteFolderAndContents} disabled={isProcessing}>
+            {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEmpty ? "Delete Permanently" : "Delete Folder and Contents (Move to Trash)"}
           </Button>
         </div>

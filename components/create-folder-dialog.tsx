@@ -1,4 +1,3 @@
-// components/create-folder-dialog.tsx
 "use client"
 
 import type React from "react"
@@ -8,14 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { FolderPlus } from "lucide-react"
+import { FolderPlus, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
-export function CreateFolderDialog() {
+export function CreateFolderDialog({ onFolderCreated }: { onFolderCreated: () => void }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,13 +26,13 @@ export function CreateFolderDialog() {
       const { error } = await supabase.from("decks").insert({
         name,
         user_id: user.id,
-        is_folder: true, // La clave: esto es una carpeta
+        is_folder: true,
       })
       if (error) throw error
 
       setName("")
       setOpen(false)
-      router.refresh()
+      onFolderCreated()
     } catch (error) {
       console.error("Error creating folder:", error)
       alert("Error creating folder.")
@@ -73,6 +71,7 @@ export function CreateFolderDialog() {
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading || !name.trim()}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isLoading ? "Creating..." : "Create Folder"}
             </Button>
           </DialogFooter>

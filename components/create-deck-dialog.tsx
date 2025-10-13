@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -17,10 +16,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus } from "lucide-react"
+import { Plus, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
-export function CreateDeckDialog() {
+export function CreateDeckDialog({ onDeckCreated }: { onDeckCreated?: () => void }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -59,9 +58,9 @@ export function CreateDeckDialog() {
       setName("")
       setDescription("")
       setOpen(false)
-      router.refresh()
+      onDeckCreated ? onDeckCreated() : router.refresh()
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Error creating deck")
+      setError(error instanceof Error ? error.message : "Error creating the deck")
     } finally {
       setIsLoading(false)
     }
@@ -79,7 +78,7 @@ export function CreateDeckDialog() {
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Create new deck</DialogTitle>
-            <DialogDescription>Create a new deck to organize your study cards</DialogDescription>
+            <DialogDescription>Create a new deck to organize your study cards.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -109,6 +108,7 @@ export function CreateDeckDialog() {
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading || !name.trim()}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isLoading ? "Creating..." : "Create Deck"}
             </Button>
           </DialogFooter>

@@ -1,7 +1,7 @@
 // components/dashboard-client.tsx
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { DndContext, useDraggable, useDroppable, DragOverlay } from "@dnd-kit/core"
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core"
@@ -11,7 +11,7 @@ import { DeckCard } from "./deck-card"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Button } from "./ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Folder, GripVertical, Trash2, Edit, Paintbrush, ChevronDown, ChevronRight } from "lucide-react"
+import { Folder, GripVertical, Trash2, Edit, Paintbrush, ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { DeleteFolderDialog } from "./delete-folder-dialog"
 import { RenameDialog } from "./rename-dialog"
 import { ColorPopover } from "./color-popover"
@@ -27,7 +27,7 @@ type Item = {
 }
 
 // ---- Componente para una Carpeta ----
-function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; decks: Item[], isEditMode: boolean, onUpdate: (updater: (prevItems: Item[]) => Item[]) => void }) {
+function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; decks: Item[], isEditMode: boolean, onUpdate: (updater: (prev: Item[]) => Item[]) => void }) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const { isOver, setNodeRef } = useDroppable({ id: folder.id, disabled: !isEditMode })
@@ -56,8 +56,12 @@ function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; dec
           {isEditMode ? (
               <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}><Edit className="h-4 w-4" /></Button>
-                  <ColorPopover folderId={folder.id} currentColor={folder.color} />
-                  <DeleteFolderDialog folder={folder} decksInFolder={decks} onDelete={() => onUpdate(() => [])} />
+                  <ColorPopover folderId={folder.id} currentColor={folder.color} onColorChange={(color) => {
+                      onUpdate(prev => prev.map(it => it.id === folder.id ? {...it, color} : it))
+                  }} />
+                  <DeleteFolderDialog folder={folder} decksInFolder={decks} onDelete={(deletedIds) => {
+                      onUpdate(prev => prev.filter(it => !deletedIds.includes(it.id)))
+                  }} />
               </div>
           ) : (
               <Button variant="ghost" size="icon">
@@ -85,14 +89,17 @@ function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; dec
 }
 
 // ---- Componente para un Mazo Arrastrable ----
-function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode: boolean, onUpdate: (updater: (prevItems: Item[]) => Item[]) => void }) {
+function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode: boolean, onUpdate: (updater: (prev: Item[]) => Item[]) => void }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: item.id, disabled: !isEditMode })
   const { toast } = useToast()
   const [isRenaming, setIsRenaming] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
+    setIsDeleting(true)
     const supabase = createClient()
     const { error } = await supabase.from("decks").update({ deleted_at: new Date().toISOString() }).eq("id", item.id)
+    setIsDeleting(false)
     if (error) {
       alert("Error sending deck to trash.")
     } else {
@@ -116,7 +123,9 @@ function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode:
             </PopoverContent>
           </Popover>
 
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={handleDelete} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={handleDelete} title="Delete" disabled={isDeleting}>
+            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          </Button>
           <div {...listeners} {...attributes} className="cursor-grab p-1" title="Move deck">
             <GripVertical className="h-5 w-5 text-muted-foreground" />
           </div>
@@ -128,10 +137,16 @@ function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode:
 }
 
 // ---- Componente Principal del Dashboard ----
-export function DashboardClient({ initialItems, isEditMode }: { initialItems: Item[], isEditMode: boolean }) {
+export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   const [items, setItems] = useState(initialItems)
   const [activeDragItem, setActiveDragItem] = useState<Item | null>(null)
+  const [isEditMode, setIsEditMode] = useState(false) // El estado ahora es local
   const router = useRouter()
+
+  useEffect(() => {
+    // Sincroniza el estado si los datos iniciales cambian (ej. al renombrar)
+    setItems(initialItems)
+  }, [initialItems])
 
   const { folders, rootDecks } = useMemo(() => {
     const folders = items.filter(item => item.is_folder).sort((a,b) => a.name.localeCompare(b.name));
@@ -140,6 +155,7 @@ export function DashboardClient({ initialItems, isEditMode }: { initialItems: It
   }, [items])
   
   const handleDragStart = (event: DragStartEvent) => {
+    if (!isEditMode) return
     const item = items.find(i => i.id === event.active.id)
     if (item && !item.is_folder) setActiveDragItem(item)
   }
@@ -158,42 +174,51 @@ export function DashboardClient({ initialItems, isEditMode }: { initialItems: It
 
     if (currentDeck.parent_id === newParentId) return
 
-    const optimisticItems = items.map(item => 
+    setItems(prevItems => prevItems.map(item => 
       item.id === deckId ? { ...item, parent_id: newParentId } : item
-    )
-    setItems(optimisticItems)
+    ))
 
     const supabase = createClient()
     const { error } = await supabase.from("decks").update({ parent_id: newParentId }).eq("id", deckId)
     if (error) {
       alert("Failed to move deck.")
       setItems(initialItems)
-    } else {
-        setItems(optimisticItems)
     }
   }
   
-  const handleUpdateItems = (updater: (prevItems: Item[]) => Item[]) => {
-      setItems(updater);
-      router.refresh();
-  };
-
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="space-y-8">
-        {folders.map(folder => {
-          const decksInFolder = items.filter(deck => deck.parent_id === folder.id)
-          return <FolderView key={folder.id} folder={folder} decks={decksInFolder} isEditMode={isEditMode} onUpdate={() => router.refresh()} />
-        })}
-        
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {rootDecks.map(deck => <DraggableItem key={deck.id} item={deck} isEditMode={isEditMode} onUpdate={setItems} />)}
+    <>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">My Decks</h1>
+          <p className="text-muted-foreground">Manage your study flashcard decks</p>
+        </div>
+        <div className="flex items-center gap-2">
+            <Button variant={isEditMode ? "default" : "outline"} onClick={() => setIsEditMode(prev => !prev)}>
+                <Edit className="mr-2 h-4 w-4" />
+                {isEditMode ? "Done" : "Edit"}
+            </Button>
+            {isEditMode && <CreateFolderDialog onFolderCreated={() => router.refresh()} />}
+            <CreateDeckDialog />
         </div>
       </div>
-      
-      <DragOverlay>
-        {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
-      </DragOverlay>
-    </DndContext>
+
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="space-y-8">
+          {folders.map(folder => {
+            const decksInFolder = items.filter(deck => deck.parent_id === folder.id)
+            return <FolderView key={folder.id} folder={folder} decks={decksInFolder} isEditMode={isEditMode} onUpdate={setItems} />
+          })}
+          
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {rootDecks.map(deck => <DraggableItem key={deck.id} item={deck} isEditMode={isEditMode} onUpdate={setItems} />)}
+          </div>
+        </div>
+        
+        <DragOverlay>
+          {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
+        </DragOverlay>
+      </DndContext>
+    </>
   )
 }
