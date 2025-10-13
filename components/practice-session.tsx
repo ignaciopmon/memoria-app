@@ -82,7 +82,7 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" asChild>
-              <Link href={`/deck/${deck.id}`}>
+              <Link href="/dashboard">
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
