@@ -1,4 +1,3 @@
-// components/practice-session.tsx
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -21,7 +20,6 @@ interface PracticeSessionProps {
   }>
 }
 
-// Función para barajar un array
 const shuffleArray = <T,>(array: T[]): T[] => {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
@@ -45,7 +43,6 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
   useEffect(() => {
     setCurrentIndex(0);
   }, [isShuffled]);
-
 
   if (initialCards.length === 0) {
     return (
