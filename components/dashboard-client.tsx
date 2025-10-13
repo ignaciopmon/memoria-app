@@ -15,6 +15,10 @@ import { Folder, GripVertical, Trash2, Edit, Paintbrush, ChevronDown, ChevronRig
 import { DeleteFolderDialog } from "./delete-folder-dialog"
 import { RenameDialog } from "./rename-dialog"
 import { ColorPopover } from "./color-popover"
+// --- LÍNEAS QUE FALTABAN ---
+import { CreateDeckDialog } from "./create-deck-dialog"
+import { CreateFolderDialog } from "./create-folder-dialog"
+// --- FIN DE LÍNEAS QUE FALTABAN ---
 
 type Item = {
   id: string
@@ -140,11 +144,10 @@ function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode:
 export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   const [items, setItems] = useState(initialItems)
   const [activeDragItem, setActiveDragItem] = useState<Item | null>(null)
-  const [isEditMode, setIsEditMode] = useState(false) // El estado ahora es local
+  const [isEditMode, setIsEditMode] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
-    // Sincroniza el estado si los datos iniciales cambian (ej. al renombrar)
     setItems(initialItems)
   }, [initialItems])
 
@@ -174,9 +177,10 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
 
     if (currentDeck.parent_id === newParentId) return
 
-    setItems(prevItems => prevItems.map(item => 
+    const optimisticItems = items.map(item => 
       item.id === deckId ? { ...item, parent_id: newParentId } : item
-    ))
+    )
+    setItems(optimisticItems)
 
     const supabase = createClient()
     const { error } = await supabase.from("decks").update({ parent_id: newParentId }).eq("id", deckId)
@@ -199,26 +203,38 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
                 {isEditMode ? "Done" : "Edit"}
             </Button>
             {isEditMode && <CreateFolderDialog onFolderCreated={() => router.refresh()} />}
-            <CreateDeckDialog />
+            <CreateDeckDialog onDeckCreated={() => router.refresh()} />
         </div>
       </div>
 
-      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="space-y-8">
-          {folders.map(folder => {
-            const decksInFolder = items.filter(deck => deck.parent_id === folder.id)
-            return <FolderView key={folder.id} folder={folder} decks={decksInFolder} isEditMode={isEditMode} onUpdate={setItems} />
-          })}
-          
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {rootDecks.map(deck => <DraggableItem key={deck.id} item={deck} isEditMode={isEditMode} onUpdate={setItems} />)}
+      {initialItems.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
+            <h3 className="mb-2 text-lg font-semibold">You don't have any items yet</h3>
+            <p className="mb-4 text-center text-sm text-muted-foreground">
+              Create your first deck to get started.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="space-y-8">
+            {folders.map(folder => {
+              const decksInFolder = items.filter(deck => deck.parent_id === folder.id)
+              return <FolderView key={folder.id} folder={folder} decks={decksInFolder} isEditMode={isEditMode} onUpdate={setItems} />
+            })}
+            
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {rootDecks.map(deck => <DraggableItem key={deck.id} item={deck} isEditMode={isEditMode} onUpdate={setItems} />)}
+            </div>
           </div>
-        </div>
-        
-        <DragOverlay>
-          {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
-        </DragOverlay>
-      </DndContext>
+          
+          <DragOverlay>
+            {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
+          </DragOverlay>
+        </DndContext>
+      )}
     </>
   )
 }
