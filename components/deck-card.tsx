@@ -33,19 +33,23 @@ export function DeckCard({ deck }: DeckCardProps) {
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const handleDelete = async () => {
+const handleDelete = async () => {
     setIsDeleting(true)
     const supabase = createClient()
 
     try {
-      const { error } = await supabase.from("decks").delete().eq("id", deck.id)
+      // Soft delete: set the 'deleted_at' timestamp
+      const { error } = await supabase
+        .from("decks")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", deck.id)
 
       if (error) throw error
 
       router.refresh()
     } catch (error) {
-      console.error("[v0] Error deleting deck:", error)
-      alert("Error deleting deck")
+      console.error("Error sending deck to trash:", error)
+      alert("Error sending deck to trash")
     } finally {
       setIsDeleting(false)
     }

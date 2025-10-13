@@ -36,19 +36,23 @@ export function CardItem({ card }: CardItemProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showBack, setShowBack] = useState(false)
 
-  const handleDelete = async () => {
+const handleDelete = async () => {
     setIsDeleting(true)
     const supabase = createClient()
 
     try {
-      const { error } = await supabase.from("cards").delete().eq("id", card.id)
+      // Soft delete: set the 'deleted_at' timestamp
+      const { error } = await supabase
+        .from("cards")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", card.id)
 
       if (error) throw error
 
       router.refresh()
     } catch (error) {
-      console.error("[v0] Error deleting card:", error)
-      alert("Error deleting the card")
+      console.error("Error sending card to trash:", error)
+      alert("Error sending card to trash")
     } finally {
       setIsDeleting(false)
     }
