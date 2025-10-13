@@ -2,13 +2,13 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
+import { cookies } from "next/headers"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Brain, BookOpen, Edit } from "lucide-react"
 import { CreateDeckDialog } from "@/components/create-deck-dialog"
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import { DashboardClient } from "@/components/dashboard-client"
-import { cookies } from "next/headers"
 
 export default async function DashboardPage() {
   const cookieStore = cookies()
@@ -42,7 +42,30 @@ export default async function DashboardPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
-        {/* ... Tu código de header ... */}
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <Brain className="h-6 w-6" />
+            <span className="text-xl font-bold">Memoria</span>
+          </div>
+          {/* === BOTONES DEL HEADER RESTAURADOS === */}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/upcoming">Upcoming</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/trash">Trash</Link>
+            </Button>
+            <span className="h-6 border-l"></span>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/settings">Settings</Link>
+            </Button>
+            <form action="/auth/signout" method="post">
+              <Button variant="ghost" size="sm" type="submit">
+                Sign Out
+              </Button>
+            </form>
+          </div>
+        </div>
       </header>
 
       <main className="flex-1">
@@ -52,23 +75,22 @@ export default async function DashboardPage() {
               <h1 className="text-3xl font-bold">My Decks</h1>
               <p className="text-muted-foreground">Manage your study flashcard decks</p>
             </div>
+            {/* === LÓGICA DE BOTONES CORREGIDA === */}
             <div className="flex items-center gap-2">
-                <form action={async () => {
-                    "use server"
-                    cookies().set("editMode", String(!isEditMode))
-                    redirect("/dashboard")
-                }}>
-                    <Button variant={isEditMode ? "default" : "outline"} type="submit">
-                        <Edit className="mr-2 h-4 w-4" />
-                        {isEditMode ? "Done" : "Edit"}
-                    </Button>
-                </form>
-              {isEditMode && (
-                <>
-                    <CreateFolderDialog />
-                    <CreateDeckDialog />
-                </>
-              )}
+              <form action={async () => {
+                  "use server"
+                  cookies().set("editMode", String(!isEditMode))
+                  redirect("/dashboard")
+              }}>
+                  <Button variant={isEditMode ? "default" : "outline"} type="submit">
+                      <Edit className="mr-2 h-4 w-4" />
+                      {isEditMode ? "Done" : "Edit"}
+                  </Button>
+              </form>
+              {/* "New Folder" solo aparece en modo edición */}
+              {isEditMode && <CreateFolderDialog />}
+              {/* "New Deck" siempre está visible */}
+              <CreateDeckDialog />
             </div>
           </div>
 
@@ -78,8 +100,11 @@ export default async function DashboardPage() {
                 <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
                 <h3 className="mb-2 text-lg font-semibold">You don't have any items yet</h3>
                 <p className="mb-4 text-center text-sm text-muted-foreground">
-                  Click 'Edit' to create your first folder or deck.
+                  Create your first deck, or click 'Edit' to create a folder.
                 </p>
+                <div className="flex gap-2">
+                    <CreateDeckDialog />
+                </div>
               </CardContent>
             </Card>
           ) : (
