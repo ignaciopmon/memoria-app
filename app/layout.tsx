@@ -1,10 +1,10 @@
-// app/layout.tsx
 import type { Metadata } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from "@/components/ui/toaster"
 import { ThemeProvider } from "@/components/theme-provider"
+import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Memoria App',
@@ -18,9 +18,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    // El "suppressHydrationWarning" es CRUCIAL para que next-themes funcione bien
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

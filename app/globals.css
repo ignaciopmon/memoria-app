@@ -6,7 +6,7 @@
 
 /* TEMA CLARO (POR DEFECTO) */
 :root {
-  --background: oklch(1 0 0); /* Blanco puro */
+  --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -51,29 +51,30 @@
   --ring: oklch(0.439 0 0);
 }
 
-/* === NUEVO TEMA PASTEL CON FONDO SUAVE === */
+/* TEMA PASTEL */
 .pastel {
-  --background: oklch(84.41% 0.05036 85.118); /* Color crema muy suave */
-  --foreground: oklch(0.3 0.03 85);   /* Marrón suave para el texto */
-  --card: oklch(1 0 0);                /* Tarjetas blancas para contraste */
+  --background: oklch(0.985 0.006 90);
+  --foreground: oklch(0.3 0.03 85);
+  --card: oklch(1 0 0);
   --card-foreground: oklch(0.3 0.03 85);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.3 0.03 85);
-  --primary: oklch(0.7 0.1 25);       /* Terracota suave */
+  --primary: oklch(0.7 0.1 25);
   --primary-foreground: oklch(0.99 0.006 90);
-  --secondary: oklch(0.8 0.05 150);     /* Verde salvia */
+  --secondary: oklch(0.8 0.05 150);
   --secondary-foreground: oklch(0.25 0.03 150);
   --muted: oklch(0.96 0.008 90);
   --muted-foreground: oklch(0.55 0.03 85);
-  --accent: oklch(0.9 0.06 240);       /* Azul cielo pálido */
+  --accent: oklch(0.9 0.06 240);
   --accent-foreground: oklch(0.3 0.04 240);
-  --destructive: oklch(0.75 0.15 20);   /* Salmón suave */
+  --destructive: oklch(0.75 0.15 20);
   --destructive-foreground: oklch(1 0 0);
   --border: oklch(0.92 0.01 90);
   --input: oklch(0.96 0.01 90);
   --ring: oklch(0.7 0.1 25);
 }
 
+/* ESTE BLOQUE ES FUNDAMENTAL Y LO RESTAURAMOS */
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
