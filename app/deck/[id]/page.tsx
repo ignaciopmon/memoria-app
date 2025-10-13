@@ -8,6 +8,7 @@ import { CreateCardDialog } from "@/components/create-card-dialog"
 import { CardItem } from "@/components/card-item"
 import { ImportCSVDialog } from "@/components/import-csv-dialog"
 import { ImportAnkiDialog } from "@/components/import-anki-dialog"
+import { ImportXLSXDialog } from "@/components/import-xlsx-dialog" // <-- 1. IMPORTA EL NUEVO COMPONENTE
 
 export default async function DeckPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -51,7 +52,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
             <span className="text-sm text-muted-foreground">{user.email}</span>
             <form action="/auth/signout" method="post">
               <Button variant="ghost" size="sm" type="submit">
-                Log Out
+                Sign Out
               </Button>
             </form>
           </div>
@@ -67,14 +68,15 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
                 Back to Dashboard
               </Link>
             </Button>
-            <div className="flex items-start justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold">{deck.name}</h1>
                 {deck.description && <p className="text-muted-foreground">{deck.description}</p>}
                 <p className="mt-2 text-sm text-muted-foreground">{cards?.length || 0} cards</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <ImportCSVDialog deckId={id} />
+                <ImportXLSXDialog deckId={id} /> {/* <-- 2. AÑADE EL BOTÓN AQUÍ */}
                 <ImportAnkiDialog deckId={id} />
                 <CreateCardDialog deckId={id} />
               </div>
@@ -87,10 +89,11 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
                 <Plus className="mb-4 h-12 w-12 text-muted-foreground" />
                 <h3 className="mb-2 text-lg font-semibold">No cards yet</h3>
                 <p className="mb-4 text-center text-sm text-muted-foreground">
-                  Create your first card or import from a file
+                  Create your first card or import from a file.
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap justify-center gap-2">
                   <ImportCSVDialog deckId={id} />
+                  <ImportXLSXDialog deckId={id} /> {/* <-- 3. AÑADE EL BOTÓN TAMBIÉN AQUÍ */}
                   <ImportAnkiDialog deckId={id} />
                   <CreateCardDialog deckId={id} />
                 </div>
