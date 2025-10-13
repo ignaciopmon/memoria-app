@@ -19,15 +19,19 @@ export default async function DashboardPage() {
   }
 
   // Fetch user's decks
+// ...
+  // Fetch user's decks
   const { data: decks, error } = await supabase
     .from("decks")
     .select(
       `
       *,
       cards:cards(count)
-    `,
+    `
     )
+    .is("deleted_at", null) // <-- AÑADE ESTA LÍNEA
     .order("created_at", { ascending: false })
+  // ...
 
   if (error) {
     console.error("[v0] Error fetching decks:", error)

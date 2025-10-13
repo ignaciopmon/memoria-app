@@ -27,6 +27,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     .from("cards")
     .select("*")
     .eq("deck_id", id)
+    .is("deleted_at", null) // <-- AÑADE ESTA LÍNEA
     .lte("next_review_date", now)
     .order("next_review_date", { ascending: true })
 

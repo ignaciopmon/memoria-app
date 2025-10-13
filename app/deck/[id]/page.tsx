@@ -34,6 +34,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
     .from("cards")
     .select("*")
     .eq("deck_id", id)
+    .is("deleted_at", null) // <-- AÑADE ESTA LÍNEA
     .order("created_at", { ascending: false })
 
   if (cardsError) {
