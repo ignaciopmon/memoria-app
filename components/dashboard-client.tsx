@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { DeckCard } from "./deck-card"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Button } from "./ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Folder, GripVertical, Trash2, Edit, Paintbrush, ChevronDown, ChevronRight } from "lucide-react"
 import { DeleteFolderDialog } from "./delete-folder-dialog"
 import { RenameDialog } from "./rename-dialog"
@@ -26,14 +27,13 @@ type Item = {
 }
 
 // ---- Componente para una Carpeta ----
-function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; decks: Item[], isEditMode: boolean, onUpdate: (items: Item[]) => void }) {
+function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; decks: Item[], isEditMode: boolean, onUpdate: (updater: (prevItems: Item[]) => Item[]) => void }) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const { isOver, setNodeRef } = useDroppable({ id: folder.id, disabled: !isEditMode })
   
   const folderColor = folder.color || 'hsl(var(--border))'
 
-  // Si no estamos en modo edición y la carpeta está vacía, no la mostramos.
   if (!isEditMode && decks.length === 0) return null
 
   return (
@@ -57,7 +57,7 @@ function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; dec
               <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}><Edit className="h-4 w-4" /></Button>
                   <ColorPopover folderId={folder.id} currentColor={folder.color} />
-                  <DeleteFolderDialog folder={folder} decksInFolder={decks} onDelete={() => onUpdate([])} />
+                  <DeleteFolderDialog folder={folder} decksInFolder={decks} onDelete={() => onUpdate(() => [])} />
               </div>
           ) : (
               <Button variant="ghost" size="icon">
@@ -85,7 +85,7 @@ function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; dec
 }
 
 // ---- Componente para un Mazo Arrastrable ----
-function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode: boolean, onUpdate: (items: Item[]) => void }) {
+function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode: boolean, onUpdate: (updater: (prevItems: Item[]) => Item[]) => void }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: item.id, disabled: !isEditMode })
   const { toast } = useToast()
   const [isRenaming, setIsRenaming] = useState(false)
@@ -96,7 +96,6 @@ function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode:
     if (error) {
       alert("Error sending deck to trash.")
     } else {
-      // Actualización en tiempo real
       onUpdate(prevItems => prevItems.filter(i => i.id !== item.id))
     }
   }
@@ -105,7 +104,6 @@ function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode:
     <div ref={setNodeRef} className="relative group">
       {isRenaming && <RenameDialog item={item} isOpen={isRenaming} onClose={() => setIsRenaming(false)} />}
       {isEditMode && (
-        // Contenedor de acciones de edición
         <div className="absolute top-2 right-2 z-20 flex items-center bg-background/80 backdrop-blur-sm rounded-full border p-0.5 gap-0.5">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsRenaming(true)} title="Rename"><Edit className="h-4 w-4" /></Button>
           
@@ -160,7 +158,6 @@ export function DashboardClient({ initialItems, isEditMode }: { initialItems: It
 
     if (currentDeck.parent_id === newParentId) return
 
-    // Actualización optimista en la UI para el cambio de posición
     const optimisticItems = items.map(item => 
       item.id === deckId ? { ...item, parent_id: newParentId } : item
     )
@@ -170,18 +167,14 @@ export function DashboardClient({ initialItems, isEditMode }: { initialItems: It
     const { error } = await supabase.from("decks").update({ parent_id: newParentId }).eq("id", deckId)
     if (error) {
       alert("Failed to move deck.")
-      setItems(initialItems) // Revertimos en caso de error
+      setItems(initialItems)
     } else {
-        // En lugar de recargar, solo confirmamos el estado
         setItems(optimisticItems)
     }
   }
   
-  // Callback para manejar cualquier actualización de la lista de items
   const handleUpdateItems = (updater: (prevItems: Item[]) => Item[]) => {
       setItems(updater);
-      // Forzamos un refresh de los datos del servidor para sincronizar,
-      // pero la UI ya se ha actualizado.
       router.refresh();
   };
 
@@ -190,4 +183,17 @@ export function DashboardClient({ initialItems, isEditMode }: { initialItems: It
       <div className="space-y-8">
         {folders.map(folder => {
           const decksInFolder = items.filter(deck => deck.parent_id === folder.id)
-          return <FolderView key
+          return <FolderView key={folder.id} folder={folder} decks={decksInFolder} isEditMode={isEditMode} onUpdate={() => router.refresh()} />
+        })}
+        
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {rootDecks.map(deck => <DraggableItem key={deck.id} item={deck} isEditMode={isEditMode} onUpdate={setItems} />)}
+        </div>
+      </div>
+      
+      <DragOverlay>
+        {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
+      </DragOverlay>
+    </DndContext>
+  )
+}
