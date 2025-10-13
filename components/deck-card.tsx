@@ -95,18 +95,25 @@ const handleDelete = async () => {
           <BookOpen className="h-4 w-4" />
           <span>{deck.cardCount} cards</span>
         </div>
-        <div className="flex gap-2">
-          <Button asChild className="flex-1 bg-transparent" variant="outline">
+<div className="flex gap-2">
+          {deck.cardCount > 0 && (
+            <>
+              <Button asChild className="flex-1" variant="outline">
+                <Link href={`/practice/${deck.id}`}>
+                  Practice
+                </Link>
+              </Button>
+              <Button asChild className="flex-1">
+                <Link href={`/study/${deck.id}`}>
+                  <Play className="mr-2 h-4 w-4" />
+                  Study
+                </Link>
+              </Button>
+            </>
+          )}
+          <Button asChild className={deck.cardCount > 0 ? "w-full mt-2" : "flex-1"} variant={deck.cardCount > 0 ? "ghost" : "outline"}>
             <Link href={`/deck/${deck.id}`}>View Cards</Link>
           </Button>
-          {deck.cardCount > 0 && (
-            <Button asChild className="flex-1">
-              <Link href={`/study/${deck.id}`}>
-                <Play className="mr-2 h-4 w-4" />
-                Study
-              </Link>
-            </Button>
-          )}
         </div>
       </CardContent>
     </Card>
