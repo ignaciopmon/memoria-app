@@ -24,7 +24,7 @@ export default async function UpcomingPage() {
       deck:decks (id, name)
     `)
     .gt("next_review_date", today)
-    .is("deleted_at", null)
+    .is("deleted_at", null) // <-- ESTA ES LA LÍNEA CLAVE QUE OCULTA LAS TARJETAS DE LA PAPELERA
     .order("next_review_date", { ascending: true })
     .limit(100)
 
