@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { ThemeToggle } from "@/components/theme-toggle" // <-- 1. IMPORTA EL NUEVO COMPONENTE
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface Settings {
   id?: string
@@ -72,7 +72,6 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
 
   return (
     <div className="space-y-8">
-      {/* Tarjeta para la Apariencia */}
       <Card>
         <CardHeader>
           <CardTitle>Appearance</CardTitle>
@@ -85,10 +84,13 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
             <Label htmlFor="theme">Theme</Label>
             <ThemeToggle />
           </div>
+          {/* === AVISO AÑADIDO AQUÍ === */}
+          <p className="text-xs text-muted-foreground mt-4">
+            If the theme doesn't apply correctly, try reloading the page.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Tarjeta para los Intervalos */}
       <Card>
         <CardHeader>
           <CardTitle>Review Intervals</CardTitle>
