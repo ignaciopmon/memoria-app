@@ -74,6 +74,28 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+.pastel {
+  --background: oklch(0.98 0.005 240); /* Blanco hueso azulado */
+  --foreground: oklch(0.25 0.04 250);   /* Azul oscuro desaturado */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.25 0.04 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.25 0.04 250);
+  --primary: oklch(0.65 0.15 250);    /* Azul lavanda */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.9 0.05 150);     /* Verde menta claro */
+  --secondary-foreground: oklch(0.2 0.03 150);
+  --muted: oklch(0.96 0.008 240);
+  --muted-foreground: oklch(0.5 0.03 250);
+  --accent: oklch(0.95 0.06 90);       /* Crema suave */
+  --accent-foreground: oklch(0.3 0.04 90);
+  --destructive: oklch(0.75 0.15 20);   /* Salmón suave */
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.92 0.01 240);
+  --input: oklch(0.94 0.01 240);
+  --ring: oklch(0.65 0.15 250);
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
