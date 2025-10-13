@@ -6,7 +6,7 @@
 
 /* TEMA CLARO (POR DEFECTO) */
 :root {
-  --background: oklch(1 0 0);
+  --background: oklch(1 0 0); /* Blanco puro */
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -51,11 +51,11 @@
   --ring: oklch(0.439 0 0);
 }
 
-/* === NUEVO TEMA PASTEL REDISEÑADO === */
+/* === NUEVO TEMA PASTEL CON FONDO SUAVE === */
 .pastel {
-  --background: oklch(0.98 0.006 90); /* Blanco cremoso */
-  --foreground: oklch(0.3 0.03 85);   /* Marrón suave */
-  --card: oklch(1 0 0);
+  --background: oklch(0.985 0.006 90); /* Color crema muy suave */
+  --foreground: oklch(0.3 0.03 85);   /* Marrón suave para el texto */
+  --card: oklch(1 0 0);                /* Las tarjetas se mantienen blancas para contrastar */
   --card-foreground: oklch(0.3 0.03 85);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.3 0.03 85);

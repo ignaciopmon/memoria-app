@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { Moon, Sun, Paintbrush } from "lucide-react"
+import { Moon, Sun, Paintbrush } from "lucide-react" // <-- 1. Importamos el nuevo icono
 import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
@@ -17,24 +17,23 @@ export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
-  // Evita problemas de hidratación en el servidor
   React.useEffect(() => {
     setMounted(true)
   }, [])
 
+  // 2. Función para mostrar el icono correcto según el tema activo
   const renderIcon = () => {
     if (!mounted) {
-      // Muestra un icono genérico mientras carga para evitar el "salto" visual
       return <Sun className="h-[1.2rem] w-[1.2rem]" />
     }
     switch (theme) {
       case "light":
-        return <Sun className="h-[1.2rem] w-[1.2rem] transition-transform duration-300 transform rotate-0 scale-100" />
+        return <Sun className="h-[1.2rem] w-[1.2rem]" />
       case "dark":
-        return <Moon className="h-[1.2rem] w-[1.2rem] transition-transform duration-300 transform rotate-0 scale-100" />
+        return <Moon className="h-[1.2rem] w-[1.2rem]" />
       case "pastel":
-        return <Paintbrush className="h-[1.2rem] w-[1.2rem] transition-transform duration-300 transform rotate-0 scale-100" />
-      default: // System u otro
+        return <Paintbrush className="h-[1.2rem] w-[1.2rem]" /> // <-- 3. Icono de brocha para pastel
+      default: // Para "system" u otros
         return <Sun className="h-[1.2rem] w-[1.2rem]" />
     }
   }
