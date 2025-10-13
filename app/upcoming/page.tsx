@@ -15,22 +15,29 @@ export default async function UpcomingPage() {
   }
 
   const today = new Date().toISOString()
+
+  // === CONSULTA CORREGIDA ===
+  // Ahora la consulta se asegura de que tanto la tarjeta como su mazo no estén en la papelera.
   const { data: cards, error } = await supabase
     .from("cards")
     .select(`
       id,
       front,
       next_review_date,
-      deck:decks (id, name)
+      deck:decks!inner (id, name)
     `)
+    .is("deleted_at", null) // 1. Asegura que la tarjeta no esté borrada
+    .is("decks.deleted_at", null) // 2. Asegura que el MAZO no esté borrado
     .gt("next_review_date", today)
-    .is("deleted_at", null) // <-- ESTA ES LA LÍNEA CLAVE QUE OCULTA LAS TARJETAS DE LA PAPELERA
     .order("next_review_date", { ascending: true })
     .limit(100)
 
   if (error) {
     console.error("Error fetching upcoming cards:", error)
   }
+
+  // El tipo de 'cards' puede ser diferente ahora, así que lo ajustamos si es necesario.
+  // En este caso, la estructura sigue siendo la misma que espera UpcomingList.
 
   return (
     <div className="flex min-h-screen flex-col">
