@@ -4,7 +4,10 @@ import { Brain, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { SettingsForm } from "@/components/settings-form"
-import { ShortcutsForm, type Shortcuts } from "@/components/shortcuts-form" // Import component and type
+import { ShortcutsForm, type Shortcuts } from "@/components/shortcuts-form"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -27,7 +30,7 @@ export default async function SettingsPage() {
   // Fetch user's shortcuts settings
   const { data: shortcuts } = await supabase
     .from("user_shortcuts")
-    .select("*")
+    .select("rate_again, rate_hard, rate_good, rate_easy")
     .eq("user_id", user.id)
     .single()
 
@@ -51,7 +54,7 @@ export default async function SettingsPage() {
       </header>
 
       <main className="flex-1">
-        <div className="container mx-auto max-w-2xl px-4 py-8">
+        <div className="container mx-auto max-w-4xl px-4 py-8">
           <Button variant="ghost" asChild className="mb-4">
             <Link href="/dashboard">
               <ArrowLeft className="mr-2 h-4 w-4" />
@@ -62,10 +65,46 @@ export default async function SettingsPage() {
             <h1 className="text-3xl font-bold">Settings</h1>
             <p className="text-muted-foreground">Customize your study experience.</p>
           </div>
-          <div className="space-y-8">
-            <SettingsForm settings={settings} />
-            <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
-          </div>
+
+          <Tabs defaultValue="appearance" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="appearance">Appearance</TabsTrigger>
+              <TabsTrigger value="intervals">Intervals</TabsTrigger>
+              <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="appearance">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Appearance</CardTitle>
+                  <CardDescription>
+                    Customize the look and feel of the application.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div>
+                      <h3 className="font-medium">Theme</h3>
+                      <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
+                    </div>
+                    <ThemeToggle />
+                  </div>
+                   <p className="text-xs text-muted-foreground">
+                    If the theme doesn't apply correctly, try reloading the page.
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="intervals">
+              <SettingsForm settings={settings} />
+            </TabsContent>
+            
+            <TabsContent value="shortcuts">
+              <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
+            </TabsContent>
+          </Tabs>
+
         </div>
       </main>
     </div>

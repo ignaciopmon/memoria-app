@@ -1,4 +1,3 @@
-// components/settings-form.tsx
 "use client"
 
 import { useState } from "react"
@@ -8,7 +7,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { ThemeToggle } from "@/components/theme-toggle"
 
 interface Settings {
   id?: string
@@ -23,7 +21,7 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
-  const [settings, setSettings] = useState<Settings>({
+  const [settings, setSettings] = useState<Omit<Settings, 'id'>>({
     again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
     hard_interval_days: initialSettings?.hard_interval_days ?? 1,
     good_interval_days: initialSettings?.good_interval_days ?? 3,
@@ -35,7 +33,9 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setSettings((prev) => ({ ...prev, [name]: Number(value) }))
+    // Ensure value is not negative
+    const numValue = Math.max(1, Number(value));
+    setSettings((prev) => ({ ...prev, [name]: numValue }))
   }
 
   const handleSave = async () => {
@@ -59,7 +59,7 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
 
       if (error) throw error
 
-      setMessage("Settings saved successfully!")
+      setMessage("Intervals saved successfully!")
       router.refresh()
     } catch (error) {
       setMessage("Error saving settings.")
@@ -71,86 +71,65 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
   }
 
   return (
-    <div className="space-y-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>
-            Customize the look and feel of the application.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="theme">Theme</Label>
-            <ThemeToggle />
-          </div>
-          {/* === AVISO AÑADIDO AQUÍ === */}
-          <p className="text-xs text-muted-foreground mt-4">
-            If the theme doesn't apply correctly, try reloading the page.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Review Intervals</CardTitle>
-          <CardDescription>
-            Set the time until a card is shown again after you rate it.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-2">
-            <Label htmlFor="again_interval_minutes">"Again" Interval (minutes)</Label>
-            <Input
-              id="again_interval_minutes"
-              name="again_interval_minutes"
-              type="number"
-              value={settings.again_interval_minutes}
-              onChange={handleInputChange}
-              min="1"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="hard_interval_days">"Hard" Interval (days)</Label>
-            <Input
-              id="hard_interval_days"
-              name="hard_interval_days"
-              type="number"
-              value={settings.hard_interval_days}
-              onChange={handleInputChange}
-              min="1"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="good_interval_days">"Good" Interval (days)</Label>
-            <Input
-              id="good_interval_days"
-              name="good_interval_days"
-              type="number"
-              value={settings.good_interval_days}
-              onChange={handleInputChange}
-              min="1"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="easy_interval_days">"Easy" Interval (days)</Label>
-            <Input
-              id="easy_interval_days"
-              name="easy_interval_days"
-              type="number"
-              value={settings.easy_interval_days}
-              onChange={handleInputChange}
-              min="1"
-            />
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          {message && <p className="text-sm text-muted-foreground">{message}</p>}
-          <Button onClick={handleSave} disabled={isLoading} className="ml-auto">
-            {isLoading ? "Saving..." : "Save Changes"}
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Review Intervals</CardTitle>
+        <CardDescription>
+          Set the time until a card is shown again after you rate it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-6 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="again_interval_minutes">"Again" Interval (minutes)</Label>
+          <Input
+            id="again_interval_minutes"
+            name="again_interval_minutes"
+            type="number"
+            value={settings.again_interval_minutes}
+            onChange={handleInputChange}
+            min="1"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="hard_interval_days">"Hard" Interval (days)</Label>
+          <Input
+            id="hard_interval_days"
+            name="hard_interval_days"
+            type="number"
+            value={settings.hard_interval_days}
+            onChange={handleInputChange}
+            min="1"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="good_interval_days">"Good" Interval (days)</Label>
+          <Input
+            id="good_interval_days"
+            name="good_interval_days"
+            type="number"
+            value={settings.good_interval_days}
+            onChange={handleInputChange}
+            min="1"
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="easy_interval_days">"Easy" Interval (days)</Label>
+          <Input
+            id="easy_interval_days"
+            name="easy_interval_days"
+            type="number"
+            value={settings.easy_interval_days}
+            onChange={handleInputChange}
+            min="1"
+          />
+        </div>
+      </CardContent>
+      <CardFooter className="flex justify-between border-t px-6 pt-6">
+        {message && <p className="text-sm text-muted-foreground">{message}</p>}
+        <Button onClick={handleSave} disabled={isLoading} className="ml-auto">
+          {isLoading ? "Saving..." : "Save Intervals"}
+        </Button>
+      </CardFooter>
+    </Card>
   )
 }

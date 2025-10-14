@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { Keyboard } from "lucide-react"
 
 export type Shortcuts = {
   id?: string
@@ -20,6 +19,15 @@ export type Shortcuts = {
 interface ShortcutsFormProps {
   shortcuts: Omit<Shortcuts, 'id'> | null
 }
+
+const ShortcutDisplay = ({ label, value }: { label: string, value: string }) => (
+  <div className="flex items-center justify-between rounded-lg border p-4">
+      <p className="font-medium">{label}</p>
+      <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded border bg-muted px-2 font-mono text-sm font-medium text-muted-foreground">
+        {value.toUpperCase()}
+      </kbd>
+  </div>
+);
 
 export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProps) {
   const defaultShortcuts: Omit<Shortcuts, 'id'> = {
@@ -36,7 +44,7 @@ export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProp
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    const key = value.slice(-1) // Solo permite un carácter
+    const key = value.slice(-1) 
     setShortcuts((prev) => ({ ...prev, [name]: key }))
   }
   
@@ -55,9 +63,6 @@ export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProp
     try {
       const { error } = await supabase.from("user_shortcuts").upsert({
         user_id: user.id,
-        // Guardamos también los valores fijos por si en el futuro se hacen personalizables
-        flip_card: ' ',
-        to_dashboard: 'd',
         ...shortcuts,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' })
@@ -83,28 +88,20 @@ export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProp
           Customize your shortcuts for a faster study experience.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-8">
         {/* Atajos Fijos */}
-        <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
-            <h4 className="font-medium">Global Shortcuts</h4>
-            <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Go to Dashboard</p>
-                <div className="flex items-center gap-2">
-                    <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">D</kbd>
-                </div>
-            </div>
-             <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Flip Card (in Study/Practice)</p>
-                <div className="flex items-center gap-2">
-                    <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">SPACE</kbd>
-                </div>
+        <div className="space-y-4">
+            <h4 className="font-medium px-1">Global Shortcuts</h4>
+            <div className="space-y-2">
+              <ShortcutDisplay label="Go to Dashboard" value="D" />
+              <ShortcutDisplay label="Flip Card (in Study/Practice)" value="SPACE" />
             </div>
         </div>
 
         {/* Atajos Personalizables */}
         <div className="space-y-4">
-            <h4 className="font-medium">Study Mode Shortcuts</h4>
-            <div className="grid grid-cols-2 gap-4">
+            <h4 className="font-medium px-1">Study Mode Shortcuts</h4>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="rate_again">Rate "Again"</Label>
                   <Input id="rate_again" name="rate_again" value={shortcuts.rate_again} onChange={handleInputChange} maxLength={1} className="font-mono text-center"/>
@@ -124,7 +121,7 @@ export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProp
             </div>
         </div>
       </CardContent>
-      <CardFooter className="flex justify-between">
+      <CardFooter className="flex justify-between border-t px-6 pt-6">
         {message && <p className="text-sm text-muted-foreground">{message}</p>}
         <Button onClick={handleSave} disabled={isLoading} className="ml-auto">
           {isLoading ? "Saving..." : "Save Shortcuts"}
