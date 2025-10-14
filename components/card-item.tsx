@@ -64,7 +64,7 @@ export function CardItem({ card }: CardItemProps) {
           <div className="flex-1 space-y-4">
             <div>
               <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
-              {card.front_image_url && <div className="relative mb-2 h-32 w-full"><Image src={card.front_image_url} alt="Front image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
+              {card.front_image_url && <div className="relative mb-2 h-32 w-full"><Image src={card.front_image_url} alt="Front image" fill style={{ objectFit: 'contain' }} className="rounded-md" /></div>}
               <p className="text-base">{card.front}</p>
             </div>
             <div>
@@ -73,7 +73,7 @@ export function CardItem({ card }: CardItemProps) {
               </button>
               {showBack && (
                 <>
-                  {card.back_image_url && <div className="relative mb-2 h-32 w-full"><Image src={card.back_image_url} alt="Back image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
+                  {card.back_image_url && <div className="relative mb-2 h-32 w-full"><Image src={card.back_image_url} alt="Back image" fill style={{ objectFit: 'contain' }} className="rounded-md" /></div>}
                   <p className="text-base text-muted-foreground">{card.back}</p>
                 </>
               )}

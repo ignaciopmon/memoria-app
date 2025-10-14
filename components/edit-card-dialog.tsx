@@ -133,7 +133,7 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
               <Textarea id="front" value={front} onChange={(e) => setFront(e.target.value)} required rows={3} />
               {frontPreview && (
                  <div className="relative mt-2 h-24 w-24">
-                  <Image src={frontPreview} alt="Front preview" layout="fill" objectFit="cover" className="rounded-md" />
+                  <Image src={frontPreview} alt="Front preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
                   <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={() => { setFrontImage(null); setFrontPreview(null); if (frontInputRef.current) frontInputRef.current.value = ""; }}>
                     <X className="h-4 w-4" />
                   </Button>
@@ -149,7 +149,7 @@ export function EditCardDialog({ card }: EditCardDialogProps) {
               <Textarea id="back" value={back} onChange={(e) => setBack(e.target.value)} required rows={4} />
               {backPreview && (
                 <div className="relative mt-2 h-24 w-24">
-                  <Image src={backPreview} alt="Back preview" layout="fill" objectFit="cover" className="rounded-md" />
+                  <Image src={backPreview} alt="Back preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
                   <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={() => { setBackImage(null); setBackPreview(null); if (backInputRef.current) backInputRef.current.value = ""; }}>
                     <X className="h-4 w-4" />
                   </Button>
