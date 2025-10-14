@@ -56,50 +56,67 @@ export function CardItem({ card }: CardItemProps) {
       setIsDeleting(false)
     }
   }
+  
+  const imageToShow = showBack ? card.back_image_url : card.front_image_url;
 
   return (
     <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 space-y-4">
-            <div>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
-              {card.front_image_url && <div className="relative mb-2 h-32 w-full"><Image src={card.front_image_url} alt="Front image" fill style={{ objectFit: 'contain' }} className="rounded-md" /></div>}
-              <p className="text-base">{card.front}</p>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-4">
+          {/* Contenedor de la Imagen */}
+          {imageToShow && (
+            <div className="relative h-28 w-28 flex-shrink-0 rounded-md bg-muted">
+              <Image 
+                src={imageToShow} 
+                alt={showBack ? "Back image" : "Front image"} 
+                layout="fill" 
+                objectFit="cover" 
+                className="rounded-md" 
+              />
             </div>
-            <div>
-              <button onClick={() => setShowBack(!showBack)} className="mb-1 text-xs font-medium text-muted-foreground hover:text-foreground">
-                BACK {showBack ? "▼" : "▶"}
-              </button>
-              {showBack && (
-                <>
-                  {card.back_image_url && <div className="relative mb-2 h-32 w-full"><Image src={card.back_image_url} alt="Back image" fill style={{ objectFit: 'contain' }} className="rounded-md" /></div>}
-                  <p className="text-base text-muted-foreground">{card.back}</p>
-                </>
-              )}
+          )}
+
+          {/* Contenedor de Texto y Acciones */}
+          <div className="flex flex-1 flex-col">
+            <div className="flex justify-between">
+              {/* Textos */}
+              <div className="flex-1 space-y-3">
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
+                  <p className="text-base">{card.front}</p>
+                </div>
+                <div>
+                  <button onClick={() => setShowBack(!showBack)} className="mb-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+                    BACK {showBack ? "▼" : "▶"}
+                  </button>
+                  {showBack && <p className="text-base text-muted-foreground">{card.back}</p>}
+                </div>
+              </div>
+
+              {/* Acciones */}
+              <div className="flex gap-1">
+                <EditCardDialog card={card} />
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete card?</AlertDialogTitle>
+                      <AlertDialogDescription>This action cannot be undone. This will permanently delete this card.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        {isDeleting ? "Deleting..." : "Delete"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
-          </div>
-          <div className="flex gap-1">
-            <EditCardDialog card={card} />
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete card?</AlertDialogTitle>
-                  <AlertDialogDescription>This action cannot be undone. This will permanently delete this card.</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
         </div>
       </CardContent>
