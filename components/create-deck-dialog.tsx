@@ -1,9 +1,10 @@
+// components/create-deck-dialog.tsx
 "use client"
 
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -18,8 +19,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { type VariantProps } from "class-variance-authority"
 
-export function CreateDeckDialog({ onDeckCreated }: { onDeckCreated?: () => void }) {
+export function CreateDeckDialog({ onDeckCreated, size }: { onDeckCreated?: () => void, size?: VariantProps<typeof buttonVariants>["size"] }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -69,7 +71,7 @@ export function CreateDeckDialog({ onDeckCreated }: { onDeckCreated?: () => void
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button size={size}>
           <Plus className="mr-2 h-4 w-4" />
           New Deck
         </Button>

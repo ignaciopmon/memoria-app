@@ -11,14 +11,12 @@ import { DeckCard } from "./deck-card"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Button } from "./ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Folder, GripVertical, Trash2, Edit, Paintbrush, ChevronDown, ChevronRight, Loader2 } from "lucide-react"
+import { Folder, GripVertical, Trash2, Edit, Paintbrush, ChevronDown, ChevronRight, Loader2, BookOpen } from "lucide-react"
 import { DeleteFolderDialog } from "./delete-folder-dialog"
 import { RenameDialog } from "./rename-dialog"
 import { ColorPopover } from "./color-popover"
-// --- LÍNEAS QUE FALTABAN ---
 import { CreateDeckDialog } from "./create-deck-dialog"
 import { CreateFolderDialog } from "./create-folder-dialog"
-// --- FIN DE LÍNEAS QUE FALTABAN ---
 
 type Item = {
   id: string
@@ -189,6 +187,17 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
       setItems(initialItems)
     }
   }
+
+  if (items.length === 0) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center text-center">
+        <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
+        <h2 className="text-2xl font-semibold">Your dashboard is empty</h2>
+        <p className="mb-6 text-muted-foreground">Create your first deck to get started.</p>
+        <CreateDeckDialog onDeckCreated={() => router.refresh()} size="lg" />
+      </div>
+    )
+  }
   
   return (
     <>
@@ -207,34 +216,22 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         </div>
       </div>
 
-      {initialItems.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="mb-2 text-lg font-semibold">You don't have any items yet</h3>
-            <p className="mb-4 text-center text-sm text-muted-foreground">
-              Create your first deck to get started.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="space-y-8">
-            {folders.map(folder => {
-              const decksInFolder = items.filter(deck => deck.parent_id === folder.id)
-              return <FolderView key={folder.id} folder={folder} decks={decksInFolder} isEditMode={isEditMode} onUpdate={setItems} />
-            })}
-            
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {rootDecks.map(deck => <DraggableItem key={deck.id} item={deck} isEditMode={isEditMode} onUpdate={setItems} />)}
-            </div>
-          </div>
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="space-y-8">
+          {folders.map(folder => {
+            const decksInFolder = items.filter(deck => deck.parent_id === folder.id)
+            return <FolderView key={folder.id} folder={folder} decks={decksInFolder} isEditMode={isEditMode} onUpdate={setItems} />
+          })}
           
-          <DragOverlay>
-            {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
-          </DragOverlay>
-        </DndContext>
-      )}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {rootDecks.map(deck => <DraggableItem key={deck.id} item={deck} isEditMode={isEditMode} onUpdate={setItems} />)}
+          </div>
+        </div>
+        
+        <DragOverlay>
+          {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
+        </DragOverlay>
+      </DndContext>
     </>
   )
 }

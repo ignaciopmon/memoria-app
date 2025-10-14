@@ -3,8 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Brain, BookOpen } from "lucide-react"
+import { Brain } from "lucide-react"
 import { DashboardClient } from "@/components/dashboard-client"
 
 export default async function DashboardPage() {
@@ -63,17 +62,7 @@ export default async function DashboardPage() {
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8">
-          {itemsWithCount.length === 0 ? (
-            <div className="flex h-[60vh] flex-col items-center justify-center text-center">
-              <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
-              <h2 className="text-2xl font-semibold">Your dashboard is empty</h2>
-              <p className="mb-6 text-muted-foreground">Create your first deck to get started.</p>
-              {/* El botón de crear se gestiona ahora dentro del DashboardClient */}
-            </div>
-          ) : (
-            // Pasamos el control total al componente cliente
-            <DashboardClient initialItems={itemsWithCount} />
-          )}
+          <DashboardClient initialItems={itemsWithCount} />
         </div>
       </main>
     </div>
