@@ -9,7 +9,9 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Memoria App',
   description: 'Learn faster with spaced repetition',
-  generator: 'v0.app',
+  verification: {
+    google: 'eiQsfdzrkZN4RKz0MNQST3aYzZvRKZtxcMACBsxzxnA'
+  },
 }
 
 export default function RootLayout({
