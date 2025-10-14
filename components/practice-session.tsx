@@ -1,23 +1,16 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react" // <-- Añade useCallback
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Brain, ArrowLeft, CheckCircle, ChevronLeft, ChevronRight, Shuffle } from "lucide-react"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 
 interface PracticeSessionProps {
-  deck: {
-    id: string
-    name: string
-  }
-  initialCards: Array<{
-    id: string
-    front: string
-    back: string
-  }>
+  deck: { id: string; name: string }
+  initialCards: Array<{ id: string; front: string; back: string }>
 }
 
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -39,6 +32,23 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
   }, [isShuffled, initialCards]);
 
   const currentCard = cards[currentIndex]
+
+  // Atajo para la barra espaciadora
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+    
+    if (event.key === ' ') {
+        event.preventDefault();
+        setShowAnswer(prev => !prev);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
 
   useEffect(() => {
     setCurrentIndex(0);
