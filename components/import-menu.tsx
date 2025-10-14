@@ -17,6 +17,13 @@ export function ImportMenu({ deckId }: ImportMenuProps) {
   const [xlsxOpen, setXlsxOpen] = useState(false)
   const [txtOpen, setTxtOpen] = useState(false)
 
+  // Esta función previene el comportamiento por defecto del menú y usa un pequeño retraso
+  // para evitar que el diálogo y el menú "choquen", lo que causaba el bug de bloqueo.
+  const handleSelect = (setter: (isOpen: boolean) => void) => (e: Event) => {
+    e.preventDefault()
+    setTimeout(() => setter(true), 0)
+  }
+
   return (
     <>
       <DropdownMenu>
@@ -27,19 +34,18 @@ export function ImportMenu({ deckId }: ImportMenuProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          <DropdownMenuItem onSelect={() => setCsvOpen(true)}>
+          <DropdownMenuItem onSelect={handleSelect(setCsvOpen)}>
             From CSV file...
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setXlsxOpen(true)}>
+          <DropdownMenuItem onSelect={handleSelect(setXlsxOpen)}>
             From XLSX file...
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setTxtOpen(true)}>
+          <DropdownMenuItem onSelect={handleSelect(setTxtOpen)}>
             From TXT file...
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Estos diálogos están ocultos hasta que su estado 'open' es true */}
       <ImportCSVDialog deckId={deckId} open={csvOpen} onOpenChange={setCsvOpen} />
       <ImportXLSXDialog deckId={deckId} open={xlsxOpen} onOpenChange={setXlsxOpen} />
       <ImportTxtDialog deckId={deckId} open={txtOpen} onOpenChange={setTxtOpen} />

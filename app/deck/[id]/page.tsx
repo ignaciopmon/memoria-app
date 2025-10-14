@@ -6,7 +6,7 @@ import { Brain, ArrowLeft, Plus } from "lucide-react"
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { CardItem } from "@/components/card-item"
-import { ImportMenu } from "@/components/import-menu" // <-- IMPORTAMOS EL NUEVO MENÚ
+import { ImportMenu } from "@/components/import-menu"
 
 export default async function DeckPage({ params }: { params: { id: string } }) {
   const { id } = params
@@ -34,7 +34,22 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b">{/* ... Header ... */}</header>
+      <header className="border-b">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <Brain className="h-6 w-6" />
+            <span className="text-xl font-bold">Memoria</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground">{user.email}</span>
+            <form action="/auth/signout" method="post">
+              <Button variant="ghost" size="sm" type="submit">
+                Sign Out
+              </Button>
+            </form>
+          </div>
+        </div>
+      </header>
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8">
@@ -52,7 +67,6 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
                 <p className="mt-2 text-sm text-muted-foreground">{cards?.length || 0} cards</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {/* === BOTONES ANTIGUOS REEMPLAZADOS POR EL MENÚ === */}
                 <ImportMenu deckId={id} />
                 <CreateCardDialog deckId={id} />
               </div>
@@ -68,7 +82,6 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
                   Create your first card or import from a file.
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
-                  {/* === BOTONES ANTIGUOS REEMPLAZADOS POR EL MENÚ === */}
                   <ImportMenu deckId={id} />
                   <CreateCardDialog deckId={id} />
                 </div>
