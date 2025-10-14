@@ -2,12 +2,18 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
+import { cookies } from "next/headers"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, BookOpen } from "lucide-react"
+import { Brain, BookOpen, Edit } from "lucide-react"
+import { CreateDeckDialog } from "@/components/create-deck-dialog"
+import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import { DashboardClient } from "@/components/dashboard-client"
 
 export default async function DashboardPage() {
+  const cookieStore = cookies()
+  const isEditMode = cookieStore.get("editMode")?.value === "true"
+
   const supabase = await createClient()
 
   const {
@@ -63,18 +69,42 @@ export default async function DashboardPage() {
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8">
+          {/* === LÓGICA CONDICIONAL AÑADIDA AQUÍ === */}
           {itemsWithCount.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-16">
-                <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-semibold">You don't have any items yet</h3>
-                <p className="mb-4 text-center text-sm text-muted-foreground">
-                  Create your first deck to get started.
-                </p>
-              </CardContent>
-            </Card>
+            // VISTA CUANDO NO HAY MAZOS
+            <div className="flex h-[60vh] flex-col items-center justify-center text-center">
+              <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
+              <h2 className="text-2xl font-semibold">Your dashboard is empty</h2>
+              <p className="mb-6 text-muted-foreground">Create your first deck to get started.</p>
+              <CreateDeckDialog />
+            </div>
           ) : (
-            <DashboardClient initialItems={itemsWithCount} />
+            // VISTA NORMAL CUANDO SÍ HAY MAZOS
+            <>
+              <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-bold">My Decks</h1>
+                  <p className="text-muted-foreground">Manage your study flashcard decks</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <form action={async () => {
+                        "use server"
+                        // El estado se guarda en una cookie para persistir entre recargas
+                        const currentMode = cookies().get("editMode")?.value === "true"
+                        cookies().set("editMode", String(!currentMode))
+                        redirect("/dashboard")
+                    }}>
+                        <Button variant={isEditMode ? "default" : "outline"} type="submit">
+                            <Edit className="mr-2 h-4 w-4" />
+                            {isEditMode ? "Done" : "Edit"}
+                        </Button>
+                    </form>
+                  {isEditMode && <CreateFolderDialog />}
+                  <CreateDeckDialog />
+                </div>
+              </div>
+              <DashboardClient initialItems={itemsWithCount} isEditMode={isEditMode} />
+            </>
           )}
         </div>
       </main>
