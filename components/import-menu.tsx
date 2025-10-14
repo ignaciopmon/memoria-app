@@ -22,6 +22,16 @@ export function ImportMenu({ deckId }: ImportMenuProps) {
   const [xlsxOpen, setXlsxOpen] = useState(false)
   const [txtOpen, setTxtOpen] = useState(false)
 
+  // Esta función es la clave de la solución.
+  // Evita el conflicto entre el menú y el diálogo.
+  const handleSelect = (setter: (isOpen: boolean) => void) => {
+    // Usamos un pequeño retraso para asegurar que el menú se cierre
+    // antes de que el diálogo intente abrirse.
+    setTimeout(() => {
+      setter(true)
+    }, 100) // 100 milisegundos es suficiente para que la animación del menú termine.
+  }
+
   return (
     <>
       <DropdownMenu>
@@ -32,21 +42,20 @@ export function ImportMenu({ deckId }: ImportMenuProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          {/* Al hacer clic, simplemente cambiamos el estado. El menú se cerrará
-              y el diálogo se abrirá en un flujo limpio y sin conflictos. */}
-          <DropdownMenuItem onSelect={() => setCsvOpen(true)}>
+          {/* El 'onSelect' ahora llama a nuestra función segura */}
+          <DropdownMenuItem onSelect={() => handleSelect(setCsvOpen)}>
             From CSV file...
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setXlsxOpen(true)}>
+          <DropdownMenuItem onSelect={() => handleSelect(setXlsxOpen)}>
             From XLSX file...
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setTxtOpen(true)}>
+          <DropdownMenuItem onSelect={() => handleSelect(setTxtOpen)}>
             From TXT file...
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Los diálogos siguen aquí, escuchando su estado de 'open' */}
+      {/* Los diálogos no cambian, siguen esperando a que su estado 'open' sea true */}
       <ImportCSVDialog deckId={deckId} open={csvOpen} onOpenChange={setCsvOpen} />
       <ImportXLSXDialog deckId={deckId} open={xlsxOpen} onOpenChange={setXlsxOpen} />
       <ImportTxtDialog deckId={deckId} open={txtOpen} onOpenChange={setTxtOpen} />
