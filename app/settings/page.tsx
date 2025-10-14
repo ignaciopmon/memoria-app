@@ -23,6 +23,13 @@ export default async function SettingsPage() {
     .eq("user_id", user.id)
     .single()
 
+  // Fetch user's shortcuts settings
+  const { data: shortcuts } = await supabase
+    .from("user_shortcuts")
+    .select("*")
+    .eq("user_id", user.id)
+    .single()
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
@@ -52,9 +59,12 @@ export default async function SettingsPage() {
           </Button>
           <div className="mb-8">
             <h1 className="text-3xl font-bold">Settings</h1>
-            <p className="text-muted-foreground">Customize your study intervals.</p>
+            <p className="text-muted-foreground">Customize your study experience.</p>
           </div>
-          <SettingsForm settings={settings} />
+          <div className="space-y-8">
+            <SettingsForm settings={settings} />
+            <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
+          </div>
         </div>
       </main>
     </div>

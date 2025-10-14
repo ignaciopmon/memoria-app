@@ -8,6 +8,7 @@ import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { Progress } from "@/components/ui/progress"
+import type { Shortcuts } from "@/components/shortcuts-form"
 
 interface StudySessionProps {
   deck: {
@@ -40,6 +41,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [showAnswer, setShowAnswer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null)
+  const [shortcuts, setShortcuts] = useState<Shortcuts | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -53,10 +55,56 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           .eq('user_id', user.id)
           .single()
         setUserSettings(data)
+
+        // Fetch shortcuts
+        const { data: shortcutsData } = await supabase
+          .from('user_shortcuts')
+          .select('*')
+          .eq('user_id', user.id)
+          .single()
+        setShortcuts(shortcutsData)
       }
     }
     fetchSettings()
   }, [])
+
+    // Hook para manejar los atajos de teclado
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // Ignoramos si se está escribiendo en un input
+    if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+      return
+    }
+
+    const key = event.key === ' ' ? ' ' : event.key.toLowerCase()
+    const s = shortcuts || { flip_card: ' ', rate_again: '1', rate_hard: '2', rate_good: '3', rate_easy: '4', to_dashboard: 'd' }
+
+    if (!showAnswer && key === s.flip_card.toLowerCase()) {
+      event.preventDefault()
+      setShowAnswer(true)
+    } else if (showAnswer) {
+      event.preventDefault()
+      switch (key) {
+        case s.rate_again.toLowerCase(): handleRating(1); break;
+        case s.rate_hard.toLowerCase(): handleRating(2); break;
+        case s.rate_good.toLowerCase(): handleRating(3); break;
+        case s.rate_easy.toLowerCase(): handleRating(4); break;
+      }
+    }
+
+    if (key === s.to_dashboard.toLowerCase()) {
+        event.preventDefault()
+        router.push('/dashboard')
+    }
+
+  }, [showAnswer, shortcuts, handleRating, router])
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [handleKeyDown])
+
 
   const currentCard = cards[currentIndex]
   const progress = (currentIndex / cards.length) * 100 || 0
