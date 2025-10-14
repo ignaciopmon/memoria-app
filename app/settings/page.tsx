@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { Brain, ArrowLeft } from "lucide-react"
+import { Brain, ArrowLeft, HelpCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { SettingsForm } from "@/components/settings-form"
@@ -104,6 +104,15 @@ export default async function SettingsPage() {
               <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
             </TabsContent>
           </Tabs>
+
+          <div className="mt-8 flex justify-center">
+            <Button variant="link" asChild className="text-muted-foreground">
+              <Link href="/help">
+                <HelpCircle className="mr-2 h-4 w-4" />
+                How does it work?
+              </Link>
+            </Button>
+          </div>
 
         </div>
       </main>
