@@ -58,9 +58,13 @@ function FolderView({ folder, decks, isEditMode, onUpdate }: { folder: Item; dec
           {isEditMode ? (
               <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}><Edit className="h-4 w-4" /></Button>
-                  <ColorPopover folderId={folder.id} currentColor={folder.color} onColorChange={(color) => {
-                      onUpdate(prev => prev.map(it => it.id === folder.id ? {...it, color} : it))
-                  }} />
+                  <ColorPopover
+                    itemId={folder.id}
+                    currentColor={folder.color}
+                    onColorChange={(color) => {
+                      onUpdate(prev => prev.map(it => it.id === folder.id ? { ...it, color } : it));
+                    }}
+                  />
                   <DeleteFolderDialog folder={folder} decksInFolder={decks} onDelete={(deletedIds) => {
                       onUpdate(prev => prev.filter(it => !deletedIds.includes(it.id)))
                   }} />
@@ -116,14 +120,13 @@ function DraggableItem({ item, isEditMode, onUpdate }: { item: Item, isEditMode:
         <div className="absolute top-2 right-2 z-20 flex items-center bg-background/80 backdrop-blur-sm rounded-full border p-0.5 gap-0.5">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsRenaming(true)} title="Rename"><Edit className="h-4 w-4" /></Button>
           
-          <Popover>
-            <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" title="Change color"><Paintbrush className="h-4 w-4" /></Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-2">
-                <p className="text-sm">Deck colors coming soon!</p>
-            </PopoverContent>
-          </Popover>
+          <ColorPopover
+            itemId={item.id}
+            currentColor={item.color}
+            onColorChange={(color) => {
+              onUpdate(prev => prev.map(it => it.id === item.id ? { ...it, color } : it));
+            }}
+          />
 
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={handleDelete} title="Delete" disabled={isDeleting}>
             {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

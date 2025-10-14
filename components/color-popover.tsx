@@ -10,22 +10,25 @@ import { Paintbrush } from "lucide-react"
 const colors = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899"]
 
 interface ColorPopoverProps {
-  folderId: string
+  itemId: string
   currentColor: string | null
+  onColorChange: (color: string | null) => void
 }
 
-export function ColorPopover({ folderId, currentColor }: ColorPopoverProps) {
+export function ColorPopover({ itemId, currentColor, onColorChange }: ColorPopoverProps) {
   const router = useRouter()
 
   const handleColorSelect = async (color: string | null) => {
+    onColorChange(color)
     const supabase = createClient()
     const { error } = await supabase
       .from("decks")
       .update({ color: color })
-      .eq("id", folderId)
+      .eq("id", itemId)
 
     if (error) {
       alert("Error updating color.")
+      onColorChange(currentColor)
     } else {
       router.refresh()
     }

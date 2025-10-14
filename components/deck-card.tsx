@@ -1,6 +1,5 @@
 // components/deck-card.tsx
 "use client"
-// ... (tus imports de siempre)
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { BookOpen, Play } from "lucide-react"
@@ -12,20 +11,25 @@ interface DeckCardProps {
     name: string
     description: string | null
     cardCount: number
+    color: string | null
   }
-  isEditMode?: boolean // Prop para saber si estamos en modo edición
+  isEditMode?: boolean
 }
 
 export function DeckCard({ deck, isEditMode = false }: DeckCardProps) {
-  // Si estamos en modo edición, los botones no hacen nada
   const handleActionClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (isEditMode) {
       e.preventDefault()
     }
   }
 
+  const cardStyle = deck.color ? { borderColor: deck.color, borderWidth: '2px' } : {};
+
   return (
-    <Card className={`flex flex-col transition-opacity ${isEditMode ? 'opacity-75 cursor-default' : ''}`}>
+    <Card 
+      className={`flex flex-col transition-all ${isEditMode ? 'opacity-75 cursor-default' : ''}`}
+      style={cardStyle}
+    >
       <CardHeader className="pb-4">
         <CardTitle className="line-clamp-1">{deck.name}</CardTitle>
         <CardDescription className="line-clamp-2 h-10">{deck.description || "No description"}</CardDescription>
