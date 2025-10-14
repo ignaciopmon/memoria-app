@@ -20,6 +20,7 @@ interface StudySessionProps {
     interval: number
     repetitions: number
     next_review_date: string
+    last_rating: number | null
   }>
 }
 
@@ -61,30 +62,48 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const isComplete = currentIndex >= cards.length
 
   const calculateNextReview = (card: (typeof cards)[0], rating: Rating) => {
-    let { ease_factor, interval, repetitions } = card
+    let { ease_factor, interval, repetitions, last_rating } = card;
     const settings = {
         again: userSettings?.again_interval_minutes ?? 1,
         hard: userSettings?.hard_interval_days ?? 1,
         good: userSettings?.good_interval_days ?? 3,
         easy: userSettings?.easy_interval_days ?? 7,
+    };
+
+    const now = new Date();
+    let nextReviewDate = new Date();
+
+    if (rating < 3) { // Rating 1 (Again) or 2 (Hard)
+        repetitions = 0;
+        if (rating === 1) { // Again
+            interval = 0;
+            nextReviewDate.setMinutes(now.getMinutes() + settings.again);
+        } else { // Hard
+            if (last_rating === 2) {
+                // Second time "Hard" in a row, penalize more
+                interval = Math.max(1, Math.ceil(interval * 0.5));
+            } else {
+                interval = settings.hard;
+            }
+        }
+    } else { // Rating 3 (Good) or 4 (Easy)
+        repetitions += 1;
+        if (repetitions === 1) {
+            interval = settings.good;
+        } else if (repetitions === 2) {
+            interval = settings.easy;
+        } else {
+            interval = Math.ceil(interval * ease_factor);
+        }
     }
-    if (rating < 3) {
-      repetitions = 0
-      interval = rating === 1 ? 0 : 1
-    } else {
-      if (repetitions === 0) interval = settings.good
-      else if (repetitions === 1) interval = settings.easy
-      else interval = Math.round(interval * ease_factor)
-      repetitions += 1
+
+    ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02)));
+
+    if (rating > 1) { // For Hard, Good, Easy, add the interval in days
+        nextReviewDate.setDate(now.getDate() + interval);
     }
-    ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02)))
-    const nextReviewDate = new Date()
-    if (rating === 1) {
-        nextReviewDate.setMinutes(nextReviewDate.getMinutes() + settings.again)
-    } else {
-        nextReviewDate.setDate(nextReviewDate.getDate() + interval)
-    }
-    return { ease_factor, interval, repetitions, next_review_date: nextReviewDate.toISOString() }
+    
+    return { ease_factor, interval, repetitions, next_review_date: nextReviewDate.toISOString(), last_rating: rating };
   }
 
   const handleRating = useCallback(async (rating: Rating) => {
