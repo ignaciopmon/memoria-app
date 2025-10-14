@@ -4,6 +4,7 @@ import { Brain, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { SettingsForm } from "@/components/settings-form"
+import { ShortcutsForm, type Shortcuts } from "@/components/shortcuts-form" // Import component and type
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -16,13 +17,13 @@ export default async function SettingsPage() {
     redirect("/auth/login")
   }
 
-  // Fetch user's settings
+  // Fetch user's interval settings
   const { data: settings } = await supabase
     .from("user_settings")
     .select("*")
     .eq("user_id", user.id)
     .single()
-
+    
   // Fetch user's shortcuts settings
   const { data: shortcuts } = await supabase
     .from("user_shortcuts")
