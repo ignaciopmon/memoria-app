@@ -9,6 +9,7 @@ import { Brain, ArrowLeft, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import type { Shortcuts } from "@/components/shortcuts-form"
+import Image from "next/image"
 
 interface StudySessionProps {
   deck: { id: string; name: string }
@@ -16,6 +17,8 @@ interface StudySessionProps {
     id: string
     front: string
     back: string
+    front_image_url: string | null
+    back_image_url: string | null
     ease_factor: number
     interval: number
     repetitions: number
@@ -73,20 +76,19 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     const now = new Date();
     let nextReviewDate = new Date();
 
-    if (rating < 3) { // Rating 1 (Again) or 2 (Hard)
+    if (rating < 3) { 
         repetitions = 0;
-        if (rating === 1) { // Again
+        if (rating === 1) { 
             interval = 0;
             nextReviewDate.setMinutes(now.getMinutes() + settings.again);
-        } else { // Hard
+        } else { 
             if (last_rating === 2) {
-                // Second time "Hard" in a row, penalize more
                 interval = Math.max(1, Math.ceil(interval * 0.5));
             } else {
                 interval = settings.hard;
             }
         }
-    } else { // Rating 3 (Good) or 4 (Easy)
+    } else { 
         repetitions += 1;
         if (repetitions === 1) {
             interval = settings.good;
@@ -99,7 +101,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
     ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02)));
 
-    if (rating > 1) { // For Hard, Good, Easy, add the interval in days
+    if (rating > 1) { 
         nextReviewDate.setDate(now.getDate() + interval);
     }
     
@@ -256,14 +258,16 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       <main className="flex flex-1 items-center justify-center">
         <div className="container mx-auto max-w-3xl px-4">
           <Card className="mb-6">
-            <CardContent className="p-8 min-h-[250px] flex flex-col justify-center">
+            <CardContent className="p-8 min-h-[300px] flex flex-col justify-center">
               <div className="mb-6 text-center">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">QUESTION</p>
+                {currentCard.front_image_url && <div className="relative mb-4 h-48 w-full"><Image src={currentCard.front_image_url} alt="Front image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
                 <h2 className="text-balance text-2xl font-semibold">{currentCard.front}</h2>
               </div>
               {showAnswer && (
                 <div className="border-t pt-6 text-center">
                   <p className="mb-2 text-xs font-medium text-muted-foreground">ANSWER</p>
+                  {currentCard.back_image_url && <div className="relative mb-4 h-48 w-full"><Image src={currentCard.back_image_url} alt="Back image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
                   <p className="text-balance text-xl text-muted-foreground">{currentCard.back}</p>
                 </div>
               )}

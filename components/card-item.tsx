@@ -18,12 +18,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { EditCardDialog } from "@/components/edit-card-dialog"
+import Image from "next/image"
 
 interface CardItemProps {
   card: {
     id: string
     front: string
     back: string
+    front_image_url: string | null
+    back_image_url: string | null
     ease_factor: number
     interval: number
     repetitions: number
@@ -36,19 +39,15 @@ export function CardItem({ card }: CardItemProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [showBack, setShowBack] = useState(false)
 
-const handleDelete = async () => {
+  const handleDelete = async () => {
     setIsDeleting(true)
     const supabase = createClient()
-
     try {
-      // Soft delete: set the 'deleted_at' timestamp
       const { error } = await supabase
         .from("cards")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", card.id)
-
       if (error) throw error
-
       router.refresh()
     } catch (error) {
       console.error("Error sending card to trash:", error)
@@ -65,16 +64,19 @@ const handleDelete = async () => {
           <div className="flex-1 space-y-4">
             <div>
               <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
+              {card.front_image_url && <div className="relative mb-2 h-32 w-full"><Image src={card.front_image_url} alt="Front image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
               <p className="text-base">{card.front}</p>
             </div>
             <div>
-              <button
-                onClick={() => setShowBack(!showBack)}
-                className="mb-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
+              <button onClick={() => setShowBack(!showBack)} className="mb-1 text-xs font-medium text-muted-foreground hover:text-foreground">
                 BACK {showBack ? "▼" : "▶"}
               </button>
-              {showBack && <p className="text-base text-muted-foreground">{card.back}</p>}
+              {showBack && (
+                <>
+                  {card.back_image_url && <div className="relative mb-2 h-32 w-full"><Image src={card.back_image_url} alt="Back image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
+                  <p className="text-base text-muted-foreground">{card.back}</p>
+                </>
+              )}
             </div>
           </div>
           <div className="flex gap-1">
@@ -88,17 +90,11 @@ const handleDelete = async () => {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete card?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete this card.
-                  </AlertDialogDescription>
+                  <AlertDialogDescription>This action cannot be undone. This will permanently delete this card.</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
+                  <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                     {isDeleting ? "Deleting..." : "Delete"}
                   </AlertDialogAction>
                 </AlertDialogFooter>

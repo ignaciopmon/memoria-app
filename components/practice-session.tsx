@@ -1,16 +1,23 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react" // <-- Añade useCallback
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Brain, ArrowLeft, CheckCircle, ChevronLeft, ChevronRight, Shuffle } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { ArrowLeft, CheckCircle, ChevronLeft, ChevronRight, Shuffle } from "lucide-react"
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import Image from "next/image"
 
 interface PracticeSessionProps {
   deck: { id: string; name: string }
-  initialCards: Array<{ id: string; front: string; back: string }>
+  initialCards: Array<{ 
+    id: string; 
+    front: string; 
+    back: string;
+    front_image_url: string | null;
+    back_image_url: string | null;
+  }>
 }
 
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -33,7 +40,6 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
 
   const currentCard = cards[currentIndex]
 
-  // Atajo para la barra espaciadora
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
     
@@ -114,15 +120,17 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
             </div>
 
           <Card className="mb-6 w-full">
-            <CardContent className="p-8 min-h-[250px] flex flex-col justify-center">
+            <CardContent className="p-8 min-h-[300px] flex flex-col justify-center">
               <div className="text-center">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">FRONT</p>
+                {currentCard.front_image_url && <div className="relative mb-4 h-48 w-full"><Image src={currentCard.front_image_url} alt="Front image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
                 <h2 className="text-balance text-2xl font-semibold">{currentCard.front}</h2>
               </div>
 
               {showAnswer && (
                 <div className="border-t pt-6 text-center mt-6">
                   <p className="mb-2 text-xs font-medium text-muted-foreground">BACK</p>
+                  {currentCard.back_image_url && <div className="relative mb-4 h-48 w-full"><Image src={currentCard.back_image_url} alt="Back image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
                   <p className="text-balance text-xl text-muted-foreground">{currentCard.back}</p>
                 </div>
               )}
