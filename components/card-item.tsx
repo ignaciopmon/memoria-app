@@ -56,44 +56,18 @@ export function CardItem({ card }: CardItemProps) {
       setIsDeleting(false)
     }
   }
-  
-  const imageToShow = showBack ? card.back_image_url : card.front_image_url;
 
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-start gap-4">
-          {/* Contenedor de la Imagen */}
-          {imageToShow && (
-            <div className="relative h-28 w-28 flex-shrink-0 rounded-md bg-muted">
-              <Image 
-                src={imageToShow} 
-                alt={showBack ? "Back image" : "Front image"} 
-                layout="fill" 
-                objectFit="cover" 
-                className="rounded-md" 
-              />
-            </div>
-          )}
-
-          {/* Contenedor de Texto y Acciones */}
-          <div className="flex flex-1 flex-col">
+        <div className="flex items-start justify-between gap-4">
+          {/* Columna de Texto y Acciones */}
+          <div className="flex-1 space-y-4">
             <div className="flex justify-between">
-              {/* Textos */}
-              <div className="flex-1 space-y-3">
-                <div>
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
-                  <p className="text-base">{card.front}</p>
-                </div>
-                <div>
-                  <button onClick={() => setShowBack(!showBack)} className="mb-1 text-xs font-medium text-muted-foreground hover:text-foreground">
-                    BACK {showBack ? "▼" : "▶"}
-                  </button>
-                  {showBack && <p className="text-base text-muted-foreground">{card.back}</p>}
-                </div>
+              <div>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
+                <p className="text-base">{card.front}</p>
               </div>
-
-              {/* Acciones */}
               <div className="flex gap-1">
                 <EditCardDialog card={card} />
                 <AlertDialog>
@@ -117,7 +91,30 @@ export function CardItem({ card }: CardItemProps) {
                 </AlertDialog>
               </div>
             </div>
+            
+            <div>
+              <button onClick={() => setShowBack(!showBack)} className="mb-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+                BACK {showBack ? "▼" : "▶"}
+              </button>
+              {showBack && <p className="text-base text-muted-foreground">{card.back}</p>}
+            </div>
           </div>
+
+          {/* Columna de Imágenes */}
+          {(card.front_image_url || card.back_image_url) && (
+             <div className="flex flex-col gap-2 w-32 flex-shrink-0">
+                {card.front_image_url && (
+                    <div className="relative h-24 w-full">
+                        <Image src={card.front_image_url} alt="Front image" layout="fill" objectFit="cover" className="rounded-md bg-muted" />
+                    </div>
+                )}
+                {showBack && card.back_image_url && (
+                    <div className="relative h-24 w-full">
+                        <Image src={card.back_image_url} alt="Back image" layout="fill" objectFit="cover" className="rounded-md bg-muted" />
+                    </div>
+                )}
+             </div>
+          )}
         </div>
       </CardContent>
     </Card>
