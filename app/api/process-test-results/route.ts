@@ -1,13 +1,71 @@
 // app/api/process-test-results/route.ts
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createClient } from "@/lib/supabase/server"; // Usamos el cliente de servidor para operaciones seguras
+import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-// Tipos de datos que recibimos
+// --- INICIO DE LA LÓGICA DE CÁLCULO DE SRS ---
+// Adaptada desde 'components/study-session.tsx' para el backend.
+
+interface CardSRS {
+  ease_factor: number;
+  interval: number;
+  repetitions: number;
+  last_rating: number | null;
+}
+
+interface UserSettings {
+  again_interval_minutes: number;
+  hard_interval_days: number;
+  good_interval_days: number;
+  easy_interval_days: number;
+}
+
+type Rating = 1 | 2 | 3 | 4;
+
+const calculateNextReview = (card: CardSRS, rating: Rating, settings: UserSettings) => {
+  let { ease_factor, interval, repetitions, last_rating } = card;
+
+  const now = new Date();
+  let nextReviewDate = new Date();
+
+  if (rating < 3) {
+    repetitions = 0;
+    if (rating === 1) {
+      interval = 0;
+      nextReviewDate.setMinutes(now.getMinutes() + settings.again_interval_minutes);
+    } else {
+      if (last_rating === 2) {
+        interval = Math.max(1, Math.ceil(interval * 0.5));
+      } else {
+        interval = settings.hard_interval_days;
+      }
+    }
+  } else {
+    repetitions += 1;
+    if (repetitions === 1) {
+      interval = settings.good_interval_days;
+    } else if (repetitions === 2) {
+      interval = settings.easy_interval_days;
+    } else {
+      interval = Math.ceil(interval * ease_factor);
+    }
+  }
+
+  ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02)));
+
+  if (rating > 1) {
+    nextReviewDate.setDate(now.getDate() + interval);
+  }
+
+  return { ease_factor, interval, repetitions, next_review_date: nextReviewDate.toISOString(), last_rating: rating };
+};
+
+// --- FIN DE LA LÓGICA DE CÁLCULO DE SRS ---
+
 interface TestResult {
   question: string;
   userAnswer: string | null;
@@ -36,87 +94,95 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Usamos el cliente de Supabase del lado del servidor para poder realizar actualizaciones seguras
     const cookieStore = cookies();
     const supabase = await createClient(cookieStore);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
+      return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
     }
 
     const { results, language } = (await request.json()) as ProcessTestBody;
 
-    // Obtenemos los ajustes de intervalos del usuario para darle más contexto a la IA
-    const { data: userSettings } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single();
-    const settings = userSettings || { again_interval_minutes: 1, hard_interval_days: 1, good_interval_days: 3, easy_interval_days: 7 };
+    const { data: userSettingsData } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single();
+    const settings: UserSettings = userSettingsData || { again_interval_minutes: 1, hard_interval_days: 1, good_interval_days: 3, easy_interval_days: 7 };
 
     for (const result of results) {
-      if (result.userAnswer === null) continue; // No procesamos preguntas no respondidas
+      if (result.userAnswer === null) continue;
 
       const isCorrect = result.userAnswer === result.correctAnswer;
-      
+
+      // Consulta corregida para encontrar la tarjeta y verificar la propiedad a través del mazo
       const { data: card, error: cardError } = await supabase
         .from('cards')
-        .select('id, next_review_date, interval, repetitions, ease_factor')
+        .select(`
+          id, ease_factor, interval, repetitions, last_rating,
+          deck:decks!inner(user_id)
+        `)
         .eq('front', result.sourceCardFront)
-        .eq('user_id', user.id) // Aseguramos que solo modificamos tarjetas del usuario
+        .eq('decks.user_id', user.id)
         .single();
 
-      if (cardError || !card) continue;
-
+      if (cardError || !card) {
+        console.warn(`Card not found or user not owner for front: "${result.sourceCardFront}"`);
+        continue;
+      }
+      
       const prompt = `
-        You are an expert AI tutor using a spaced repetition system. A user has answered a test question related to a flashcard. Based on their performance and their personal settings, decide the next review date for this card.
+        You are an expert AI tutor using a Spaced Repetition System (SRS). A user answered a test question. Your task is to act as the user and rate their own performance on this flashcard.
 
-        **User's Personal Settings:**
-        - "Again" (forgotten): review in ${settings.again_interval_minutes} minutes.
-        - "Hard": review in ${settings.hard_interval_days} days.
-        - "Good": review in ${settings.good_interval_days} days.
-
-        **Card's Current Status:**
+        **Performance:**
         - Card Content: "${result.sourceCardFront}"
-        - Current scheduled review date: ${card.next_review_date}
-        - User's answer to the test question was: ${isCorrect ? "CORRECT" : "INCORRECT"}.
+        - The user's answer was: ${isCorrect ? "CORRECT" : "INCORRECT"}.
 
         **Your Task:**
-        1.  **If the answer was INCORRECT:** You MUST reschedule the card for an earlier review. A short interval (like the user's "Again" or "Hard" setting) is appropriate. The card needs reinforcement.
-        2.  **If the answer was CORRECT:** You MUST postpone the card's review to a later date. If the current review date was already far in the future, you can push it even further. This shows mastery.
-        3.  Your response MUST be ONLY a raw JSON object with two fields:
-            - "new_review_date": A new review date in UTC ISO 8601 format ('YYYY-MM-DDTHH:mm:ss.sssZ').
-            - "reason": A very brief explanation in '${language}' for the change.
-
-        **Example for an INCORRECT answer:**
+        - If the answer was INCORRECT, you MUST decide between rating it as "Again" (1) or "Hard" (2). "Again" is for complete failure to recall. "Hard" is for recalling with difficulty.
+        - If the answer was CORRECT, you MUST decide between rating it as "Good" (3) or "Easy" (4). "Good" is for correct recall with some effort. "Easy" is for effortless, instant recall.
+        
+        You MUST return ONLY a raw JSON object with this exact structure:
         {
-          "new_review_date": "${new Date(Date.now() + settings.again_interval_minutes * 60000).toISOString()}",
-          "reason": "Repaso adelantado por fallo en el test."
+          "rating": <A number: 1, 2, 3, or 4>,
+          "reason": "<A very brief explanation for your choice in '${language}'>"
         }
 
-        **Example for a CORRECT answer:**
-        {
-          "new_review_date": "${new Date(Date.now() + 10 * 24 * 60 * 60000).toISOString()}",
-          "reason": "Repaso pospuesto por acierto en el test."
-        }
+        Example for INCORRECT: { "rating": 1, "reason": "Fallo en el test, necesita repaso inmediato." }
+        Example for CORRECT: { "rating": 3, "reason": "Acierto en el test, buen recuerdo." }
       `;
 
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
       const aiResult = await model.generateContent(prompt);
-      const aiResponseText = aiResult.response.text().replace(/^```json\n/, "").replace(/\n```$/, "");
-      const aiSuggestion = JSON.parse(aiResponseText);
-
-      // Actualizamos la tarjeta en la base de datos con la nueva fecha y la sugerencia de la IA
+      const aiResponseText = aiResult.response.text().replace(/```json\n?/, "").replace(/\n?```$/, "");
+      
+      let aiSuggestion;
+      try {
+        aiSuggestion = JSON.parse(aiResponseText);
+        if (![1, 2, 3, 4].includes(aiSuggestion.rating)) {
+          throw new Error('Invalid rating from AI');
+        }
+      } catch (e) {
+        console.error("Failed to parse or validate AI rating response:", aiResponseText);
+        continue; // Skip this card if AI response is invalid
+      }
+      
+      const newSrsData = calculateNextReview(card, aiSuggestion.rating as Rating, settings);
+      
       await supabase
         .from('cards')
         .update({ 
-          next_review_date: aiSuggestion.new_review_date,
-          ai_suggestion: { reason: aiSuggestion.reason, previous_date: card.next_review_date }
+          ...newSrsData,
+          ai_suggestion: { reason: aiSuggestion.reason }
         })
         .eq('id', card.id);
+        
+      await supabase
+        .from("card_reviews")
+        .insert({ card_id: card.id, rating: aiSuggestion.rating });
     }
 
     return NextResponse.json({ success: true, message: "Card reviews updated by AI." });
 
   } catch (error) {
-    console.error("Error processing test results:", error);
+    console.error("Error in process-test-results API route:", error);
     const errorMessage = error instanceof Error ? error.message : "An unknown server error occurred.";
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
