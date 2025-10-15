@@ -3,21 +3,33 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-// Asegurarnos de que esta ruta solo se ejecute en el servidor
 export const dynamic = "force-dynamic";
 
-// Tipos para los datos que esperamos
 type Card = {
   front: string;
   back: string;
   last_rating: number | null;
 };
 
-// 1. Inicializamos el cliente de la IA de Google
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
+// 1. Verificamos la clave de API al inicio
+const apiKey = process.env.GOOGLE_API_KEY;
+if (!apiKey) {
+  // Si la clave no está, detenemos todo aquí.
+  // Este es el error más probable si no has configurado las variables de entorno en Vercel.
+  console.error("GOOGLE_API_KEY is not set in environment variables.");
+}
 
-// 2. Definimos la función que gestionará las peticiones POST
+const genAI = new GoogleGenerativeAI(apiKey || "");
+
 export async function POST(request: Request) {
+  // Comprobación adicional por si la clave no se cargó
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "Server configuration error: Missing API Key." },
+      { status: 500 }
+    );
+  }
+
   try {
     const { cards } = (await request.json()) as { cards: Card[] };
 
@@ -25,7 +37,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No cards provided" }, { status: 400 });
     }
 
-    // 3. Creamos el "prompt": las instrucciones para la IA
     const prompt = `
       Eres un asistente experto en crear tests de estudio. Tu tarea es generar un cuestionario de 5 preguntas en formato JSON basado en la siguiente lista de tarjetas (flashcards).
 
@@ -43,7 +54,7 @@ export async function POST(request: Request) {
               "C": "Opción C",
               "D": "Opción D"
             },
-            "answer": "A" // Letra de la opción correcta
+            "answer": "A"
           }
 
       Aquí está la lista de tarjetas:
@@ -61,22 +72,33 @@ export async function POST(request: Request) {
       )}
     `;
 
-    // 4. Llamamos al modelo de IA
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
+    
+    // Con este log, podremos ver en la consola de Vercel qué está respondiendo la IA exactamente
+    console.log("Raw AI Response:", text);
 
-    // 5. Limpiamos y parseamos la respuesta JSON
-    // A veces, la IA puede devolver el JSON dentro de un bloque de código markdown.
-    const cleanedText = text.replace(/^```json\n/, "").replace(/\n```$/, "");
-    const testData = JSON.parse(cleanedText);
-
+    let testData;
+    try {
+      // Intentamos limpiar y parsear la respuesta
+      const cleanedText = text.replace(/^```json\n/, "").replace(/\n```$/, "");
+      testData = JSON.parse(cleanedText);
+    } catch (parseError) {
+      // Si la respuesta de la IA no es un JSON válido, damos un error específico.
+      console.error("Failed to parse JSON from AI response:", parseError);
+      throw new Error("The AI returned an invalid response format. Please try again.");
+    }
+    
     return NextResponse.json(testData);
+
   } catch (error) {
-    console.error("Error generating test:", error);
+    console.error("Error in generate-test API route:", error);
+    // Devolvemos el mensaje de error real al frontend para un mejor diagnóstico.
+    const errorMessage = error instanceof Error ? error.message : "An unknown server error occurred.";
     return NextResponse.json(
-      { error: "Failed to generate test. Please try again." },
+      { error: errorMessage },
       { status: 500 }
     );
   }
