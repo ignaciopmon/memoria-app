@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { Brain, ArrowLeft, HelpCircle } from "lucide-react"
+import { Brain, ArrowLeft, HelpCircle, Palette, Timer, Keyboard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { SettingsForm } from "@/components/settings-form"
@@ -66,43 +66,54 @@ export default async function SettingsPage() {
             <p className="text-muted-foreground">Customize your study experience.</p>
           </div>
 
-          <Tabs defaultValue="appearance" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
-              <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              <TabsTrigger value="intervals">Intervals</TabsTrigger>
-              <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
+          <Tabs defaultValue="appearance" orientation="vertical" className="flex flex-col gap-8 md:flex-row">
+            <TabsList className="flex h-auto flex-col justify-start rounded-lg p-2 md:w-1/4">
+              <TabsTrigger value="appearance" className="w-full justify-start gap-2">
+                <Palette className="h-4 w-4" />
+                Appearance
+              </TabsTrigger>
+              <TabsTrigger value="intervals" className="w-full justify-start gap-2">
+                <Timer className="h-4 w-4" />
+                Intervals
+              </TabsTrigger>
+              <TabsTrigger value="shortcuts" className="w-full justify-start gap-2">
+                <Keyboard className="h-4 w-4" />
+                Shortcuts
+              </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="appearance">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Appearance</CardTitle>
-                  <CardDescription>
-                    Customize the look and feel of the application.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div>
-                      <h3 className="font-medium">Theme</h3>
-                      <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
+            <div className="flex-1">
+              <TabsContent value="appearance">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Appearance</CardTitle>
+                    <CardDescription>
+                      Customize the look and feel of the application.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <h3 className="font-medium">Theme</h3>
+                        <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
+                      </div>
+                      <ThemeToggle />
                     </div>
-                    <ThemeToggle />
-                  </div>
-                   <p className="text-xs text-muted-foreground">
-                    If the theme doesn't apply correctly, try reloading the page.
-                  </p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="intervals">
-              <SettingsForm settings={settings} />
-            </TabsContent>
-            
-            <TabsContent value="shortcuts">
-              <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
-            </TabsContent>
+                     <p className="text-xs text-muted-foreground">
+                      If the theme doesn't apply correctly, try reloading the page.
+                    </p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="intervals">
+                <SettingsForm settings={settings} />
+              </TabsContent>
+              
+              <TabsContent value="shortcuts">
+                <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
+              </TabsContent>
+            </div>
           </Tabs>
 
           <div className="mt-8 flex justify-center">
