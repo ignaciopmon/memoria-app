@@ -15,11 +15,12 @@ interface GenerateTestBody {
   cards: Card[];
   language: string;
   context?: string;
+  questionCount: number;
 }
 
 const apiKey = process.env.GOOGLE_API_KEY;
 if (!apiKey) {
-  console.error("GOOGLE_API_KEY is not set in environment variables.");
+  console.error("CRITICAL: GOOGLE_API_KEY is not set in environment variables.");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
@@ -27,42 +28,39 @@ const genAI = new GoogleGenerativeAI(apiKey || "");
 export async function POST(request: Request) {
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Server configuration error: Missing API Key." },
+      { error: "Server configuration error: The API Key is missing." },
       { status: 500 }
     );
   }
 
   try {
-    const { cards, language, context } = (await request.json()) as GenerateTestBody;
+    const { cards, language, context, questionCount } = (await request.json()) as GenerateTestBody;
 
     if (!cards || cards.length === 0) {
-      return NextResponse.json({ error: "No cards provided" }, { status: 400 });
+      return NextResponse.json({ error: "No cards were provided to generate the test." }, { status: 400 });
     }
 
     const prompt = `
-      Eres un asistente experto en crear tests de estudio. Tu tarea es generar un cuestionario de 10 preguntas en el idioma '${language}' basado en la siguiente lista de tarjetas (flashcards).
+      You are an expert assistant designed to create study tests. Your task is to generate a ${questionCount}-question multiple-choice quiz in ${language} based on the following list of flashcards.
 
-      ${context ? `Contexto adicional sobre el tema: "${context}"` : ''}
+      ${context ? `Additional context about the topic: "${context}"` : ''}
 
-      Instrucciones:
-      1.  Genera exactamente 10 preguntas de opción múltiple.
-      2.  Cada pregunta debe tener 4 opciones (A, B, C, D), donde solo una es la correcta.
-      3.  **Prioriza** la creación de preguntas basadas en las tarjetas que el usuario ha encontrado más difíciles. Las tarjetas con 'difficulty' 'very hard' o 'hard' son las más importantes.
-      4.  Las preguntas deben ser claras y directas, basadas en la información "front" (pregunta) y "back" (respuesta) de cada tarjeta.
-      5.  Todo el contenido del test (preguntas, opciones) debe estar en '${language}'.
-      6.  Devuelve el resultado exclusivamente en formato JSON, sin añadir ningún texto o formato adicional antes o después del JSON. La estructura debe ser un array de objetos, donde cada objeto representa una pregunta con la siguiente forma:
+      Instructions:
+      1. Generate exactly ${questionCount} multiple-choice questions.
+      2. Each question must have 4 options (A, B, C, D), with only one being correct.
+      3. **Prioritize** creating questions from the cards the user finds most difficult. Cards with a 'difficulty' of 'very hard' or 'hard' are the most important.
+      4. The questions must be clear, direct, and based on the "front" (question) and "back" (answer) information from each card.
+      5. The entire test content (questions, options) must be in ${language}.
+      6. For each question, you MUST include a "sourceCardFront" field containing the exact "front" text of the original card you used to create the question. This is crucial for linking the results back.
+      7. You MUST return the result exclusively in JSON format, without any extra text, formatting, or markdown like \`\`\`json. The output must be a raw JSON array of objects. Each object must have this exact structure:
           {
-            "question": "Texto de la pregunta...",
-            "options": {
-              "A": "Opción A",
-              "B": "Opción B",
-              "C": "Opción C",
-              "D": "Opción D"
-            },
-            "answer": "A"
+            "question": "The question text...",
+            "options": { "A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D" },
+            "answer": "A",
+            "sourceCardFront": "The exact front text of the source card"
           }
 
-      Aquí está la lista de tarjetas:
+      Here is the list of flashcards:
       ${JSON.stringify(
         cards.map((c) => ({
           front: c.front,
@@ -77,7 +75,7 @@ export async function POST(request: Request) {
       )}
     `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -87,10 +85,9 @@ export async function POST(request: Request) {
 
     let testData;
     try {
-      const cleanedText = text.replace(/^```json\n/, "").replace(/\n```$/, "");
-      testData = JSON.parse(cleanedText);
+      testData = JSON.parse(text);
     } catch (parseError) {
-      console.error("Failed to parse JSON from AI response:", parseError);
+      console.error("Failed to parse JSON from AI response. Raw text was:", text, parseError);
       throw new Error("The AI returned an invalid response format. Please try again.");
     }
     

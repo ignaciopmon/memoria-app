@@ -3,12 +3,19 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { formatDistanceToNow } from "date-fns"
-import { Clock } from "lucide-react"
+import { Clock, Sparkles } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface UpcomingCard {
   id: string
   front: string
   next_review_date: string
+  ai_suggestion: { reason: string } | null
   deck: {
     id: string
     name: string
@@ -32,24 +39,38 @@ export function UpcomingList({ initialCards }: { initialCards: UpcomingCard[] })
 
   return (
     <div className="space-y-4">
-      {initialCards.map(card => (
-        <Card key={card.id}>
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <p className="font-medium">{card.front}</p>
-              <p className="text-sm text-muted-foreground">
-                In deck: <strong>{card.deck?.name || 'Unknown'}</strong>
-              </p>
-            </div>
-            <div className="text-right text-sm text-muted-foreground">
-              <p>Due in</p>
-              <p className="font-semibold">
-                {formatDistanceToNow(new Date(card.next_review_date), { addSuffix: false })}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+      <TooltipProvider>
+        {initialCards.map(card => (
+          <Card key={card.id}>
+            <CardContent className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                {card.ai_suggestion && (
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Sparkles className="h-5 w-5 text-purple-500" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{card.ai_suggestion.reason}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                <div>
+                  <p className="font-medium">{card.front}</p>
+                  <p className="text-sm text-muted-foreground">
+                    In deck: <strong>{card.deck?.name || 'Unknown'}</strong>
+                  </p>
+                </div>
+              </div>
+              <div className="text-right text-sm text-muted-foreground">
+                <p>Due in</p>
+                <p className="font-semibold">
+                  {formatDistanceToNow(new Date(card.next_review_date), { addSuffix: false })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </TooltipProvider>
     </div>
   )
 }

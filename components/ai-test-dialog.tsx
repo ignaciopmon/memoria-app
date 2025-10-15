@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,8 @@ import { Card, CardContent } from "./ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { Textarea } from "./ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { useToast } from "./ui/use-toast"
+import { useRouter } from "next/navigation"
 
 type CardData = {
   id: string;
@@ -35,6 +37,7 @@ type TestQuestion = {
   question: string;
   options: { [key: string]: string };
   answer: string;
+  sourceCardFront: string; // Vínculo con la tarjeta original
 };
 
 export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) {
@@ -46,6 +49,10 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState("Spanish");
   const [context, setContext] = useState("");
+  const [questionCount, setQuestionCount] = useState("10");
+  const [allCards, setAllCards] = useState<CardData[]>([]);
+  const { toast } = useToast();
+  const router = useRouter();
 
   const handleGenerateTest = async () => {
     setTestState('loading');
@@ -54,17 +61,19 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
       const supabase = createClient();
       const { data: cards, error: cardsError } = await supabase
         .from('cards')
-        .select('front, back, last_rating')
+        .select('id, front, back, last_rating')
         .eq('deck_id', deckId)
         .is('deleted_at', null);
 
       if (cardsError) throw new Error("Could not fetch cards for the test.");
       if (!cards || cards.length === 0) throw new Error("This deck has no cards to generate a test from.");
+      
+      setAllCards(cards); // Guardamos todas las tarjetas para el final
 
       const response = await fetch('/api/generate-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cards, language, context }),
+        body: JSON.stringify({ cards, language, context, questionCount: parseInt(questionCount) }),
       });
 
       if (!response.ok) {
@@ -82,6 +91,41 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
       setTestState('options');
     }
   };
+
+  // Esta función se ejecuta cuando se muestran los resultados
+  useEffect(() => {
+    if (testState === 'results') {
+      const processResults = async () => {
+        const results = questions.map((q, index) => ({
+          question: q.question,
+          userAnswer: userAnswers[index],
+          correctAnswer: q.answer,
+          sourceCardFront: q.sourceCardFront,
+        }));
+
+        try {
+          await fetch('/api/process-test-results', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ results, language }),
+          });
+          toast({
+            title: "AI Analysis Complete!",
+            description: "Your study schedule has been updated based on your test results.",
+          });
+          router.refresh(); // Refresca los datos del servidor para que "Upcoming" se actualice
+        } catch (error) {
+          console.error("Failed to process test results with AI:", error);
+           toast({
+            variant: "destructive",
+            title: "Update Failed",
+            description: "Could not update card schedules after the test.",
+          });
+        }
+      };
+      processResults();
+    }
+  }, [testState, questions, userAnswers, language, toast, router]);
 
   const handleAnswerSelect = (answer: string) => {
     const newAnswers = [...userAnswers];
@@ -125,20 +169,35 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
 
         {testState === 'options' && (
           <div className="py-4 space-y-6">
-            <div>
-              <Label htmlFor="language">Test Language</Label>
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger id="language" className="w-full mt-2">
-                  <SelectValue placeholder="Select a language" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="English">English</SelectItem>
-                  <SelectItem value="Spanish">Spanish</SelectItem>
-                  <SelectItem value="French">French</SelectItem>
-                  <SelectItem value="German">German</SelectItem>
-                  <SelectItem value="Portuguese">Portuguese</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <div>
+                <Label htmlFor="language">Test Language</Label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger id="language" className="w-full mt-2">
+                    <SelectValue placeholder="Select a language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="English">English</SelectItem>
+                    <SelectItem value="Spanish">Spanish</SelectItem>
+                    <SelectItem value="French">French</SelectItem>
+                    <SelectItem value="German">German</SelectItem>
+                    <SelectItem value="Portuguese">Portuguese</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="questionCount">Number of questions</Label>
+                 <Select value={questionCount} onValueChange={setQuestionCount}>
+                  <SelectTrigger id="questionCount" className="w-full mt-2">
+                    <SelectValue placeholder="Select number" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="15">15</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div>
@@ -156,7 +215,7 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
             </div>
             
             <p className="text-sm text-muted-foreground pt-2">
-              The AI will generate a 10-question multiple-choice test focusing on the cards you find most difficult.
+              The AI will generate a test focusing on the cards you find most difficult.
             </p>
 
             {error && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error}</p>}
