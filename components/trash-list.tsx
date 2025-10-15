@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trash2, RotateCcw, Package, File, AlertTriangle } from "lucide-react"
+import { Trash2, RotateCcw, Package, File } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface DeletedItem {
@@ -51,7 +51,7 @@ export function TrashList({ initialDecks, initialCards }: { initialDecks: Delete
           <div className="space-y-4 pt-4">
             {initialDecks.map(deck => (
               <Card key={deck.id}>
-                <CardContent className="flex items-center justify-between p-4">
+                <CardContent className="flex flex-col items-start justify-between gap-4 p-4 sm:flex-row sm:items-center">
                   <div className="flex items-center gap-3">
                     <Package className="h-5 w-5 text-muted-foreground" />
                     <div>
@@ -59,7 +59,7 @@ export function TrashList({ initialDecks, initialCards }: { initialDecks: Delete
                       <p className="text-xs text-muted-foreground">Deleted on {new Date(deck.deleted_at).toLocaleDateString()}</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                     <Button variant="ghost" size="sm" onClick={() => handleRestore('decks', deck.id)} disabled={!!isProcessing}>
                       <RotateCcw className="mr-2 h-4 w-4" /> Restore
                     </Button>
@@ -79,15 +79,15 @@ export function TrashList({ initialDecks, initialCards }: { initialDecks: Delete
           <div className="space-y-4 pt-4">
             {initialCards.map(card => (
               <Card key={card.id}>
-                <CardContent className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <File className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium line-clamp-1">{card.front}</p>
+                <CardContent className="flex flex-col items-start justify-between gap-4 p-4 sm:flex-row sm:items-center">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <File className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                    <div className="overflow-hidden">
+                      <p className="font-medium truncate">{card.front}</p>
                       <p className="text-xs text-muted-foreground">From deck: <strong>{card.deck?.name || "Unknown"}</strong></p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                     <Button variant="ghost" size="sm" onClick={() => handleRestore('cards', card.id)} disabled={!!isProcessing}>
                       <RotateCcw className="mr-2 h-4 w-4" /> Restore
                     </Button>
