@@ -11,18 +11,20 @@ type Card = {
   last_rating: number | null;
 };
 
-// 1. Verificamos la clave de API al inicio
+interface GenerateTestBody {
+  cards: Card[];
+  language: string;
+  context?: string;
+}
+
 const apiKey = process.env.GOOGLE_API_KEY;
 if (!apiKey) {
-  // Si la clave no está, detenemos todo aquí.
-  // Este es el error más probable si no has configurado las variables de entorno en Vercel.
   console.error("GOOGLE_API_KEY is not set in environment variables.");
 }
 
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
 export async function POST(request: Request) {
-  // Comprobación adicional por si la clave no se cargó
   if (!apiKey) {
     return NextResponse.json(
       { error: "Server configuration error: Missing API Key." },
@@ -31,21 +33,24 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { cards } = (await request.json()) as { cards: Card[] };
+    const { cards, language, context } = (await request.json()) as GenerateTestBody;
 
     if (!cards || cards.length === 0) {
       return NextResponse.json({ error: "No cards provided" }, { status: 400 });
     }
 
     const prompt = `
-      Eres un asistente experto en crear tests de estudio. Tu tarea es generar un cuestionario de 5 preguntas en formato JSON basado en la siguiente lista de tarjetas (flashcards).
+      Eres un asistente experto en crear tests de estudio. Tu tarea es generar un cuestionario de 10 preguntas en el idioma '${language}' basado en la siguiente lista de tarjetas (flashcards).
+
+      ${context ? `Contexto adicional sobre el tema: "${context}"` : ''}
 
       Instrucciones:
-      1.  Genera exactamente 5 preguntas de opción múltiple.
+      1.  Genera exactamente 10 preguntas de opción múltiple.
       2.  Cada pregunta debe tener 4 opciones (A, B, C, D), donde solo una es la correcta.
-      3.  **Prioriza** la creación de preguntas basadas en las tarjetas que el usuario ha encontrado más difíciles. Las tarjetas con 'last_rating' de 1 o 2 son las más difíciles. Las que tienen 'last_rating' de 3 o 4 son más fáciles. Las que tienen 'null' son nuevas.
+      3.  **Prioriza** la creación de preguntas basadas en las tarjetas que el usuario ha encontrado más difíciles. Las tarjetas con 'difficulty' 'very hard' o 'hard' son las más importantes.
       4.  Las preguntas deben ser claras y directas, basadas en la información "front" (pregunta) y "back" (respuesta) de cada tarjeta.
-      5.  Devuelve el resultado exclusivamente en formato JSON, sin añadir ningún texto o formato adicional antes o después del JSON. La estructura debe ser un array de objetos, donde cada objeto representa una pregunta con la siguiente forma:
+      5.  Todo el contenido del test (preguntas, opciones) debe estar en '${language}'.
+      6.  Devuelve el resultado exclusivamente en formato JSON, sin añadir ningún texto o formato adicional antes o después del JSON. La estructura debe ser un array de objetos, donde cada objeto representa una pregunta con la siguiente forma:
           {
             "question": "Texto de la pregunta...",
             "options": {
@@ -72,22 +77,18 @@ export async function POST(request: Request) {
       )}
     `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // O 'gemini-pro' si el otro falla
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-
     
-    // Con este log, podremos ver en la consola de Vercel qué está respondiendo la IA exactamente
     console.log("Raw AI Response:", text);
 
     let testData;
     try {
-      // Intentamos limpiar y parsear la respuesta
       const cleanedText = text.replace(/^```json\n/, "").replace(/\n```$/, "");
       testData = JSON.parse(cleanedText);
     } catch (parseError) {
-      // Si la respuesta de la IA no es un JSON válido, damos un error específico.
       console.error("Failed to parse JSON from AI response:", parseError);
       throw new Error("The AI returned an invalid response format. Please try again.");
     }
@@ -96,7 +97,6 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error("Error in generate-test API route:", error);
-    // Devolvemos el mensaje de error real al frontend para un mejor diagnóstico.
     const errorMessage = error instanceof Error ? error.message : "An unknown server error occurred.";
     return NextResponse.json(
       { error: errorMessage },

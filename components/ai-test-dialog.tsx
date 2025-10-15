@@ -1,4 +1,3 @@
-// components/ai-test-dialog.tsx
 "use client"
 
 import { useState } from "react"
@@ -16,12 +15,14 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "./ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { Textarea } from "./ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 
-// Tipos para el test que recibimos de la IA
-type TestQuestion = {
-  question: string;
-  options: { [key: string]: string };
-  answer: string;
+type CardData = {
+  id: string;
+  front: string;
+  back: string;
+  last_rating: number | null;
 };
 
 interface AITestDialogProps {
@@ -30,6 +31,12 @@ interface AITestDialogProps {
   children: React.ReactNode;
 }
 
+type TestQuestion = {
+  question: string;
+  options: { [key: string]: string };
+  answer: string;
+};
+
 export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) {
   const [open, setOpen] = useState(false);
   const [testState, setTestState] = useState<'options' | 'loading' | 'taking_test' | 'results'>('options');
@@ -37,12 +44,13 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<(string | null)[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [language, setLanguage] = useState("Spanish");
+  const [context, setContext] = useState("");
 
   const handleGenerateTest = async () => {
     setTestState('loading');
     setError(null);
     try {
-      // 1. Obtener las tarjetas del mazo desde Supabase
       const supabase = createClient();
       const { data: cards, error: cardsError } = await supabase
         .from('cards')
@@ -53,11 +61,10 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
       if (cardsError) throw new Error("Could not fetch cards for the test.");
       if (!cards || cards.length === 0) throw new Error("This deck has no cards to generate a test from.");
 
-      // 2. Llamar a nuestra API para generar el test
       const response = await fetch('/api/generate-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cards }),
+        body: JSON.stringify({ cards, language, context }),
       });
 
       if (!response.ok) {
@@ -117,12 +124,43 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
         </DialogHeader>
 
         {testState === 'options' && (
-          <div className="py-4">
-            <h3 className="mb-2 text-lg font-medium">Ready to start?</h3>
-            <p className="text-muted-foreground mb-6">
-              The AI will generate a 5-question multiple-choice test focusing on the cards you find most difficult.
+          <div className="py-4 space-y-6">
+            <div>
+              <Label htmlFor="language">Test Language</Label>
+              <Select value={language} onValueChange={setLanguage}>
+                <SelectTrigger id="language" className="w-full mt-2">
+                  <SelectValue placeholder="Select a language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="English">English</SelectItem>
+                  <SelectItem value="Spanish">Spanish</SelectItem>
+                  <SelectItem value="French">French</SelectItem>
+                  <SelectItem value="German">German</SelectItem>
+                  <SelectItem value="Portuguese">Portuguese</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="context">Optional Context</Label>
+              <Textarea
+                id="context"
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+                placeholder="E.g., 'This deck is about the main characters of the novel Don Quixote.'"
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Provide a brief description of the deck's topic to help the AI generate more accurate questions.
+              </p>
+            </div>
+            
+            <p className="text-sm text-muted-foreground pt-2">
+              The AI will generate a 10-question multiple-choice test focusing on the cards you find most difficult.
             </p>
-             {error && <p className="mb-4 rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error}</p>}
+
+            {error && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error}</p>}
+
             <div className="flex justify-end">
                <Button onClick={handleGenerateTest}>Start Test</Button>
             </div>
