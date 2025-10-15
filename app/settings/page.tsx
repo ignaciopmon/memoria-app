@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { Brain, ArrowLeft, HelpCircle, Palette, Timer, Keyboard } from "lucide-react"
+import { Brain, ArrowLeft, HelpCircle, Monitor } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { SettingsForm } from "@/components/settings-form"
@@ -66,53 +66,70 @@ export default async function SettingsPage() {
             <p className="text-muted-foreground">Customize your study experience.</p>
           </div>
 
-          <Tabs defaultValue="appearance" className="w-full">
-            {/* Pestañas para Escritorio (como antes) */}
-            <TabsList className="hidden w-full grid-cols-3 md:grid">
-              <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              <TabsTrigger value="intervals">Intervals</TabsTrigger>
-              <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
-            </TabsList>
-
-            {/* Pestañas para Móvil (verticales) */}
-            <TabsList className="grid w-full grid-cols-1 md:hidden">
-              <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              <TabsTrigger value="intervals">Intervals</TabsTrigger>
-              <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
-            </TabsList>
-            
-            {/* El contenido de las pestañas no cambia */}
-            <TabsContent value="appearance">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Appearance</CardTitle>
-                  <CardDescription>
-                    Customize the look and feel of the application.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div>
-                      <h3 className="font-medium">Theme</h3>
-                      <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
+          {/* VERSIÓN DE ESCRITORIO (oculta en móvil) */}
+          <div className="hidden md:block">
+            <Tabs defaultValue="appearance" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="appearance">Appearance</TabsTrigger>
+                <TabsTrigger value="intervals">Intervals</TabsTrigger>
+                <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
+              </TabsList>
+              <TabsContent value="appearance">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Appearance</CardTitle>
+                    <CardDescription>Customize the look and feel of the application.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <h3 className="font-medium">Theme</h3>
+                        <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
+                      </div>
+                      <ThemeToggle />
                     </div>
-                    <ThemeToggle />
+                    <p className="text-xs text-muted-foreground">If the theme doesn't apply correctly, try reloading the page.</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="intervals">
+                <SettingsForm settings={settings} />
+              </TabsContent>
+              <TabsContent value="shortcuts">
+                <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          {/* VERSIÓN MÓVIL (oculta en escritorio) */}
+          <div className="space-y-8 md:hidden">
+            <Card>
+              <CardHeader>
+                <CardTitle>Appearance</CardTitle>
+                <CardDescription>Customize the look and feel of the application.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div>
+                    <h3 className="font-medium">Theme</h3>
+                    <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
                   </div>
-                   <p className="text-xs text-muted-foreground">
-                    If the theme doesn't apply correctly, try reloading the page.
-                  </p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="intervals">
-              <SettingsForm settings={settings} />
-            </TabsContent>
-            
-            <TabsContent value="shortcuts">
-              <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
-            </TabsContent>
-          </Tabs>
+                  <ThemeToggle />
+                </div>
+                <p className="text-xs text-muted-foreground">If the theme doesn't apply correctly, try reloading the page.</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex-row items-center gap-4 space-y-0">
+                <Monitor className="h-8 w-8 flex-shrink-0 text-muted-foreground" />
+                <div>
+                  <CardTitle>More Settings on Desktop</CardTitle>
+                  <CardDescription>To customize intervals and shortcuts, please use a larger screen.</CardDescription>
+                </div>
+              </CardHeader>
+            </Card>
+          </div>
 
           <div className="mt-8 flex justify-center">
             <Button variant="link" asChild className="text-muted-foreground">
