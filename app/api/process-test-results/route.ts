@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         }
       `;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
       const aiResult = await model.generateContent(prompt);
       const aiResponseText = aiResult.response.text();
       const aiSuggestion = JSON.parse(aiResponseText);
