@@ -107,6 +107,11 @@ export async function POST(request: Request) {
     const { data: userSettingsData } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single();
     const settings: UserSettings = userSettingsData || { again_interval_minutes: 1, hard_interval_days: 1, good_interval_days: 3, easy_interval_days: 7 };
 
+    // Si la opción de IA está desactivada, no hacemos nada.
+    if (userSettingsData && userSettingsData.enable_ai_suggestions === false) {
+        return NextResponse.json({ success: true, message: "AI suggestions are disabled by the user." });
+    }
+
     for (const result of results) {
       if (result.userAnswer === null) continue;
 
@@ -116,7 +121,7 @@ export async function POST(request: Request) {
       const { data: card, error: cardError } = await supabase
         .from('cards')
         .select(`
-          id, ease_factor, interval, repetitions, last_rating,
+          id, ease_factor, interval, repetitions, last_rating, next_review_date,
           deck:decks!inner(user_id)
         `)
         .eq('front', result.sourceCardFront)
@@ -142,11 +147,11 @@ export async function POST(request: Request) {
         You MUST return ONLY a raw JSON object with this exact structure:
         {
           "rating": <A number: 1, 2, 3, or 4>,
-          "reason": "<A very brief explanation for your choice in '${language}'>"
+          "reason": "<A very brief explanation for your choice, **always in English**>"
         }
 
-        Example for INCORRECT: { "rating": 1, "reason": "Fallo en el test, necesita repaso inmediato." }
-        Example for CORRECT: { "rating": 3, "reason": "Acierto en el test, buen recuerdo." }
+        Example for INCORRECT: { "rating": 1, "reason": "Failed test question, needs immediate review." }
+        Example for CORRECT: { "rating": 3, "reason": "Correct on test, good recall." }
       `;
 
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
@@ -161,7 +166,7 @@ export async function POST(request: Request) {
         }
       } catch (e) {
         console.error("Failed to parse or validate AI rating response:", aiResponseText);
-        continue; // Skip this card if AI response is invalid
+        continue;
       }
       
       const newSrsData = calculateNextReview(card, aiSuggestion.rating as Rating, settings);
@@ -170,7 +175,10 @@ export async function POST(request: Request) {
         .from('cards')
         .update({ 
           ...newSrsData,
-          ai_suggestion: { reason: aiSuggestion.reason }
+          ai_suggestion: { 
+            reason: aiSuggestion.reason,
+            previous_date: card.next_review_date
+          }
         })
         .eq('id', card.id);
         

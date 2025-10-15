@@ -10,7 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Sparkles, Loader2, CheckCircle, XCircle } from "lucide-react"
+import { Sparkles, Loader2, CheckCircle, XCircle, Bot } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "./ui/card"
@@ -37,8 +37,12 @@ type TestQuestion = {
   question: string;
   options: { [key: string]: string };
   answer: string;
-  sourceCardFront: string; // Vínculo con la tarjeta original
+  sourceCardFront: string;
 };
+
+interface UserSettings {
+  enable_ai_suggestions?: boolean;
+}
 
 export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) {
   const [open, setOpen] = useState(false);
@@ -50,9 +54,29 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
   const [language, setLanguage] = useState("Spanish");
   const [context, setContext] = useState("");
   const [questionCount, setQuestionCount] = useState("10");
-  const [allCards, setAllCards] = useState<CardData[]>([]);
+  const [userSettings, setUserSettings] = useState<UserSettings>({ enable_ai_suggestions: true });
   const { toast } = useToast();
   const router = useRouter();
+
+  useEffect(() => {
+    if (open) {
+      const fetchUserSettings = async () => {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: settings } = await supabase
+            .from('user_settings')
+            .select('enable_ai_suggestions')
+            .eq('user_id', user.id)
+            .single();
+          if (settings) {
+            setUserSettings(settings);
+          }
+        }
+      };
+      fetchUserSettings();
+    }
+  }, [open]);
 
   const handleGenerateTest = async () => {
     setTestState('loading');
@@ -67,8 +91,6 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
 
       if (cardsError) throw new Error("Could not fetch cards for the test.");
       if (!cards || cards.length === 0) throw new Error("This deck has no cards to generate a test from.");
-      
-      setAllCards(cards); // Guardamos todas las tarjetas para el final
 
       const response = await fetch('/api/generate-test', {
         method: 'POST',
@@ -91,10 +113,9 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
       setTestState('options');
     }
   };
-
-  // Esta función se ejecuta cuando se muestran los resultados
+  
   useEffect(() => {
-    if (testState === 'results') {
+    if (testState === 'results' && userSettings.enable_ai_suggestions) {
       const processResults = async () => {
         const results = questions.map((q, index) => ({
           question: q.question,
@@ -113,7 +134,7 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
             title: "AI Analysis Complete!",
             description: "Your study schedule has been updated based on your test results.",
           });
-          router.refresh(); // Refresca los datos del servidor para que "Upcoming" se actualice
+          router.refresh(); 
         } catch (error) {
           console.error("Failed to process test results with AI:", error);
            toast({
@@ -125,7 +146,7 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
       };
       processResults();
     }
-  }, [testState, questions, userAnswers, language, toast, router]);
+  }, [testState, userSettings.enable_ai_suggestions, questions, userAnswers, language, toast, router]);
 
   const handleAnswerSelect = (answer: string) => {
     const newAnswers = [...userAnswers];
@@ -262,6 +283,14 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
             <h3 className="text-2xl font-bold">Test Complete!</h3>
             <p className="text-muted-foreground">You scored:</p>
             <p className="my-4 text-6xl font-bold text-purple-500">{score} <span className="text-3xl text-muted-foreground">/ {questions.length}</span></p>
+             
+            {userSettings.enable_ai_suggestions && (
+              <div className="mt-6 mb-4 flex items-center justify-center gap-2 rounded-lg bg-purple-500/10 p-3 text-sm text-purple-800 dark:text-purple-300">
+                <Bot className="h-5 w-5" />
+                <p>The AI is updating your schedule based on these results...</p>
+              </div>
+            )}
+
              <div className="mt-8 space-y-4 max-h-60 overflow-y-auto pr-3 text-left">
                 {questions.map((q, index) => (
                   <div key={index} className="rounded-md border p-3">
