@@ -78,7 +78,7 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
           Set the time until a card is shown again after you rate it.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-6 sm:grid-cols-2">
+      <CardContent className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="again_interval_minutes">"Again" Interval (minutes)</Label>
           <Input

@@ -60,7 +60,25 @@ export function CardItem({ card }: CardItemProps) {
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
+        {/* Main container: stacks vertically on mobile, horizontally on desktop */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+          
+          {/* Columna de Imágenes (ahora se adapta) */}
+          {(card.front_image_url || card.back_image_url) && (
+             <div className="flex flex-row gap-2 md:flex-col md:w-32 flex-shrink-0">
+                {card.front_image_url && (
+                    <div className="relative h-24 w-full">
+                        <Image src={card.front_image_url} alt="Front image" layout="fill" objectFit="cover" className="rounded-md bg-muted" />
+                    </div>
+                )}
+                {showBack && card.back_image_url && (
+                    <div className="relative h-24 w-full">
+                        <Image src={card.back_image_url} alt="Back image" layout="fill" objectFit="cover" className="rounded-md bg-muted" />
+                    </div>
+                )}
+             </div>
+          )}
+
           {/* Columna de Texto y Acciones */}
           <div className="flex-1 space-y-4">
             <div className="flex justify-between">
@@ -68,7 +86,7 @@ export function CardItem({ card }: CardItemProps) {
                 <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
                 <p className="text-base">{card.front}</p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex flex-shrink-0 gap-1">
                 <EditCardDialog card={card} />
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -99,22 +117,6 @@ export function CardItem({ card }: CardItemProps) {
               {showBack && <p className="text-base text-muted-foreground">{card.back}</p>}
             </div>
           </div>
-
-          {/* Columna de Imágenes */}
-          {(card.front_image_url || card.back_image_url) && (
-             <div className="flex flex-col gap-2 w-32 flex-shrink-0">
-                {card.front_image_url && (
-                    <div className="relative h-24 w-full">
-                        <Image src={card.front_image_url} alt="Front image" layout="fill" objectFit="cover" className="rounded-md bg-muted" />
-                    </div>
-                )}
-                {showBack && card.back_image_url && (
-                    <div className="relative h-24 w-full">
-                        <Image src={card.back_image_url} alt="Back image" layout="fill" objectFit="cover" className="rounded-md bg-muted" />
-                    </div>
-                )}
-             </div>
-          )}
         </div>
       </CardContent>
     </Card>

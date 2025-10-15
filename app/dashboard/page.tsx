@@ -3,8 +3,15 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Brain } from "lucide-react"
+import { Brain, Menu } from "lucide-react" // Importa el icono del menú
 import { DashboardClient } from "@/components/dashboard-client"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu" // Importa los componentes del menú
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -40,7 +47,9 @@ export default async function DashboardPage() {
             <Brain className="h-6 w-6" />
             <span className="text-xl font-bold">Memoria</span>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* NAVEGACIÓN PARA ESCRITORIO (se oculta en móvil) */}
+          <div className="hidden items-center gap-2 md:flex">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/upcoming">Upcoming</Link>
             </Button>
@@ -56,6 +65,37 @@ export default async function DashboardPage() {
                 Sign Out
               </Button>
             </form>
+          </div>
+
+          {/* MENÚ DESPLEGABLE PARA MÓVIL (se oculta en escritorio) */}
+          <div className="md:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href="/upcoming">Upcoming</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/trash">Trash</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">Settings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                   <form action="/auth/signout" method="post" className="w-full">
+                      <button type="submit" className="w-full text-left">
+                        Sign Out
+                      </button>
+                    </form>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

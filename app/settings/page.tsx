@@ -67,7 +67,7 @@ export default async function SettingsPage() {
           </div>
 
           <Tabs defaultValue="appearance" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
               <TabsTrigger value="appearance">Appearance</TabsTrigger>
               <TabsTrigger value="intervals">Intervals</TabsTrigger>
               <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>

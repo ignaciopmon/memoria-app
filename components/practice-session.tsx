@@ -120,18 +120,18 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
             </div>
 
           <Card className="mb-6 w-full">
-            <CardContent className="p-8 min-h-[300px] flex flex-col justify-center">
+            <CardContent className="flex min-h-[250px] flex-col justify-center p-4 md:min-h-[300px] md:p-8">
               <div className="text-center">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">FRONT</p>
-                {currentCard.front_image_url && <div className="relative mb-4 h-48 w-full"><Image src={currentCard.front_image_url} alt="Front image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
-                <h2 className="text-balance text-2xl font-semibold">{currentCard.front}</h2>
+                {currentCard.front_image_url && <div className="relative mx-auto mb-4 h-32 w-full sm:h-48"><Image src={currentCard.front_image_url} alt="Front image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
+                <h2 className="text-balance text-xl font-semibold md:text-2xl">{currentCard.front}</h2>
               </div>
 
               {showAnswer && (
                 <div className="border-t pt-6 text-center mt-6">
                   <p className="mb-2 text-xs font-medium text-muted-foreground">BACK</p>
-                  {currentCard.back_image_url && <div className="relative mb-4 h-48 w-full"><Image src={currentCard.back_image_url} alt="Back image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
-                  <p className="text-balance text-xl text-muted-foreground">{currentCard.back}</p>
+                  {currentCard.back_image_url && <div className="relative mx-auto mb-4 h-32 w-full sm:h-48"><Image src={currentCard.back_image_url} alt="Back image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
+                  <p className="text-balance text-lg text-muted-foreground md:text-xl">{currentCard.back}</p>
                 </div>
               )}
             </CardContent>
