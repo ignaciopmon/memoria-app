@@ -72,10 +72,11 @@ export async function POST(request: Request) {
       )}
     `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
+
     
     // Con este log, podremos ver en la consola de Vercel qué está respondiendo la IA exactamente
     console.log("Raw AI Response:", text);
