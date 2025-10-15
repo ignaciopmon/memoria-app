@@ -2,8 +2,9 @@
 "use client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { BookOpen, Play } from "lucide-react"
+import { BookOpen, Play, Sparkles } from "lucide-react"
 import Link from "next/link"
+import { AITestDialog } from "./ai-test-dialog"
 
 interface DeckCardProps {
   deck: {
@@ -41,6 +42,15 @@ export function DeckCard({ deck, isEditMode = false }: DeckCardProps) {
         </div>
 
         <div className="flex flex-col gap-2">
+           {/* Botón de IA movido aquí */}
+          {deck.cardCount > 0 && (
+             <AITestDialog deckId={deck.id} deckName={deck.name}>
+                <Button variant="outline" disabled={isEditMode}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Generate Test
+                </Button>
+              </AITestDialog>
+          )}
           {deck.cardCount > 0 && (
             <div className="flex gap-2">
               <Button asChild className="flex-1" variant="outline" disabled={isEditMode}>

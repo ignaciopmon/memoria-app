@@ -2,12 +2,11 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, ArrowLeft, Plus, Sparkles } from "lucide-react"
+import { Brain, ArrowLeft, Plus } from "lucide-react"
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { CardItem } from "@/components/card-item"
 import { ImportMenu } from "@/components/import-menu"
-import { AITestDialog } from "@/components/ai-test-dialog" // Importamos el nuevo componente
 
 export default async function DeckPage({ params }: { params: { id: string } }) {
   const { id } = params
@@ -32,8 +31,6 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
     .eq("deck_id", id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
-
-  const safeCards = cards || [];
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -67,24 +64,16 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
               <div>
                 <h1 className="text-3xl font-bold">{deck.name}</h1>
                 {deck.description && <p className="text-muted-foreground">{deck.description}</p>}
-                <p className="mt-2 text-sm text-muted-foreground">{safeCards.length || 0} cards</p>
+                <p className="mt-2 text-sm text-muted-foreground">{cards?.length || 0} cards</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {safeCards.length > 0 && (
-                  <AITestDialog deckId={id} cards={safeCards}>
-                    <Button variant="outline">
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      Generate Test with AI
-                    </Button>
-                  </AITestDialog>
-                )}
                 <ImportMenu deckId={id} />
                 <CreateCardDialog deckId={id} />
               </div>
             </div>
           </div>
 
-          {safeCards.length === 0 ? (
+          {!cards || cards.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <Plus className="mb-4 h-12 w-12 text-muted-foreground" />
@@ -100,7 +89,7 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
             </Card>
           ) : (
             <div className="space-y-4">
-              {safeCards.map((card) => (
+              {cards.map((card) => (
                 <CardItem key={card.id} card={card} />
               ))}
             </div>
