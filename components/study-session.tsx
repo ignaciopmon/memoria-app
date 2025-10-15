@@ -9,7 +9,7 @@ import { Brain, ArrowLeft, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import type { Shortcuts } from "@/components/shortcuts-form"
-import Image from "next/image"
+import { ImageViewerDialog } from "./image-viewer-dialog"
 
 interface StudySessionProps {
   deck: { id: string; name: string }
@@ -261,13 +261,17 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
             <CardContent className="flex min-h-[250px] flex-col justify-center p-4 md:min-h-[300px] md:p-8">
               <div className="mb-6 text-center">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">QUESTION</p>
-                {currentCard.front_image_url && <div className="relative mx-auto mb-4 h-32 w-full sm:h-48"><Image src={currentCard.front_image_url} alt="Front image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
+                {currentCard.front_image_url && (
+                  <ImageViewerDialog src={currentCard.front_image_url} alt="Front image" triggerClassName="mb-4" />
+                )}
                 <h2 className="text-balance text-xl font-semibold md:text-2xl">{currentCard.front}</h2>
               </div>
               {showAnswer && (
                 <div className="border-t pt-6 text-center">
                   <p className="mb-2 text-xs font-medium text-muted-foreground">ANSWER</p>
-                  {currentCard.back_image_url && <div className="relative mx-auto mb-4 h-32 w-full sm:h-48"><Image src={currentCard.back_image_url} alt="Back image" layout="fill" objectFit="contain" className="rounded-md" /></div>}
+                   {currentCard.back_image_url && (
+                    <ImageViewerDialog src={currentCard.back_image_url} alt="Back image" triggerClassName="mb-4" />
+                  )}
                   <p className="text-balance text-lg text-muted-foreground md:text-xl">{currentCard.back}</p>
                 </div>
               )}
