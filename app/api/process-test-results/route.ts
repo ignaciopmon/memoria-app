@@ -1,15 +1,16 @@
 // app/api/process-test-results/route.ts
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server"; // Usamos el cliente de servidor para operaciones seguras
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 // Tipos de datos que recibimos
 interface TestResult {
   question: string;
-  userAnswer: string;
+  userAnswer: string | null;
   correctAnswer: string;
   sourceCardFront: string;
 }
@@ -20,60 +21,86 @@ interface ProcessTestBody {
 }
 
 const apiKey = process.env.GOOGLE_API_KEY;
+if (!apiKey) {
+  console.error("CRITICAL: GOOGLE_API_KEY is not set in environment variables.");
+}
+
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
 export async function POST(request: Request) {
   if (!apiKey) {
-    return NextResponse.json({ error: "Server configuration error: Missing API Key." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server configuration error: The API Key is missing." },
+      { status: 500 }
+    );
   }
 
   try {
-    const supabase = await createClient();
+    // Usamos el cliente de Supabase del lado del servidor para poder realizar actualizaciones seguras
+    const cookieStore = cookies();
+    const supabase = await createClient(cookieStore);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
+    }
+
     const { results, language } = (await request.json()) as ProcessTestBody;
 
-    // Filtramos solo las tarjetas que necesitan una decisión de la IA (las que el usuario respondió)
-    const cardsToProcess = results.filter(r => r.userAnswer);
+    // Obtenemos los ajustes de intervalos del usuario para darle más contexto a la IA
+    const { data: userSettings } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single();
+    const settings = userSettings || { again_interval_minutes: 1, hard_interval_days: 1, good_interval_days: 3, easy_interval_days: 7 };
 
-    for (const result of cardsToProcess) {
+    for (const result of results) {
+      if (result.userAnswer === null) continue; // No procesamos preguntas no respondidas
+
       const isCorrect = result.userAnswer === result.correctAnswer;
       
       const { data: card, error: cardError } = await supabase
         .from('cards')
         .select('id, next_review_date, interval, repetitions, ease_factor')
         .eq('front', result.sourceCardFront)
+        .eq('user_id', user.id) // Aseguramos que solo modificamos tarjetas del usuario
         .single();
 
       if (cardError || !card) continue;
 
       const prompt = `
-        Eres un tutor de IA experto en repetición espaciada. Un usuario ha respondido a una pregunta sobre una tarjeta de estudio. Tu tarea es decidir la nueva fecha de revisión para esta tarjeta.
+        You are an expert AI tutor using a spaced repetition system. A user has answered a test question related to a flashcard. Based on their performance and their personal settings, decide the next review date for this card.
 
-        Contexto:
-        - Tarjeta (pregunta): "${result.sourceCardFront}"
-        - Fecha de revisión actual: ${card.next_review_date}
-        - El usuario ha respondido ${isCorrect ? "CORRECTAMENTE" : "INCORRECTAMENTE"} a la pregunta del test.
+        **User's Personal Settings:**
+        - "Again" (forgotten): review in ${settings.again_interval_minutes} minutes.
+        - "Hard": review in ${settings.hard_interval_days} days.
+        - "Good": review in ${settings.good_interval_days} days.
 
-        Instrucciones:
-        1.  Si la respuesta fue INCORRECTA: Debes ADELANTAR la fecha de revisión para que el usuario la repase pronto. Un buen intervalo sería entre 1 y 3 días a partir de hoy.
-        2.  Si la respuesta fue CORRECTA: Debes ALEJAR la fecha de revisión. Un buen intervalo sería entre 7 y 14 días a partir de hoy, o incluso más si el intervalo actual ya era grande.
-        3.  Tu respuesta DEBE ser únicamente un objeto JSON con dos claves: "new_review_date" (en formato 'YYYY-MM-DDTHH:mm:ss.sssZ') y "reason" (una explicación muy breve en ${language} de por qué has cambiado la fecha).
+        **Card's Current Status:**
+        - Card Content: "${result.sourceCardFront}"
+        - Current scheduled review date: ${card.next_review_date}
+        - User's answer to the test question was: ${isCorrect ? "CORRECT" : "INCORRECT"}.
 
-        Ejemplo de respuesta si fue incorrecta:
+        **Your Task:**
+        1.  **If the answer was INCORRECT:** You MUST reschedule the card for an earlier review. A short interval (like the user's "Again" or "Hard" setting) is appropriate. The card needs reinforcement.
+        2.  **If the answer was CORRECT:** You MUST postpone the card's review to a later date. If the current review date was already far in the future, you can push it even further. This shows mastery.
+        3.  Your response MUST be ONLY a raw JSON object with two fields:
+            - "new_review_date": A new review date in UTC ISO 8601 format ('YYYY-MM-DDTHH:mm:ss.sssZ').
+            - "reason": A very brief explanation in '${language}' for the change.
+
+        **Example for an INCORRECT answer:**
         {
-          "new_review_date": "2025-10-16T12:00:00.000Z",
-          "reason": "Repaso adelantado por fallo en el test de IA."
+          "new_review_date": "${new Date(Date.now() + settings.again_interval_minutes * 60000).toISOString()}",
+          "reason": "Repaso adelantado por fallo en el test."
         }
 
-        Ejemplo de respuesta si fue correcta:
+        **Example for a CORRECT answer:**
         {
-          "new_review_date": "2025-10-25T12:00:00.000Z",
-          "reason": "Repaso pospuesto por acierto en el test de IA."
+          "new_review_date": "${new Date(Date.now() + 10 * 24 * 60 * 60000).toISOString()}",
+          "reason": "Repaso pospuesto por acierto en el test."
         }
       `;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
       const aiResult = await model.generateContent(prompt);
-      const aiResponseText = aiResult.response.text();
+      const aiResponseText = aiResult.response.text().replace(/^```json\n/, "").replace(/\n```$/, "");
       const aiSuggestion = JSON.parse(aiResponseText);
 
       // Actualizamos la tarjeta en la base de datos con la nueva fecha y la sugerencia de la IA
