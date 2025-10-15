@@ -1,165 +1,117 @@
-"use client"
-
-import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/server"
+import { redirect } from "next/navigation"
+import { Brain, ArrowLeft, HelpCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useRouter } from "next/navigation"
-import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
+import Link from "next/link"
+import { SettingsForm } from "@/components/settings-form"
+import { ShortcutsForm, type Shortcuts } from "@/components/shortcuts-form"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-interface Settings {
-  id?: string
-  again_interval_minutes: number
-  hard_interval_days: number
-  good_interval_days: number
-  easy_interval_days: number
-  enable_ai_suggestions: boolean
-}
+export default async function SettingsPage() {
+  const supabase = await createClient()
 
-interface SettingsFormProps {
-  settings: Settings | null
-}
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
-  const [settings, setSettings] = useState({
-    again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
-    hard_interval_days: initialSettings?.hard_interval_days ?? 1,
-    good_interval_days: initialSettings?.good_interval_days ?? 3,
-    easy_interval_days: initialSettings?.easy_interval_days ?? 7,
-    enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
-  })
-  const [isLoading, setIsLoading] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const router = useRouter()
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    const numValue = Math.max(1, Number(value));
-    setSettings((prev) => ({ ...prev, [name]: numValue }))
+  if (!user) {
+    redirect("/auth/login")
   }
 
-  const handleSave = async () => {
-    setIsLoading(true)
-    setMessage(null)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      setMessage("You must be logged in to save settings.")
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      const { error } = await supabase.from("user_settings").upsert({
-        user_id: user.id,
-        ...settings,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' })
-
-      if (error) throw error
-
-      setMessage("Settings saved successfully!")
-      router.refresh()
-    } catch (error) {
-      setMessage("Error saving settings.")
-      console.error(error)
-    } finally {
-      setIsLoading(false)
-      setTimeout(() => setMessage(null), 3000)
-    }
-  }
+  // Fetch user's settings (intervals and AI toggle)
+  const { data: settings } = await supabase
+    .from("user_settings")
+    .select("*")
+    .eq("user_id", user.id)
+    .single()
+    
+  // Fetch user's shortcuts settings
+  const { data: shortcuts } = await supabase
+    .from("user_shortcuts")
+    .select("rate_again, rate_hard, rate_good, rate_easy")
+    .eq("user_id", user.id)
+    .single()
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Study Settings</CardTitle>
-        <CardDescription>
-          Customize your learning experience, from review intervals to AI features.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-8">
-        {/* SECCIÓN DE IA */}
-        <div className="space-y-4">
-            <h4 className="font-medium text-sm">Artificial Intelligence</h4>
-             <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                  <h3 className="font-medium">AI-Powered Scheduling</h3>
-                  <p className="text-sm text-muted-foreground">Allow AI to automatically reschedule cards based on your test results.</p>
-                </div>
-                <Switch
-                    checked={settings.enable_ai_suggestions}
-                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enable_ai_suggestions: checked }))}
-                    aria-label="Toggle AI-powered scheduling"
-                />
-            </div>
-        </div>
-
-        <Separator />
-
-        {/* SECCIÓN DE INTERVALOS */}
-        <div className="space-y-4">
-          <h4 className="font-medium text-sm">Review Intervals</h4>
-           <p className="text-sm text-muted-foreground">
-              Set the time until a card is shown again after you rate it in Study Mode.
-            </p>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 pt-2">
-            <div className="grid gap-2">
-              <Label htmlFor="again_interval_minutes">"Again" Interval (minutes)</Label>
-              <Input
-                id="again_interval_minutes"
-                name="again_interval_minutes"
-                type="number"
-                value={settings.again_interval_minutes}
-                onChange={handleInputChange}
-                min="1"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="hard_interval_days">"Hard" Interval (days)</Label>
-              <Input
-                id="hard_interval_days"
-                name="hard_interval_days"
-                type="number"
-                value={settings.hard_interval_days}
-                onChange={handleInputChange}
-                min="1"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="good_interval_days">"Good" Interval (days)</Label>
-              <Input
-                id="good_interval_days"
-                name="good_interval_days"
-                type="number"
-                value={settings.good_interval_days}
-                onChange={handleInputChange}
-                min="1"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="easy_interval_days">"Easy" Interval (days)</Label>
-              <Input
-                id="easy_interval_days"
-                name="easy_interval_days"
-                type="number"
-                value={settings.easy_interval_days}
-                onChange={handleInputChange}
-                min="1"
-              />
-            </div>
+    <div className="flex min-h-screen flex-col">
+      <header className="border-b">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <Brain className="h-6 w-6" />
+            <span className="text-xl font-bold">Memoria</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground">{user.email}</span>
+            <form action="/auth/signout" method="post">
+              <Button variant="ghost" size="sm" type="submit">
+                Sign Out
+              </Button>
+            </form>
           </div>
         </div>
-      </CardContent>
-      <CardFooter className="flex justify-between border-t px-6 pt-6">
-        {message && <p className="text-sm text-muted-foreground">{message}</p>}
-        <Button onClick={handleSave} disabled={isLoading} className="ml-auto">
-          {isLoading ? "Saving..." : "Save Settings"}
-        </Button>
-      </CardFooter>
-    </Card>
+      </header>
+
+      <main className="flex-1">
+        <div className="container mx-auto max-w-4xl px-4 py-8">
+          <Button variant="ghost" asChild className="mb-4">
+            <Link href="/dashboard">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Dashboard
+            </Link>
+          </Button>
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold">Settings</h1>
+            <p className="text-muted-foreground">Customize your study experience.</p>
+          </div>
+
+          <Tabs defaultValue="study" className="w-full" orientation="vertical">
+            <TabsList className="mb-6 w-full md:w-auto">
+              <TabsTrigger value="study" className="flex-1 md:flex-initial">Study</TabsTrigger>
+              <TabsTrigger value="shortcuts" className="flex-1 md:flex-initial">Shortcuts</TabsTrigger>
+              <TabsTrigger value="appearance" className="flex-1 md:flex-initial">Appearance</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="study">
+              <SettingsForm settings={settings} />
+            </TabsContent>
+
+            <TabsContent value="shortcuts">
+              <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
+            </TabsContent>
+            
+            <TabsContent value="appearance">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Appearance</CardTitle>
+                  <CardDescription>Customize the look and feel of the application.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div>
+                      <h3 className="font-medium">Theme</h3>
+                      <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
+                    </div>
+                    <ThemeToggle />
+                  </div>
+                  <p className="text-xs text-muted-foreground">If the theme doesn't apply correctly, try reloading the page.</p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          <div className="mt-8 flex justify-center">
+            <Button variant="link" asChild className="text-muted-foreground">
+              <Link href="/help">
+                <HelpCircle className="mr-2 h-4 w-4" />
+                How does it work?
+              </Link>
+            </Button>
+          </div>
+
+        </div>
+      </main>
+    </div>
   )
 }
