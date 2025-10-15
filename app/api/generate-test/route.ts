@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       4. The questions must be clear, direct, and based on the "front" (question) and "back" (answer) information from each card.
       5. The entire test content (questions, options) must be in ${language}.
       6. For each question, you MUST include a "sourceCardFront" field containing the exact "front" text of the original card you used to create the question. This is crucial for linking the results back.
-      7. You MUST return the result exclusively in JSON format, without any extra text, formatting, or markdown like \`\`\`json. The output must be a raw JSON array of objects. Each object must have this exact structure:
+      7. You MUST return the result exclusively in raw JSON format. Do not add any introductory text, concluding text, or markdown formatting like \`\`\`json. The output must be a raw JSON array of objects only. Each object must have this exact structure:
           {
             "question": "The question text...",
             "options": { "A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D" },
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       )}
     `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -85,7 +85,16 @@ export async function POST(request: Request) {
 
     let testData;
     try {
-      testData = JSON.parse(text);
+      // --- NUEVA LÓGICA DE PARSEO ROBUSTA ---
+      // 1. Buscamos si la respuesta está envuelta en un bloque de código JSON.
+      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+      
+      // 2. Si lo encontramos, usamos el contenido. Si no, usamos la respuesta completa.
+      const jsonString = jsonMatch ? jsonMatch[1] : text;
+      
+      // 3. Parseamos la cadena de texto limpia.
+      testData = JSON.parse(jsonString);
+
     } catch (parseError) {
       console.error("Failed to parse JSON from AI response. Raw text was:", text, parseError);
       throw new Error("The AI returned an invalid response format. Please try again.");
