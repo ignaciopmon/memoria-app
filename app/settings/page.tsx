@@ -66,54 +66,52 @@ export default async function SettingsPage() {
             <p className="text-muted-foreground">Customize your study experience.</p>
           </div>
 
-          <Tabs defaultValue="appearance" orientation="vertical" className="flex flex-col gap-8 md:flex-row">
-            <TabsList className="flex h-auto flex-col justify-start rounded-lg p-2 md:w-1/4">
-              <TabsTrigger value="appearance" className="w-full justify-start gap-2">
-                <Palette className="h-4 w-4" />
-                Appearance
-              </TabsTrigger>
-              <TabsTrigger value="intervals" className="w-full justify-start gap-2">
-                <Timer className="h-4 w-4" />
-                Intervals
-              </TabsTrigger>
-              <TabsTrigger value="shortcuts" className="w-full justify-start gap-2">
-                <Keyboard className="h-4 w-4" />
-                Shortcuts
-              </TabsTrigger>
+          <Tabs defaultValue="appearance" className="w-full">
+            {/* Pestañas para Escritorio (como antes) */}
+            <TabsList className="hidden w-full grid-cols-3 md:grid">
+              <TabsTrigger value="appearance">Appearance</TabsTrigger>
+              <TabsTrigger value="intervals">Intervals</TabsTrigger>
+              <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
+            </TabsList>
+
+            {/* Pestañas para Móvil (verticales) */}
+            <TabsList className="grid w-full grid-cols-1 md:hidden">
+              <TabsTrigger value="appearance">Appearance</TabsTrigger>
+              <TabsTrigger value="intervals">Intervals</TabsTrigger>
+              <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
             </TabsList>
             
-            <div className="flex-1">
-              <TabsContent value="appearance">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Appearance</CardTitle>
-                    <CardDescription>
-                      Customize the look and feel of the application.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="flex items-center justify-between rounded-lg border p-4">
-                      <div>
-                        <h3 className="font-medium">Theme</h3>
-                        <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
-                      </div>
-                      <ThemeToggle />
+            {/* El contenido de las pestañas no cambia */}
+            <TabsContent value="appearance">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Appearance</CardTitle>
+                  <CardDescription>
+                    Customize the look and feel of the application.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div>
+                      <h3 className="font-medium">Theme</h3>
+                      <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
                     </div>
-                     <p className="text-xs text-muted-foreground">
-                      If the theme doesn't apply correctly, try reloading the page.
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="intervals">
-                <SettingsForm settings={settings} />
-              </TabsContent>
-              
-              <TabsContent value="shortcuts">
-                <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
-              </TabsContent>
-            </div>
+                    <ThemeToggle />
+                  </div>
+                   <p className="text-xs text-muted-foreground">
+                    If the theme doesn't apply correctly, try reloading the page.
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="intervals">
+              <SettingsForm settings={settings} />
+            </TabsContent>
+            
+            <TabsContent value="shortcuts">
+              <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
+            </TabsContent>
           </Tabs>
 
           <div className="mt-8 flex justify-center">
