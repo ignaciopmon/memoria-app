@@ -77,7 +77,8 @@ export async function POST(request: Request) {
       )}
     `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // O 'gemini-pro' si el otro falla
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
