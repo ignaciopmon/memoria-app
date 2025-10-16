@@ -40,19 +40,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No cards were provided to generate the test." }, { status: 400 });
     }
 
+    // Seleccionar un subconjunto aleatorio de tarjetas si hay más de las solicitadas
+    const shuffledCards = [...cards].sort(() => 0.5 - Math.random());
+    const selectedCards = shuffledCards.slice(0, questionCount);
+
     const prompt = `
-      You are an expert assistant designed to create study tests. Your task is to generate a ${questionCount}-question multiple-choice quiz in ${language} based on the following list of flashcards.
+      You are an expert assistant designed to create study tests. Your task is to generate a ${selectedCards.length}-question multiple-choice quiz in ${language} based on the following list of flashcards.
 
       ${context ? `Additional context about the topic: "${context}"` : ''}
 
       Instructions:
-      1. Generate exactly ${questionCount} multiple-choice questions.
+      1. Generate exactly ${selectedCards.length} multiple-choice questions, one for each card provided.
       2. Each question must have 4 options (A, B, C, D), with only one being correct.
-      3. **Prioritize** creating questions from the cards the user finds most difficult. Cards with a 'difficulty' of 'very hard' or 'hard' are the most important.
-      4. The questions must be clear, direct, and based on the "front" (question) and "back" (answer) information from each card.
-      5. The entire test content (questions, options) must be in ${language}.
-      6. For each question, you MUST include a "sourceCardFront" field containing the exact "front" text of the original card you used to create the question. This is crucial for linking the results back.
-      7. You MUST return the result exclusively in raw JSON format. Do not add any introductory text, concluding text, or markdown formatting like \`\`\`json. The output must be a raw JSON array of objects only. Each object must have this exact structure:
+      3. The questions must be clear, direct, and based on the "front" (question) and "back" (answer) information from each card.
+      4. The entire test content (questions, options) must be in ${language}.
+      5. For each question, you MUST include a "sourceCardFront" field containing the exact "front" text of the original card you used to create the question. This is crucial for linking the results back.
+      6. You MUST return the result exclusively in raw JSON format. Do not add any introductory text, concluding text, or markdown formatting like \`\`\`json. The output must be a raw JSON array of objects only. Each object must have this exact structure:
           {
             "question": "The question text...",
             "options": { "A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D" },
@@ -60,19 +63,8 @@ export async function POST(request: Request) {
             "sourceCardFront": "The exact front text of the source card"
           }
 
-      Here is the list of flashcards:
-      ${JSON.stringify(
-        cards.map((c) => ({
-          front: c.front,
-          back: c.back,
-          difficulty:
-            c.last_rating === 1
-              ? "very hard"
-              : c.last_rating === 2
-              ? "hard"
-              : "normal",
-        }))
-      )}
+      Here is the list of flashcards to use:
+      ${JSON.stringify(selectedCards)}
     `;
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
@@ -81,18 +73,12 @@ export async function POST(request: Request) {
     const response = await result.response;
     const text = response.text();
     
-    console.log("Raw AI Response:", text);
+    // console.log("Raw AI Response:", text);
 
     let testData;
     try {
-      // --- NUEVA LÓGICA DE PARSEO ROBUSTA ---
-      // 1. Buscamos si la respuesta está envuelta en un bloque de código JSON.
       const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
-      
-      // 2. Si lo encontramos, usamos el contenido. Si no, usamos la respuesta completa.
       const jsonString = jsonMatch ? jsonMatch[1] : text;
-      
-      // 3. Parseamos la cadena de texto limpia.
       testData = JSON.parse(jsonString);
 
     } catch (parseError) {

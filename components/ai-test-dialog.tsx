@@ -14,7 +14,7 @@ import { Sparkles, Loader2, CheckCircle, XCircle, Bot } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "./ui/card"
-import { createClient } from "@/lib/supabase/client"
+import { createClient, SupabaseClient } from "@/lib/supabase/client"
 import { Textarea } from "./ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useToast } from "./ui/use-toast"
@@ -44,6 +44,8 @@ interface UserSettings {
   enable_ai_suggestions?: boolean;
 }
 
+type CardSource = "all" | "new" | "again" | "hard" | "good" | "easy";
+
 export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) {
   const [open, setOpen] = useState(false);
   const [testState, setTestState] = useState<'options' | 'loading' | 'taking_test' | 'results'>('options');
@@ -54,6 +56,7 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
   const [language, setLanguage] = useState("Spanish");
   const [context, setContext] = useState("");
   const [questionCount, setQuestionCount] = useState("10");
+  const [cardSource, setCardSource] = useState<CardSource>("all"); // <-- NUEVO ESTADO
   const [userSettings, setUserSettings] = useState<UserSettings>({ enable_ai_suggestions: true });
   const { toast } = useToast();
   const router = useRouter();
@@ -78,19 +81,49 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
     }
   }, [open]);
 
+  // LÓGICA DE GENERACIÓN DE TEST ACTUALIZADA
   const handleGenerateTest = async () => {
     setTestState('loading');
     setError(null);
     try {
       const supabase = createClient();
-      const { data: cards, error: cardsError } = await supabase
+      
+      // Construir la consulta dinámicamente
+      let query = supabase
         .from('cards')
         .select('id, front, back, last_rating')
         .eq('deck_id', deckId)
         .is('deleted_at', null);
 
+      switch (cardSource) {
+        case "new":
+          query = query.eq('repetitions', 0);
+          break;
+        case "again":
+          query = query.eq('last_rating', 1);
+          break;
+        case "hard":
+          query = query.eq('last_rating', 2);
+          break;
+        case "good":
+          query = query.eq('last_rating', 3);
+          break;
+        case "easy":
+          query = query.eq('last_rating', 4);
+          break;
+        // "all" no necesita filtro adicional
+      }
+
+      const { data: cards, error: cardsError } = await query;
+
       if (cardsError) throw new Error("Could not fetch cards for the test.");
-      if (!cards || cards.length === 0) throw new Error("This deck has no cards to generate a test from.");
+      if (!cards || cards.length === 0) {
+        const sourceName = {
+          "all": "en este mazo", "new": "nuevas", "again": "marcadas como 'Again'",
+          "hard": "marcadas como 'Hard'", "good": "marcadas como 'Good'", "easy": "marcadas como 'Easy'"
+        }[cardSource];
+        throw new Error(`No se encontraron tarjetas ${sourceName} para generar un test.`);
+      }
 
       const response = await fetch('/api/generate-test', {
         method: 'POST',
@@ -128,7 +161,7 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
           await fetch('/api/process-test-results', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ results, language }),
+            body: JSON.stringify({ results }),
           });
           toast({
             title: "AI Analysis Complete!",
@@ -146,7 +179,7 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
       };
       processResults();
     }
-  }, [testState, userSettings.enable_ai_suggestions, questions, userAnswers, language, toast, router]);
+  }, [testState, userSettings.enable_ai_suggestions, questions, userAnswers, toast, router]);
 
   const handleAnswerSelect = (answer: string) => {
     const newAnswers = [...userAnswers];
@@ -221,6 +254,25 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
               </div>
             </div>
 
+            {/* */}
+             <div>
+              <Label htmlFor="cardSource">Generate test from</Label>
+              <Select value={cardSource} onValueChange={(value) => setCardSource(value as CardSource)}>
+                <SelectTrigger id="cardSource" className="w-full mt-2">
+                  <SelectValue placeholder="Select card source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cards</SelectItem>
+                  <SelectItem value="new">New Cards (never studied)</SelectItem>
+                  <SelectItem value="again">Cards rated "Again"</SelectItem>
+                  <SelectItem value="hard">Cards rated "Hard"</SelectItem>
+                  <SelectItem value="good">Cards rated "Good"</SelectItem>
+                  <SelectItem value="easy">Cards rated "Easy"</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* */}
+
             <div>
               <Label htmlFor="context">Optional Context</Label>
               <Textarea
@@ -234,10 +286,6 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
                 Provide a brief description of the deck's topic to help the AI generate more accurate questions.
               </p>
             </div>
-            
-            <p className="text-sm text-muted-foreground pt-2">
-              The AI will generate a test focusing on the cards you find most difficult.
-            </p>
 
             {error && <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error}</p>}
 

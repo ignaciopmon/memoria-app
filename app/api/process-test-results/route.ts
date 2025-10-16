@@ -8,8 +8,6 @@ import { cookies } from "next/headers";
 export const dynamic = "force-dynamic";
 
 // --- INICIO DE LA LÓGICA DE CÁLCULO DE SRS ---
-// Adaptada desde 'components/study-session.tsx' para el backend.
-
 interface CardSRS {
   ease_factor: number;
   interval: number;
@@ -63,7 +61,6 @@ const calculateNextReview = (card: CardSRS, rating: Rating, settings: UserSettin
 
   return { ease_factor, interval, repetitions, next_review_date: nextReviewDate.toISOString(), last_rating: rating };
 };
-
 // --- FIN DE LA LÓGICA DE CÁLCULO DE SRS ---
 
 interface TestResult {
@@ -75,7 +72,6 @@ interface TestResult {
 
 interface ProcessTestBody {
   results: TestResult[];
-  language: string;
 }
 
 const apiKey = process.env.GOOGLE_API_KEY;
@@ -102,12 +98,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
     }
 
-    const { results, language } = (await request.json()) as ProcessTestBody;
+    const { results } = (await request.json()) as ProcessTestBody;
 
     const { data: userSettingsData } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single();
     const settings: UserSettings = userSettingsData || { again_interval_minutes: 1, hard_interval_days: 1, good_interval_days: 3, easy_interval_days: 7 };
 
-    // Si la opción de IA está desactivada, no hacemos nada.
     if (userSettingsData && userSettingsData.enable_ai_suggestions === false) {
         return NextResponse.json({ success: true, message: "AI suggestions are disabled by the user." });
     }
@@ -117,7 +112,6 @@ export async function POST(request: Request) {
 
       const isCorrect = result.userAnswer === result.correctAnswer;
 
-      // Consulta corregida para encontrar la tarjeta y verificar la propiedad a través del mazo
       const { data: card, error: cardError } = await supabase
         .from('cards')
         .select(`
@@ -134,24 +128,34 @@ export async function POST(request: Request) {
       }
       
       const prompt = `
-        You are an expert AI tutor using a Spaced Repetition System (SRS). A user answered a test question. Your task is to act as the user and rate their own performance on this flashcard.
+        You are an expert AI tutor using a Spaced Repetition System (SRS). A user answered a test question. Your task is to intelligently rate their performance.
 
         **Performance:**
+        - User's answer was: ${isCorrect ? "CORRECT" : "INCORRECT"}.
+
+        **Card's Current Status:**
         - Card Content: "${result.sourceCardFront}"
-        - The user's answer was: ${isCorrect ? "CORRECT" : "INCORRECT"}.
+        - Current Next Review: ${card.next_review_date}
+        - Current Interval: ${card.interval} days
+        - Repetitions: ${card.repetitions}
 
         **Your Task:**
-        - If the answer was INCORRECT, you MUST decide between rating it as "Again" (1) or "Hard" (2). "Again" is for complete failure to recall. "Hard" is for recalling with difficulty.
-        - If the answer was CORRECT, you MUST decide between rating it as "Good" (3) or "Easy" (4). "Good" is for correct recall with some effort. "Easy" is for effortless, instant recall.
-        
+        Decide on a rating for this card. You have 5 options:
+        1.  **"rating": 1 (Again):** The user was INCORRECT. This card needs immediate review.
+        2.  **"rating": 2 (Hard):** The user was INCORRECT, but it was a close mistake, or the card is already advanced.
+        3.  **"rating": 3 (Good):** The user was CORRECT. This is a standard "pass".
+        4.  **"rating": 4 (Easy):** The user was CORRECT, and it was trivial.
+        5.  **"rating": null (No Change):** The user was CORRECT, but the card is already scheduled far in the future (e.g., > 30 days). Updating it might be unnecessary. Use this if a "Good" or "Easy" rating would not significantly change the schedule or if the user clearly knows the card.
+
         You MUST return ONLY a raw JSON object with this exact structure:
         {
-          "rating": <A number: 1, 2, 3, or 4>,
+          "rating": <A number: 1, 2, 3, 4, or null>,
           "reason": "<A very brief explanation for your choice, **always in English**>"
         }
 
-        Example for INCORRECT: { "rating": 1, "reason": "Failed test question, needs immediate review." }
-        Example for CORRECT: { "rating": 3, "reason": "Correct on test, good recall." }
+        Example (INCORRECT): { "rating": 1, "reason": "Failed test, scheduling for immediate review." }
+        Example (CORRECT, new card): { "rating": 3, "reason": "Correct on test, starting schedule." }
+        Example (CORRECT, advanced card): { "rating": null, "reason": "Correct on test, schedule already advanced. No change needed." }
       `;
 
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
@@ -161,7 +165,7 @@ export async function POST(request: Request) {
       let aiSuggestion;
       try {
         aiSuggestion = JSON.parse(aiResponseText);
-        if (![1, 2, 3, 4].includes(aiSuggestion.rating)) {
+        if (![1, 2, 3, 4, null].includes(aiSuggestion.rating)) {
           throw new Error('Invalid rating from AI');
         }
       } catch (e) {
@@ -169,6 +173,20 @@ export async function POST(request: Request) {
         continue;
       }
       
+      // SI LA IA DECIDE NO CAMBIAR NADA, SALTAMOS A LA SIGUIENTE TARJETA
+      if (aiSuggestion.rating === null) {
+        await supabase
+          .from('cards')
+          .update({ 
+            ai_suggestion: { 
+              reason: aiSuggestion.reason,
+              previous_date: card.next_review_date
+            }
+          })
+          .eq('id', card.id);
+        continue;
+      }
+
       const newSrsData = calculateNextReview(card, aiSuggestion.rating as Rating, settings);
       
       await supabase
