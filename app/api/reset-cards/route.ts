@@ -11,7 +11,9 @@ export async function POST(request: Request) {
     const cookieStore = cookies();
     const supabase = await createClient(cookieStore);
 
-    const { data: { user } } } = await supabase.auth.getUser();
+    // --- CORRECCIÓN AQUÍ ---
+    // Se eliminaron las llaves '}' adicionales
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
     }
@@ -34,9 +36,8 @@ export async function POST(request: Request) {
         ai_suggestion: null // Limpia la sugerencia de la IA
       })
       .in('id', cardIds);
-
-    // La RLS (Row Level Security) se asegura de que el usuario
-    // solo pueda modificar tarjetas que le pertenecen.
+      // La RLS se asegura de que el usuario solo pueda modificar
+      // tarjetas que le pertenecen (comprobando el user_id en la tabla decks)
 
     if (error) {
       console.error("Error resetting cards:", error.message);
