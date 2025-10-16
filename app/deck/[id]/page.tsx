@@ -8,7 +8,7 @@ import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { CardItem } from "@/components/card-item"
 import { ImportMenu } from "@/components/import-menu"
-import { AddAiCardsDialog } from "@/components/add-ai-cards-dialog" // <-- 1. IMPORTAR
+import { AddAiCardsDialog } from "@/components/add-ai-cards-dialog" 
 
 export default async function DeckPage({ params }: { params: { id: string } }) {
   const { id } = params
@@ -29,10 +29,15 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
 
   const { data: cards } = await supabase
     .from("cards")
-    .select("*")
+    .select("*") // 'created_at' está incluido en '*'
     .eq("deck_id", id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
+
+  // --- LÓGICA "NEW" ---
+  // Calcular el timestamp de hace 10 minutos
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  // --- FIN LÓGICA "NEW" ---
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -70,7 +75,6 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 <ImportMenu deckId={id} />
-                {/* --- 2. AÑADIR EL BOTÓN AQUÍ --- */}
                 <AddAiCardsDialog deckId={deck.id} deckName={deck.name} />
                 <CreateCardDialog deckId={id} />
               </div>
@@ -87,7 +91,6 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   <ImportMenu deckId={id} />
-                  {/* --- 3. AÑADIR EL BOTÓN TAMBIÉN AQUÍ --- */}
                   <AddAiCardsDialog deckId={deck.id} deckName={deck.name} />
                   <CreateCardDialog deckId={id} />
                 </div>
@@ -95,9 +98,14 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
             </Card>
           ) : (
             <div className="space-y-4">
-              {cards.map((card) => (
-                <CardItem key={card.id} card={card} />
-              ))}
+              {cards.map((card) => {
+                // --- LÓGICA "NEW" ---
+                // Comparamos la fecha de creación de la tarjeta con el timestamp
+                const createdAt = new Date(card.created_at);
+                const isNew = createdAt > tenMinutesAgo;
+                // --- FIN LÓGICA "NEW" ---
+                return <CardItem key={card.id} card={card} isNew={isNew} />;
+              })}
             </div>
           )}
         </div>

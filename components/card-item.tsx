@@ -1,3 +1,4 @@
+// components/card-item.tsx
 "use client"
 
 import { Card, CardContent } from "@/components/ui/card"
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { EditCardDialog } from "@/components/edit-card-dialog"
 import Image from "next/image"
+import { Badge } from "@/components/ui/badge" // <-- 1. IMPORTAR BADGE
 
 interface CardItemProps {
   card: {
@@ -31,10 +33,12 @@ interface CardItemProps {
     interval: number
     repetitions: number
     next_review_date: string
+    created_at: string // <-- Asegurarse de que 'created_at' está en el tipo (viene de select("*"))
   }
+  isNew: boolean // <-- 2. AÑADIR 'isNew' A LAS PROPS
 }
 
-export function CardItem({ card }: CardItemProps) {
+export function CardItem({ card, isNew }: CardItemProps) { // <-- 3. RECIBIR 'isNew'
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
   const [showBack, setShowBack] = useState(false)
@@ -83,7 +87,19 @@ export function CardItem({ card }: CardItemProps) {
           <div className="flex-1 space-y-4">
             <div className="flex justify-between">
               <div>
-                <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
+                {/* --- 4. AÑADIR LÓGICA DE BADGE --- */}
+                <div className="flex items-center gap-2">
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">FRONT</p>
+                  {isNew && (
+                    <Badge 
+                      variant="outline" 
+                      className="h-auto px-1.5 py-0 text-xs font-medium text-green-600 border-green-500 bg-green-500/10"
+                    >
+                      NEW
+                    </Badge>
+                  )}
+                </div>
+                {/* --- FIN DE LÓGICA DE BADGE --- */}
                 <p className="text-base">{card.front}</p>
               </div>
               <div className="flex flex-shrink-0 gap-1">
