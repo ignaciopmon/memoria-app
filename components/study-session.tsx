@@ -114,8 +114,26 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     const supabase = createClient()
     try {
       const updates = calculateNextReview(currentCard, rating)
-      await supabase.from("cards").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", currentCard.id)
+      
+      // ***** INICIO DE LA MODIFICACIÓN *****
+      // Al calificar manualmente, borramos la sugerencia de la IA.
+      await supabase
+        .from("cards")
+        .update({ 
+          ...updates, 
+          ai_suggestion: null, // <-- AQUÍ SE LIMPIA LA ESTRELLA
+          updated_at: new Date().toISOString() 
+        })
+        .eq("id", currentCard.id)
+      // ***** FIN DE LA MODIFICACIÓN *****
+        
       await supabase.from("card_reviews").insert({ card_id: currentCard.id, rating })
+      
+      // Si la calificación fue 'Again' (1), vuelve a añadir la tarjeta al final de la cola
+      if (rating === 1) {
+        setCards(prevCards => [...prevCards, currentCard]);
+      }
+
       setCurrentIndex((prev) => prev + 1)
       setShowAnswer(false)
     } catch (error) {
@@ -169,6 +187,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     return ""
   }
 
+  // --- LÓGICA DE 'NADA QUE REPASAR' ---
   if (initialCards.length === 0) {
     return (
       <div className="flex min-h-screen flex-col">
@@ -197,6 +216,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     )
   }
 
+  // --- LÓGICA DE 'SESIÓN COMPLETA' ---
   if (isComplete) {
     return (
       <div className="flex min-h-screen flex-col">
@@ -232,6 +252,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     )
   }
 
+  // --- RENDERIZADO DE LA SESIÓN PRINCIPAL ---
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
