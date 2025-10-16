@@ -46,20 +46,23 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
-    // --- LÓGICA ANTI-DUPLICACIÓN ---
-    // 1. Obtener las tarjetas existentes en el mazo
+    // --- LÓGICA DE ESTILO Y ANTI-DUPLICACIÓN ---
+    // 1. Obtener una muestra de las tarjetas existentes
     const { data: existingCards, error: existingCardsError } = await supabase
         .from('cards')
         .select('front, back')
         .eq('deck_id', deckId)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false }) // Tomamos las más recientes como ejemplo
+        .limit(15); // <-- Limitamos a 15 para usar como muestra
 
     if (existingCardsError) {
         throw new Error("Could not fetch existing cards to prevent duplication.");
     }
 
-    // 2. Convertir las tarjetas existentes a un formato simple para el prompt
+    // 2. Convertir la muestra a JSON para el prompt
     const existingCardsJson = JSON.stringify(existingCards.map(c => ({ front: c.front, back: c.back })));
+    // --- FIN ---
 
     // --- Definiciones para el prompt ---
     const cardTypeInstructions = {
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
         hard: "The cards should focus on complex, nuanced, or advanced details of the topic. Ideal for an expert."
     }
 
-    // --- CONSTRUCCIÓN DEL PROMPT ---
+    // --- CONSTRUCCIÓN DEL PROMPT MEJORADO ---
     const prompt = `
       You are an expert in creating educational content. Your task is to generate a set of **new** flashcards to be added to an existing deck.
 
@@ -84,27 +87,25 @@ export async function POST(request: Request) {
       **Card Type:** ${cardTypeInstructions[cardType]}
       **Difficulty Level:** ${difficultyInstructions[difficulty]}
 
-      **Existing Cards in the Deck (DO NOT DUPLICATE):**
+      **Existing Card Examples (Analyze these for style, format, and tone):**
       ${existingCardsJson}
 
       **Instructions:**
-      1.  Generate exactly ${cardCount} **NEW** flashcards based on the provided topic, card type, and difficulty.
-      2.  **CRITICAL:** Do not generate any cards that are duplicates or too similar to the "Existing Cards in the Deck" list provided above.
-      3.  The content must be accurate and relevant to the topic.
-      4.  The entire output (both "front" and "back" of each card) must be in ${language}.
-      5.  You MUST return the result exclusively in raw JSON format. Do not add any introductory text, concluding text, or markdown formatting like \`\`\`json. The output must be a raw JSON array of objects only.
-      6.  Each object in the array must have this exact structure:
+      1.  **Analyze the "Existing Card Examples"** to understand their style (e.g., short questions, detailed definitions, fill-in-the-blank, tone, format).
+      2.  Generate exactly ${cardCount} **NEW** flashcards based on the provided topic, card type, and difficulty.
+      3.  The new cards should **match the style, format, and tone** of the existing cards as closely as possible.
+      4.  **CRITICAL:** Do not generate any cards that are duplicates or too similar to the "Existing Card Examples" list.
+      5.  The content must be accurate and relevant to the topic.
+      6.  The entire output (both "front" and "back" of each card) must be in ${language}.
+      7.  You MUST return the result exclusively in raw JSON format. Do not add any introductory text, concluding text, or markdown formatting like \`\`\`json. The output must be a raw JSON array of objects only.
+      8.  Each object in the array must have this exact structure:
           {
             "front": "The content for the front of the card...",
             "back": "The content for the back of the card..."
           }
     `;
     
-    // --- CORRECCIÓN AQUÍ ---
-    // Cambiado de 'getGeneraTiveModel' a 'getGenerativeModel'
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-    // --- FIN DE LA CORRECCIÓN ---
-
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
@@ -122,9 +123,8 @@ export async function POST(request: Request) {
     }
     
     // --- INSERCIÓN EN BASE DE DATOS ---
-    // No creamos un mazo, usamos el deckId existente
     const cardsToInsert = generatedCards.map((card: {front: string, back: string}) => ({
-        deck_id: deckId, // <-- Usamos el ID existente
+        deck_id: deckId,
         front: card.front,
         back: card.back,
         ease_factor: 2.5,
