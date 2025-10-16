@@ -141,21 +141,24 @@ export async function POST(request: Request) {
 
         **Your Task:**
         Decide on a rating for this card. You have 5 options:
-        1.  **"rating": 1 (Again):** The user was INCORRECT. This card needs immediate review.
-        2.  **"rating": 2 (Hard):** The user was INCORRECT, but it was a close mistake, or the card is already advanced.
+        1.  **"rating": 1 (Again):** The user was INCORRECT.
+        2.  **"rating": 2 (Hard):** The user was INCORRECT, but it was a close mistake.
         3.  **"rating": 3 (Good):** The user was CORRECT. This is a standard "pass".
         4.  **"rating": 4 (Easy):** The user was CORRECT, and it was trivial.
-        5.  **"rating": null (No Change):** The user was CORRECT, but the card is already scheduled far in the future (e.g., > 30 days). Updating it might be unnecessary. Use this if a "Good" or "Easy" rating would not significantly change the schedule or if the user clearly knows the card.
+        5.  **"rating": null (No Change):** The user was CORRECT, but the card is already scheduled far in the future (e.g., > 30 days). Updating it is unnecessary.
 
         You MUST return ONLY a raw JSON object with this exact structure:
         {
           "rating": <A number: 1, 2, 3, 4, or null>,
-          "reason": "<A very brief explanation for your choice, **always in English**>"
+          "reason": "<A brief, user-friendly explanation for your choice, **always in English**. This message will be shown to the user. Do NOT use technical terms like 'schedule', 'interval', or 'review'."
         }
 
-        Example (INCORRECT): { "rating": 1, "reason": "Failed test, scheduling for immediate review." }
-        Example (CORRECT, new card): { "rating": 3, "reason": "Correct on test, starting schedule." }
-        Example (CORRECT, advanced card): { "rating": null, "reason": "Correct on test, schedule already advanced. No change needed." }
+        **--- REASON EXAMPLES (User-Friendly) ---**
+        Example (INCORRECT): { "rating": 1, "reason": "This card needs more practice. We'll see it again soon!" }
+        Example (CORRECT, new card): { "rating": 3, "reason": "Great job on the test! This card is being moved back." }
+        Example (CORRECT, advanced card): { "rating": null, "reason": "You know this one well! No changes made." }
+        Example (INCORRECT, close guess): { "rating": 2, "reason": "Close one! Let's review this card a bit sooner." }
+        Example (CORRECT, trivial): { "rating": 4, "reason": "You've mastered this! Moving it way back." }
       `;
 
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
