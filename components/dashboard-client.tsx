@@ -17,6 +17,7 @@ import { RenameDialog } from "./rename-dialog"
 import { ColorPopover } from "./color-popover"
 import { CreateDeckDialog } from "./create-deck-dialog"
 import { CreateFolderDialog } from "./create-folder-dialog"
+import { CreateAIDeckDialog } from "./create-ai-deck-dialog"
 
 type Item = {
   id: string
@@ -197,14 +198,17 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
         <h2 className="text-2xl font-semibold">Your dashboard is empty</h2>
         <p className="mb-6 text-muted-foreground">Create your first deck to get started.</p>
-        <CreateDeckDialog onDeckCreated={() => router.refresh()} size="lg" />
+        <div className="flex gap-2">
+          <CreateDeckDialog onDeckCreated={() => router.refresh()} size="lg" />
+          <CreateAIDeckDialog />
+        </div>
       </div>
     )
   }
   
   return (
     <>
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">My Decks</h1>
           <p className="text-muted-foreground">Manage your study flashcard decks</p>
@@ -215,6 +219,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
                 {isEditMode ? "Done" : "Edit"}
             </Button>
             {isEditMode && <CreateFolderDialog onFolderCreated={() => router.refresh()} />}
+            <CreateAIDeckDialog />
             <CreateDeckDialog onDeckCreated={() => router.refresh()} />
         </div>
       </div>
