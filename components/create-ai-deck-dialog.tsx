@@ -31,6 +31,7 @@ export function CreateAIDeckDialog() {
   const [cardType, setCardType] = useState("qa")
   const [cardCount, setCardCount] = useState("10")
   const [language, setLanguage] = useState("Spanish")
+  const [difficulty, setDifficulty] = useState("medium") // <-- NUEVO ESTADO
 
   const [errorMessage, setErrorMessage] = useState("")
   const [newDeckId, setNewDeckId] = useState<string | null>(null)
@@ -43,6 +44,7 @@ export function CreateAIDeckDialog() {
     setCardType("qa")
     setCardCount("10")
     setLanguage("Spanish")
+    setDifficulty("medium") // <-- RESETEAR ESTADO
     setErrorMessage("")
     setNewDeckId(null)
     setView('form')
@@ -63,6 +65,7 @@ export function CreateAIDeckDialog() {
           cardType,
           cardCount: parseInt(cardCount),
           language,
+          difficulty, // <-- ENVIAR DIFICULTAD
         }),
       })
 
@@ -114,7 +117,7 @@ export function CreateAIDeckDialog() {
                     rows={4}
                   />
                 </div>
-                {/* --- CAMBIO AQUÍ: de sm:grid-cols-3 a sm:grid-cols-2 --- */}
+                {/* --- AHORA ES UNA REJILLA DE 2x2 --- */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="cardType">Card Type</Label>
@@ -138,7 +141,7 @@ export function CreateAIDeckDialog() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid gap-2 sm:col-span-1"> {/* Este se ajustará bien ahora */}
+                    <div className="grid gap-2">
                         <Label htmlFor="language">Language</Label>
                         <Select value={language} onValueChange={setLanguage}>
                             <SelectTrigger id="language"><SelectValue /></SelectTrigger>
@@ -147,8 +150,19 @@ export function CreateAIDeckDialog() {
                                 <SelectItem value="English">English</SelectItem>
                                 <SelectItem value="French">French</SelectItem>
                                 <SelectItem value="German">German</SelectItem>
-                                {/* --- CAMBIO AQUÍ: Añadido Portugués --- */}
                                 <SelectItem value="Portuguese">Portuguese</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     {/* --- CAMPO DE DIFICULTAD AÑADIDO --- */}
+                    <div className="grid gap-2">
+                        <Label htmlFor="difficulty">Difficulty</Label>
+                        <Select value={difficulty} onValueChange={setDifficulty}>
+                            <SelectTrigger id="difficulty"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="easy">Easy</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="hard">Hard</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

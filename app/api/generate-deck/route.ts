@@ -13,6 +13,7 @@ interface GenerateDeckBody {
   cardType: 'qa' | 'vocabulary' | 'facts';
   cardCount: number;
   language: string;
+  difficulty: 'easy' | 'medium' | 'hard'; // <-- NUEVO CAMPO
 }
 
 const apiKey = process.env.GOOGLE_API_KEY;
@@ -39,9 +40,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
     }
 
-    const { deckName, topic, cardType, cardCount, language } = (await request.json()) as GenerateDeckBody;
+    const { deckName, topic, cardType, cardCount, language, difficulty } = (await request.json()) as GenerateDeckBody; // <-- OBTENER DIFICULTAD
 
-    if (!deckName || !topic || !cardType || !cardCount || !language) {
+    if (!deckName || !topic || !cardType || !cardCount || !language || !difficulty) { // <-- VALIDAR DIFICULTAD
         return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
@@ -51,6 +52,14 @@ export async function POST(request: Request) {
         facts: 'Each card must present a key piece of information, with a prompt in the "front" (like a fill-in-the-blank or a name) and the corresponding fact in the "back".'
     }
 
+    // --- NUEVAS INSTRUCCIONES DE DIFICULTAD ---
+    const difficultyInstructions = {
+        easy: "The cards should cover the most basic and fundamental concepts. Ideal for a beginner.",
+        medium: "The cards should cover a balance of core concepts and some detailed information. Assume intermediate knowledge.",
+        hard: "The cards should focus on complex, nuanced, or advanced details of the topic. Ideal for an expert."
+    }
+    // --- FIN ---
+
     const prompt = `
       You are an expert in creating educational content. Your task is to generate a set of flashcards for a user.
 
@@ -58,9 +67,10 @@ export async function POST(request: Request) {
       **Language:** ${language}
       **Number of Cards:** ${cardCount}
       **Card Type:** ${cardTypeInstructions[cardType]}
+      **Difficulty Level:** ${difficultyInstructions[difficulty]}
 
       **Instructions:**
-      1.  Generate exactly ${cardCount} flashcards based on the provided topic and card type.
+      1.  Generate exactly ${cardCount} flashcards based on the provided topic, card type, and difficulty.
       2.  The content must be accurate and relevant to the topic.
       3.  The entire output (both "front" and "back" of each card) must be in ${language}.
       4.  You MUST return the result exclusively in raw JSON format. Do not add any introductory text, concluding text, or markdown formatting like \`\`\`json. The output must be a raw JSON array of objects only.
