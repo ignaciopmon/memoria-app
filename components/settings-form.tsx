@@ -1,14 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react" // <-- IMPORTA useEffect
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { Switch } from "@/components/ui/switch" // <-- IMPORTADO
-import { Separator } from "@/components/ui/separator" // <-- IMPORTADO
+import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
 
 interface Settings {
   id?: string
@@ -16,7 +16,7 @@ interface Settings {
   hard_interval_days: number
   good_interval_days: number
   easy_interval_days: number
-  enable_ai_suggestions: boolean // <-- NUEVA PROPIEDAD
+  enable_ai_suggestions: boolean
 }
 
 interface SettingsFormProps {
@@ -29,11 +29,27 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
     hard_interval_days: initialSettings?.hard_interval_days ?? 1,
     good_interval_days: initialSettings?.good_interval_days ?? 3,
     easy_interval_days: initialSettings?.easy_interval_days ?? 7,
-    enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true, // <-- NUEVO ESTADO
+    enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const router = useRouter()
+
+  // ***** INICIO DE LA CORRECCIÓN *****
+  // Sincroniza el estado interno si las props (initialSettings) cambian
+  // Esto es clave para que router.refresh() funcione correctamente
+  useEffect(() => {
+    if (initialSettings) {
+      setSettings({
+        again_interval_minutes: initialSettings.again_interval_minutes,
+        hard_interval_days: initialSettings.hard_interval_days,
+        good_interval_days: initialSettings.good_interval_days,
+        easy_interval_days: initialSettings.easy_interval_days,
+        enable_ai_suggestions: initialSettings.enable_ai_suggestions,
+      });
+    }
+  }, [initialSettings]);
+  // ***** FIN DE LA CORRECCIÓN *****
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
