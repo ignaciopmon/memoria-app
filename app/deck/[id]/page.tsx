@@ -1,3 +1,4 @@
+// app/deck/[id]/page.tsx
 import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -7,6 +8,7 @@ import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { CardItem } from "@/components/card-item"
 import { ImportMenu } from "@/components/import-menu"
+import { AddAiCardsDialog } from "@/components/add-ai-cards-dialog" // <-- 1. IMPORTAR
 
 export default async function DeckPage({ params }: { params: { id: string } }) {
   const { id } = params
@@ -68,6 +70,8 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 <ImportMenu deckId={id} />
+                {/* --- 2. AÑADIR EL BOTÓN AQUÍ --- */}
+                <AddAiCardsDialog deckId={deck.id} deckName={deck.name} />
                 <CreateCardDialog deckId={id} />
               </div>
             </div>
@@ -83,6 +87,8 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   <ImportMenu deckId={id} />
+                  {/* --- 3. AÑADIR EL BOTÓN TAMBIÉN AQUÍ --- */}
+                  <AddAiCardsDialog deckId={deck.id} deckName={deck.name} />
                   <CreateCardDialog deckId={id} />
                 </div>
               </CardContent>
