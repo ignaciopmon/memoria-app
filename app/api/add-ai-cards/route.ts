@@ -100,7 +100,11 @@ export async function POST(request: Request) {
           }
     `;
     
-    const model = genAI.getGeneraTiveModel({ model: "gemini-2.0-flash-exp" });
+    // --- CORRECCIÓN AQUÍ ---
+    // Cambiado de 'getGeneraTiveModel' a 'getGenerativeModel'
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    // --- FIN DE LA CORRECCIÓN ---
+
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
