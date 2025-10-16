@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react" // <-- IMPORTA useEffect
+import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +24,7 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
+  // El estado inicial se basa en las props, con valores por defecto
   const [settings, setSettings] = useState({
     again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
     hard_interval_days: initialSettings?.hard_interval_days ?? 1,
@@ -36,23 +37,23 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
   const router = useRouter()
 
   // ***** INICIO DE LA CORRECCIÓN *****
-  // Sincroniza el estado interno si las props (initialSettings) cambian
-  // Esto es clave para que router.refresh() funcione correctamente
+  // Sincroniza el estado si las props (initialSettings) cambian
+  // (por ejemplo, después de un router.refresh())
+  // APLICA LA MISMA LÓGICA DE VALOR POR DEFECTO que el useState
   useEffect(() => {
-    if (initialSettings) {
-      setSettings({
-        again_interval_minutes: initialSettings.again_interval_minutes,
-        hard_interval_days: initialSettings.hard_interval_days,
-        good_interval_days: initialSettings.good_interval_days,
-        easy_interval_days: initialSettings.easy_interval_days,
-        enable_ai_suggestions: initialSettings.enable_ai_suggestions,
-      });
-    }
+    setSettings({
+      again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
+      hard_interval_days: initialSettings?.hard_interval_days ?? 1,
+      good_interval_days: initialSettings?.good_interval_days ?? 3,
+      easy_interval_days: initialSettings?.easy_interval_days ?? 7,
+      enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
+    });
   }, [initialSettings]);
   // ***** FIN DE LA CORRECCIÓN *****
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
+    // Asegura que el valor no sea negativo
     const numValue = Math.max(1, Number(value));
     setSettings((prev) => ({ ...prev, [name]: numValue }))
   }
