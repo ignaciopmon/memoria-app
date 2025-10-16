@@ -114,7 +114,8 @@ export function CreateAIDeckDialog() {
                     rows={4}
                   />
                 </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {/* --- CAMBIO AQUÍ: de sm:grid-cols-3 a sm:grid-cols-2 --- */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="cardType">Card Type</Label>
                         <Select value={cardType} onValueChange={setCardType}>
@@ -137,7 +138,7 @@ export function CreateAIDeckDialog() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid gap-2">
+                    <div className="grid gap-2 sm:col-span-1"> {/* Este se ajustará bien ahora */}
                         <Label htmlFor="language">Language</Label>
                         <Select value={language} onValueChange={setLanguage}>
                             <SelectTrigger id="language"><SelectValue /></SelectTrigger>
@@ -146,6 +147,8 @@ export function CreateAIDeckDialog() {
                                 <SelectItem value="English">English</SelectItem>
                                 <SelectItem value="French">French</SelectItem>
                                 <SelectItem value="German">German</SelectItem>
+                                {/* --- CAMBIO AQUÍ: Añadido Portugués --- */}
+                                <SelectItem value="Portuguese">Portuguese</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
