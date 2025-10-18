@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { 
   Brain, ArrowLeft, 
   BookCopy, Folder, Edit, FileInput, Trash2, 
-  GraduationCap, Repeat, Shuffle,
-  Sparkles, CalendarCheck, Settings, Palette, Keyboard, Info
-} from "lucide-react";
+  GraduationCap, /* Repeat, */ Shuffle, // Repeat no se usaba, Shuffle sí
+  Sparkles, CalendarCheck, Settings, Palette, Keyboard, Info, 
+  GripVertical, Paintbrush, Play // <-- Play añadido aquí
+} from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -93,8 +94,8 @@ export default async function HelpPage() {
                    <li><strong>Carpetas:</strong> Agrupa mazos relacionados (ej: una carpeta "Idiomas" con mazos de "Inglés" y "Francés"). Créalas desde el Dashboard en Modo Edición.</li>
                    <li><strong>Modo Edición:</strong> En el Dashboard, pulsa el botón "Edit". Esto te permite:
                       <ul className="list-circle space-y-1 pl-5 mt-2">
-                          <li>Arrastrar (<GripVertical className="inline h-4 w-4"/>) mazos para moverlos (incluso dentro o fuera de carpetas).</li>
-                          <li>Renombrar (<Edit className="inline h-4 w-4"/>) mazos y carpetas, y editar la descripción de los mazos.</li>
+                          <li>Arrastrar (<GripVertical className="inline h-4 w-4"/>) mazos para moverlos (incluso dentro o fuera de carpetas y para reordenarlos).</li>
+                          <li>Editar (<Edit className="inline h-4 w-4"/>) mazos y carpetas (nombre y descripción en mazos).</li>
                           <li>Cambiar el color (<Paintbrush className="inline h-4 w-4"/>) de mazos y carpetas para identificarlos visualmente.</li>
                           <li>Eliminar (<Trash2 className="inline h-4 w-4"/>) mazos o carpetas (se moverán a la Papelera).</li>
                       </ul>
@@ -120,7 +121,7 @@ export default async function HelpPage() {
                       <ul className="list-circle space-y-1 pl-5 mt-2">
                           <li><span className="font-semibold text-destructive">Again:</span> No la recordabas. Se reinicia y te la volverá a mostrar pronto.</li>
                           <li><span className="font-semibold text-orange-600">Hard:</span> Te costó recordarla. El intervalo será más corto.</li>
-                          <li><span className="font-semibold text-blue-600">Good:</span> La recordaste bien. El intervalo aumenta normalmente.</li>
+                          <li><span className="font-semibold text-blue-600">Good:</span> La recordaste bien. El intervalo aumenta normally.</li>
                           <li><span className="font-semibold text-green-600">Easy:</span> Te resultó muy fácil. El intervalo aumenta considerablemente.</li>
                       </ul>
                    </li>
