@@ -6,14 +6,14 @@ import {
   BookCopy, Folder, Edit, FileInput, Trash2,
   GraduationCap, /* Repeat, */ Shuffle,
   Sparkles, CalendarCheck, Settings, Palette, Keyboard, Info,
-  GripVertical, Paintbrush, Play // <-- GripVertical YA ESTABA, Play añadido antes, ahora todo correcto
+  GripVertical, Paintbrush, Play
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-// Pequeño componente auxiliar para los ítems de la ayuda
+// Helper component for help items
 const HelpItem = ({ icon: Icon, title, children }: { icon: React.ElementType, title: string, children: React.ReactNode }) => (
   <div className="flex items-start gap-4">
     <Icon className="h-6 w-6 text-primary flex-shrink-0 mt-1" />
@@ -58,124 +58,124 @@ export default async function HelpPage() {
           <Button variant="ghost" asChild className="mb-6 text-sm">
             <Link href="/settings">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Volver a Ajustes
+              Back to Settings
             </Link>
           </Button>
           <div className="mb-10 text-center">
-            <h1 className="text-4xl font-bold mb-2">Guía de Memoria</h1>
+            <h1 className="text-4xl font-bold mb-2">Memoria Guide</h1>
             <p className="text-lg text-muted-foreground">
-              Todo lo que necesitas saber para potenciar tu aprendizaje.
+              Everything you need to know to boost your learning.
             </p>
           </div>
 
           <Card className="shadow-lg">
             <CardContent className="p-6 md:p-8 space-y-8">
 
-              <HelpItem icon={Info} title="¿Qué es la Repetición Espaciada?">
+              <HelpItem icon={Info} title="What is Spaced Repetition?">
                 <p>
-                  Es una técnica de aprendizaje súper efectiva. En lugar de estudiar todo de golpe, revisas la información a intervalos de tiempo crecientes. Al principio repasas más a menudo, y a medida que lo vas recordando mejor, los repasos se espacian más.
+                  It's a super effective learning technique. Instead of cramming, you review information at increasing time intervals. Initially, you review frequently, and as you remember better, the time between reviews gets longer.
                 </p>
                 <p>
-                  Memoria automatiza esto por ti. Usa un algoritmo inteligente para mostrarte las tarjetas justo cuando estás a punto de olvidarlas, maximizando así la retención a largo plazo. ¡Estudiar menos, recordar más!
+                  Memoria automates this for you. It uses a smart algorithm to show you cards just when you're about to forget them, maximizing long-term retention. Study less, remember more!
                 </p>
               </HelpItem>
 
-              <HelpItem icon={BookCopy} title="Mazos (Decks) y Tarjetas (Cards)">
+              <HelpItem icon={BookCopy} title="Decks and Cards">
                  <ul className="list-disc space-y-2 pl-5">
-                   <li><strong>Mazos:</strong> Son como cuadernos digitales donde guardas tus tarjetas sobre un tema específico (ej: "Vocabulario Inglés B2", "Historia de España").</li>
-                   <li><strong>Tarjetas:</strong> Son tus flashcards. Tienen un "Frente" (pregunta, término) y un "Dorso" (respuesta, definición). ¡Puedes añadir texto e imágenes a ambos lados!</li>
-                   <li><strong>Crear:</strong> Usa el botón "New Deck" para mazos o "New Card" dentro de un mazo.</li>
-                   <li><strong>Editar Tarjetas:</strong> Dentro de un mazo, haz clic en el icono del lápiz (<Edit className="inline h-4 w-4"/>) en una tarjeta para modificar su texto o imágenes.</li>
+                   <li><strong>Decks:</strong> Think of them as digital notebooks where you store your flashcards on a specific topic (e.g., "English Vocabulary B2", "History of Spain").</li>
+                   <li><strong>Cards:</strong> These are your flashcards. They have a "Front" (question, term) and a "Back" (answer, definition). You can add text and images to both sides!</li>
+                   <li><strong>Creating:</strong> Use the "New Deck" button for decks or "New Card" inside a deck.</li>
+                   <li><strong>Editing Cards:</strong> Within a deck, click the pencil icon (<Edit className="inline h-4 w-4"/>) on a card to modify its text or images.</li>
                  </ul>
               </HelpItem>
 
-              <HelpItem icon={Folder} title="Organización: Carpetas y Edición">
+              <HelpItem icon={Folder} title="Organization: Folders & Editing">
                  <ul className="list-disc space-y-2 pl-5">
-                   <li><strong>Carpetas:</strong> Agrupa mazos relacionados (ej: una carpeta "Idiomas" con mazos de "Inglés" y "Francés"). Créalas desde el Dashboard en Modo Edición.</li>
-                   <li><strong>Modo Edición:</strong> En el Dashboard, pulsa el botón "Edit". Esto te permite:
+                   <li><strong>Folders:</strong> Group related decks (e.g., a "Languages" folder with "English" and "French" decks). Create them from the Dashboard in Edit Mode.</li>
+                   <li><strong>Edit Mode:</strong> On the Dashboard, press the "Edit" button. This allows you to:
                       <ul className="list-circle space-y-1 pl-5 mt-2">
-                          <li>Arrastrar (<GripVertical className="inline h-4 w-4"/>) mazos para moverlos (incluso dentro o fuera de carpetas y para reordenarlos).</li>
-                          <li>Editar (<Edit className="inline h-4 w-4"/>) mazos y carpetas (nombre y descripción en mazos).</li>
-                          <li>Cambiar el color (<Paintbrush className="inline h-4 w-4"/>) de mazos y carpetas para identificarlos visualmente.</li>
-                          <li>Eliminar (<Trash2 className="inline h-4 w-4"/>) mazos o carpetas (se moverán a la Papelera).</li>
+                          <li>Drag (<GripVertical className="inline h-4 w-4"/>) decks to move them (even into or out of folders, and to reorder them).</li>
+                          <li>Edit (<Edit className="inline h-4 w-4"/>) decks and folders (name and description for decks).</li>
+                          <li>Change the color (<Paintbrush className="inline h-4 w-4"/>) of decks and folders for visual identification.</li>
+                          <li>Delete (<Trash2 className="inline h-4 w-4"/>) decks or folders (they will be moved to the Trash).</li>
                       </ul>
                    </li>
                  </ul>
               </HelpItem>
               
-              <HelpItem icon={FileInput} title="Importar Contenido">
+              <HelpItem icon={FileInput} title="Importing Content">
                 <p>
-                  ¿Ya tienes tarjetas en otro formato? ¡Impórtalas fácilmente! Dentro de un mazo, usa el botón "Import" para subir archivos:
+                  Already have cards in another format? Import them easily! Inside a deck, use the "Import" button to upload files:
                 </p>
                  <ul className="list-disc space-y-2 pl-5">
-                   <li><strong>CSV:</strong> Archivo de texto separado por comas. Selecciona qué columna es el "Frente" y cuál el "Dorso".</li>
-                   <li><strong>XLSX (Excel):</strong> Sube tu hoja de cálculo y elige las columnas correspondientes.</li>
-                   <li><strong>TXT:</strong> Archivo de texto plano donde cada línea es una tarjeta, con el frente y el dorso separados por un <kbd>Tab</kbd>.</li>
+                   <li><strong>CSV:</strong> Comma-separated values file. Select which column is the "Front" and which is the "Back".</li>
+                   <li><strong>XLSX (Excel):</strong> Upload your spreadsheet and choose the corresponding columns.</li>
+                   <li><strong>TXT:</strong> Plain text file where each line is a card, with the front and back separated by a <kbd>Tab</kbd>.</li>
                  </ul>
               </HelpItem>
 
-              <HelpItem icon={GraduationCap} title="Modos de Estudio">
+              <HelpItem icon={GraduationCap} title="Study Modes">
                  <ul className="list-disc space-y-2 pl-5">
                    <li>
-                     <strong>Study (<Play className="inline h-4 w-4"/>):</strong> El corazón de Memoria. Te muestra <span className="font-semibold">sólo las tarjetas que te tocan repasar hoy</span> según el algoritmo de repetición espaciada. Tras ver la respuesta, califícala:
+                     <strong>Study (<Play className="inline h-4 w-4"/>):</strong> The core of Memoria. It shows you <span className="font-semibold">only the cards due for review today</span> based on the spaced repetition algorithm. After seeing the answer, rate how well you knew it:
                       <ul className="list-circle space-y-1 pl-5 mt-2">
-                          <li><span className="font-semibold text-destructive">Again:</span> No la recordabas. Se reinicia y te la volverá a mostrar pronto.</li>
-                          <li><span className="font-semibold text-orange-600">Hard:</span> Te costó recordarla. El intervalo será más corto.</li>
-                          <li><span className="font-semibold text-blue-600">Good:</span> La recordaste bien. El intervalo aumenta normalmente.</li>
-                          <li><span className="font-semibold text-green-600">Easy:</span> Te resultó muy fácil. El intervalo aumenta considerablemente.</li>
+                          <li><span className="font-semibold text-destructive">Again:</span> You didn't remember. It resets and will be shown again soon.</li>
+                          <li><span className="font-semibold text-orange-600">Hard:</span> You struggled to recall. The interval will be shorter.</li>
+                          <li><span className="font-semibold text-blue-600">Good:</span> You remembered it well. The interval increases normally.</li>
+                          <li><span className="font-semibold text-green-600">Easy:</span> It was very easy. The interval increases significantly.</li>
                       </ul>
                    </li>
                    <li>
-                     <strong>Practice:</strong> Repasa <span className="font-semibold">todas las tarjetas</span> de un mazo en el orden que quieras (¡incluso aleatorio <Shuffle className="inline h-4 w-4"/>!). Ideal para un repaso rápido antes de un examen. <span className="italic">Este modo no afecta las fechas de revisión programadas</span>.
+                     <strong>Practice:</strong> Review <span className="font-semibold">all cards</span> in a deck in any order you like (even shuffled <Shuffle className="inline h-4 w-4"/>!). Perfect for a quick cram session or an overview before an exam. <span className="italic">This mode does not affect scheduled review times</span>.
                    </li>
                  </ul>
               </HelpItem>
               
-               <HelpItem icon={Sparkles} title="Funciones con Inteligencia Artificial (IA)">
-                 <p>Memoria utiliza IA para hacer tu estudio más inteligente:</p>
+               <HelpItem icon={Sparkles} title="Artificial Intelligence (AI) Features">
+                 <p>Memoria uses AI to make your studying smarter:</p>
                  <ul className="list-disc space-y-3 pl-5">
                    <li>
-                     <strong>Crear Mazo con IA (<Sparkles className="inline h-4 w-4"/> New AI Deck):</strong> Describe el tema, tipo de tarjetas (preguntas, vocabulario...), cantidad, idioma y dificultad, ¡y la IA crea el mazo por ti!
+                     <strong>Create Deck with AI (<Sparkles className="inline h-4 w-4"/> New AI Deck):</strong> Describe the topic, card type (questions, vocabulary...), quantity, language, and difficulty, and the AI creates the deck for you!
                    </li>
                    <li>
-                     <strong>Añadir Tarjetas con IA (<Sparkles className="inline h-4 w-4"/> Add AI Cards):</strong> Dentro de un mazo, pide a la IA que genere más tarjetas sobre un tema específico. La IA analizará las tarjetas existentes para mantener el estilo y <span className="font-semibold">evitar duplicados</span>.
+                     <strong>Add Cards with AI (<Sparkles className="inline h-4 w-4"/> Add AI Cards):</strong> Inside a deck, ask the AI to generate more cards on a specific topic. The AI will analyze existing cards to maintain the style and <span className="font-semibold">avoid duplicates</span>.
                    </li>
                     <li>
-                     <strong>Generar Test con IA (<Sparkles className="inline h-4 w-4"/> Generate Test):</strong> En cada mazo, puedes pedirle a la IA que cree un test tipo quiz (con opciones múltiples) sobre tus tarjetas. Puedes filtrar por tarjetas nuevas, difíciles, etc.
+                     <strong>Generate Test with AI (<Sparkles className="inline h-4 w-4"/> Generate Test):</strong> In each deck, you can ask the AI to create a multiple-choice quiz based on your cards. You can filter by new cards, difficult ones, etc.
                    </li>
                    <li>
-                     <strong>Programación Inteligente (AI Scheduling):</strong> <span className="italic">(Opcional, actívalo en Ajustes)</span> Después de hacer un test generado por IA, permite que la IA analice tus resultados y reprograme automáticamente las tarjetas que fallaste o acertaste con dificultad para que las repases antes. Las tarjetas reprogramadas por IA aparecerán marcadas con una estrella (<Sparkles className="inline h-4 w-4 text-purple-500"/>) en la sección "Upcoming".
+                     <strong>AI-Powered Scheduling:</strong> <span className="italic">(Optional, enable in Settings)</span> After taking an AI-generated test, allow the AI to analyze your results and automatically reschedule cards you missed or struggled with, so you review them sooner. AI-rescheduled cards will be marked with a star (<Sparkles className="inline h-4 w-4 text-purple-500"/>) in the "Upcoming" section.
                    </li>
                  </ul>
               </HelpItem>
 
-              <HelpItem icon={CalendarCheck} title="Próximos Repasos (Upcoming)">
+              <HelpItem icon={CalendarCheck} title="Upcoming Reviews">
                 <p>
-                  Accede a esta sección desde el menú del Dashboard (o el menú desplegable en móvil). Aquí verás una lista de todas las tarjetas programadas para revisión futura, ordenadas por fecha.
+                  Access this section from the Dashboard menu (or the dropdown menu on mobile). Here you'll see a list of all cards scheduled for future review, ordered by date.
                 </p>
                  <ul className="list-disc space-y-2 pl-5">
-                   <li>Puedes ver de qué mazo es cada tarjeta y cuánto falta para su repaso.</li>
-                   <li>Las tarjetas reprogramadas por la IA (<Sparkles className="inline h-4 w-4 text-purple-500"/>) mostrarán una explicación al pasar el ratón por encima.</li>
-                   <li>Selecciona tarjetas y usa el botón "Reset" si quieres que vuelvan a ser "nuevas" y aparezcan en tu próxima sesión de estudio.</li>
+                   <li>You can see which deck each card belongs to and how long until its review.</li>
+                   <li>Cards rescheduled by AI (<Sparkles className="inline h-4 w-4 text-purple-500"/>) will show an explanation on hover.</li>
+                   <li>Select cards and use the "Reset" button if you want them to become "new" again and appear in your next study session.</li>
                  </ul>
               </HelpItem>
 
-              <HelpItem icon={Trash2} title="Papelera (Trash)">
+              <HelpItem icon={Trash2} title="Trash">
                 <p>
-                  Cuando eliminas mazos, carpetas o tarjetas, no se borran permanentemente al instante. Van a la Papelera (accesible desde el menú del Dashboard).
+                  When you delete decks, folders, or cards, they aren't permanently removed immediately. They go to the Trash (accessible from the Dashboard menu).
                 </p>
                  <ul className="list-disc space-y-2 pl-5">
-                   <li>Desde la Papelera, puedes <span className="font-semibold">Restaurar</span> los elementos a su lugar original.</li>
-                   <li>O puedes <span className="font-semibold text-destructive">Eliminarlos Permanentemente</span> (¡esta acción no se puede deshacer!).</li>
+                   <li>From the Trash, you can <span className="font-semibold">Restore</span> items to their original location.</li>
+                   <li>Or you can <span className="font-semibold text-destructive">Delete Permanently</span> (this action cannot be undone!).</li>
                  </ul>
               </HelpItem>
 
-              <HelpItem icon={Settings} title="Ajustes (Settings)">
-                 <p>Personaliza tu experiencia en Memoria:</p>
+              <HelpItem icon={Settings} title="Settings">
+                 <p>Customize your Memoria experience:</p>
                  <ul className="list-disc space-y-3 pl-5">
-                   <li><strong>Study:</strong> Ajusta los intervalos base (en minutos o días) para las calificaciones "Again", "Hard", "Good", y "Easy". Activa o desactiva la función "AI-Powered Scheduling".</li>
-                   <li><strong>Shortcuts (<Keyboard className="inline h-4 w-4"/>):</strong> Cambia las teclas rápidas para calificar tarjetas en el Modo Estudio y otros atajos globales.</li>
-                   <li><strong>Appearance (<Palette className="inline h-4 w-4"/>):</strong> Elige tu tema preferido (Claro, Oscuro, Pastel) o deja que siga el de tu sistema.</li>
+                   <li><strong>Study:</strong> Adjust the base intervals (in minutes or days) for the "Again", "Hard", "Good", and "Easy" ratings. Enable or disable the "AI-Powered Scheduling" feature.</li>
+                   <li><strong>Shortcuts (<Keyboard className="inline h-4 w-4"/>):</strong> Change the keyboard shortcuts for rating cards in Study Mode and other global shortcuts.</li>
+                   <li><strong>Appearance (<Palette className="inline h-4 w-4"/>):</strong> Choose your preferred theme (Light, Dark, Pastel) or let it follow your system settings.</li>
                  </ul>
               </HelpItem>
 
