@@ -1,13 +1,13 @@
 // app/help/page.tsx
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { 
-  Brain, ArrowLeft, 
-  BookCopy, Folder, Edit, FileInput, Trash2, 
-  GraduationCap, /* Repeat, */ Shuffle, // Repeat no se usaba, Shuffle sí
-  Sparkles, CalendarCheck, Settings, Palette, Keyboard, Info, 
-  GripVertical, Paintbrush, Play // <-- Play añadido aquí
-} from "lucide-react"; 
+import {
+  Brain, ArrowLeft,
+  BookCopy, Folder, Edit, FileInput, Trash2,
+  GraduationCap, /* Repeat, */ Shuffle,
+  Sparkles, CalendarCheck, Settings, Palette, Keyboard, Info,
+  GripVertical, Paintbrush, Play // <-- GripVertical YA ESTABA, Play añadido antes, ahora todo correcto
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -121,7 +121,7 @@ export default async function HelpPage() {
                       <ul className="list-circle space-y-1 pl-5 mt-2">
                           <li><span className="font-semibold text-destructive">Again:</span> No la recordabas. Se reinicia y te la volverá a mostrar pronto.</li>
                           <li><span className="font-semibold text-orange-600">Hard:</span> Te costó recordarla. El intervalo será más corto.</li>
-                          <li><span className="font-semibold text-blue-600">Good:</span> La recordaste bien. El intervalo aumenta normally.</li>
+                          <li><span className="font-semibold text-blue-600">Good:</span> La recordaste bien. El intervalo aumenta normalmente.</li>
                           <li><span className="font-semibold text-green-600">Easy:</span> Te resultó muy fácil. El intervalo aumenta considerablemente.</li>
                       </ul>
                    </li>
