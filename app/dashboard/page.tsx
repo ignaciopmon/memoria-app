@@ -41,13 +41,15 @@ export default async function DashboardPage() {
 
 return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b">
+      {/* --- MODIFICACIÓN AQUÍ --- */}
+      <header className="sticky top-0 z-50 border-b bg-background"> {/* Añadidas clases: sticky, top-0, z-50, bg-background */}
+      {/* --- FIN MODIFICACIÓN --- */}
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
          <Link href="/" className="flex items-center gap-2">
             <Brain className="h-6 w-6" />
            <span className="text-xl font-bold select-none">Memoria</span> {/* Texto no seleccionable */}
          </Link>
-         
+
           {/* NAVEGACIÓN PARA ESCRITORIO (se oculta en móvil) */}
           <div className="hidden items-center gap-2 md:flex">
             <Button variant="ghost" size="sm" asChild>
