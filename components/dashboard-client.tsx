@@ -1,10 +1,9 @@
 // components/dashboard-client.tsx
 "use client"
 
-// --- MODIFICACIÓN: Añadir imports necesarios ---
 import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link" // Importar Link
+import Link from "next/link"
 import {
   DndContext,
   useDraggable,
@@ -40,7 +39,7 @@ import {
   ChevronRight,
   Loader2,
   BookOpen,
-  Info, // Importar icono Info
+  Info,
 } from "lucide-react"
 import { DeleteFolderDialog } from "./delete-folder-dialog"
 import { RenameDialog } from "./rename-dialog"
@@ -48,7 +47,6 @@ import { ColorPopover } from "./color-popover"
 import { CreateDeckDialog } from "./create-deck-dialog"
 import { CreateFolderDialog } from "./create-folder-dialog"
 import { CreateAIDeckDialog } from "./create-ai-deck-dialog"
-// Importar componentes AlertDialog
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,8 +56,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger, // Asegúrate de que este esté importado
 } from "@/components/ui/alert-dialog";
-// --- FIN MODIFICACIÓN ---
 
 
 type Item = {
@@ -74,7 +72,7 @@ type Item = {
   created_at?: string
 }
 
-// ---- Componente para una Carpeta (sin cambios) ----
+// ---- Componente para una Carpeta ----
 function FolderView({
   folder,
   decks,
@@ -96,7 +94,6 @@ function FolderView({
   const folderColor = folder.color || "hsl(var(--border))"
   const setNodeRef = useMemo(() => setDroppableNodeRef, [setDroppableNodeRef])
 
-  // No renderizar carpetas vacías si no estamos en modo edición
   if (!isEditMode && decks.length === 0) return null
 
   return (
@@ -193,7 +190,7 @@ function FolderView({
   )
 }
 
-// ---- Componente para un Mazo Arrastrable (sin cambios) ----
+// ---- Componente para un Mazo Arrastrable ----
 function DraggableDeckItem({
   item,
   isEditMode,
@@ -210,7 +207,7 @@ function DraggableDeckItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id, disabled: !isEditMode }); // Usar siempre useSortable
+  } = useSortable({ id: item.id, disabled: !isEditMode });
 
   const { toast } = useToast()
   const [isRenaming, setIsRenaming] = useState(false)
@@ -230,8 +227,9 @@ function DraggableDeckItem({
       .from("decks")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", item.id)
-    setIsDeleting(false)
+    // No necesitamos poner setIsDeleting(false) aquí porque el componente se desmontará o actualizará
     if (error) {
+        setIsDeleting(false) // Si hay error, sí necesitamos resetearlo
       toast({
         variant: "destructive",
         title: "Error",
@@ -240,6 +238,7 @@ function DraggableDeckItem({
     } else {
       onUpdate((prevItems) => prevItems.filter((i) => i.id !== item.id))
       toast({ title: "Success", description: "Deck moved to trash." })
+       // No necesitamos setIsDeleting(false) aquí tampoco
     }
   }
 
@@ -274,25 +273,49 @@ function DraggableDeckItem({
             }}
           />
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={handleDelete}
-            title="Delete"
-            disabled={isDeleting}
-          >
-            {isDeleting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-          </Button>
+         <AlertDialog>
+           <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-destructive hover:text-destructive"
+                title="Delete"
+                disabled={isDeleting} // Deshabilitar el trigger si ya se está borrando
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+           </AlertDialogTrigger>
+           <AlertDialogContent>
+             <AlertDialogHeader>
+               <AlertDialogTitle>Move deck "{item.name}" to trash?</AlertDialogTitle>
+               <AlertDialogDescription>
+                 This deck and its cards will be moved to the trash. You can restore them later.
+               </AlertDialogDescription>
+             </AlertDialogHeader>
+             <AlertDialogFooter>
+               <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+               <AlertDialogAction
+                 onClick={handleDelete}
+                 disabled={isDeleting} // Deshabilitar la acción mientras se procesa
+                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+               >
+                 {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                 Move to Trash
+               </AlertDialogAction>
+             </AlertDialogFooter>
+           </AlertDialogContent>
+         </AlertDialog>
+
           <div
             {...listeners}
             {...attributes}
-            className="cursor-grab p-1 touch-none"
+            className={`cursor-grab p-1 touch-none ${isDeleting ? 'cursor-not-allowed' : ''}`} // Cambiar cursor si se está borrando
             title="Move deck"
+            style={{ touchAction: 'none' }} // Importante para drag and drop en táctil
           >
             <GripVertical className="h-5 w-5 text-muted-foreground" />
           </div>
@@ -311,21 +334,17 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   const [isEditMode, setIsEditMode] = useState(false)
   const router = useRouter()
   const { toast } = useToast();
-
-  // --- MODIFICACIÓN: Añadir estado para el pop-up de bienvenida ---
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
-  // --- FIN MODIFICACIÓN ---
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 10, // Aumentado ligeramente
+        distance: 10,
       },
     })
   )
 
   useEffect(() => {
-    // Ordenar initialItems por posición (y creación si no hay posición) al cargar
     const sortedInitial = [...initialItems].sort((a, b) => {
         const posA = a.position ?? Infinity;
         const posB = b.position ?? Infinity;
@@ -334,23 +353,20 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     });
     setItems(sortedInitial);
 
-    // --- MODIFICACIÓN: Lógica para mostrar el pop-up de bienvenida ---
     const hasSeenPopup = localStorage.getItem('hasSeenWelcomePopup');
-    // Solo mostrar si NO se ha visto antes Y si hay algún item (evitar en dashboard vacío)
+    // Mostrar si no se ha visto Y si el dashboard NO ESTÁ VACÍO inicialmente
     if (!hasSeenPopup && initialItems.length > 0) {
       setShowWelcomePopup(true);
+      // Marcamos como visto INMEDIATAMENTE para evitar que salga si se recarga rápido
       localStorage.setItem('hasSeenWelcomePopup', 'true');
     }
-    // --- FIN MODIFICACIÓN ---
 
-  }, [initialItems]) // Dependencia initialItems es correcta aquí
+  }, [initialItems]) // Solo depende de initialItems
 
   const { folders, rootDecks, decksInFolders } = useMemo(() => {
-    // Lógica de separación y ordenación (sin cambios)
      const foldersMap = new Map<string, Item>()
     const rootDecksList: Item[] = []
     const decksInFoldersMap = new Map<string, Item[]>()
-
     const sortedItems = [...items].sort((a, b) => {
         if (a.is_folder && !b.is_folder) return -1;
         if (!a.is_folder && b.is_folder) return 1;
@@ -359,7 +375,6 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         if (posA !== posB) return posA - posB;
         return (a.created_at && b.created_at) ? a.created_at.localeCompare(b.created_at) : 0;
     });
-
     for (const item of sortedItems) {
       if (item.is_folder) {
         foldersMap.set(item.id, item)
@@ -381,7 +396,6 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   }, [items])
 
   const handleDragStart = (event: DragStartEvent) => {
-    // Lógica drag start (sin cambios)
      if (!isEditMode) return
     const { active } = event
     const item = items.find((i) => i.id === active.id)
@@ -393,7 +407,6 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
-     // Lógica drag end (sin cambios)
      setActiveDragItem(null)
     const { active, over } = event
     const activeItem = items.find((item) => item.id === active.id)
@@ -493,21 +506,21 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
 
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message || "An error occurred." });
-        setItems(initialItems.sort((a, b) => {
+        const sortedInitial = [...initialItems].sort((a, b) => {
              const posA = a.position ?? Infinity;
              const posB = b.position ?? Infinity;
              if (posA !== posB) return posA - posB;
              return (a.created_at && b.created_at) ? a.created_at.localeCompare(b.created_at) : 0;
-        }));
+        });
+        setItems(sortedInitial); // Revertir al estado inicial ordenado
     }
   }
 
   const calculateNewPosition = (
-    prevPos: number | null | undefined,
-    nextPos: number | null | undefined,
-    currentIndex: number
+      prevPos: number | null | undefined,
+      nextPos: number | null | undefined,
+      currentIndex: number
   ): number => {
-    // Lógica de cálculo de posición (sin cambios)
     const BASE_INCREMENT = 1000;
     const MIN_POSITION = 1;
     if (prevPos == null && nextPos == null) {
@@ -526,8 +539,8 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     }
   };
 
+
   if (items.length === 0 && !isEditMode) {
-    // Dashboard vacío (sin cambios)
      return (
       <div className="flex h-[60vh] flex-col items-center justify-center text-center">
         <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
@@ -543,12 +556,12 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     )
   }
 
-  const draggableItemIds = useMemo(() => items.filter(item => !item.is_folder).map(item => item.id), [items]);
+   const draggableItemIds = useMemo(() => items.filter(item => !item.is_folder).map(item => item.id), [items]);
+
 
   return (
     <>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        {/* Header con botones (sin cambios) */}
          <div>
           <h1 className="text-3xl font-bold">My Decks</h1>
           <p className="text-muted-foreground">
@@ -577,7 +590,6 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
       >
         <SortableContext items={draggableItemIds} strategy={rectSortingStrategy}>
           <div className="space-y-8">
-            {/* Carpetas */}
             {folders.map((folder) => {
               const decksInCurrentFolder = decksInFolders.get(folder.id) || []
               return (
@@ -591,7 +603,6 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
               )
             })}
 
-            {/* Mazos Raíz */}
              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                {rootDecks.map((deck) => (
                  <DraggableDeckItem
@@ -603,7 +614,6 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
                ))}
              </div>
           </div>
-           {/* Área root-drop-area */}
             <div
                 id="root-drop-area"
                 ref={useDroppable({ id: 'root-drop-area', disabled: !isEditMode }).setNodeRef}
@@ -616,12 +626,10 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         </SortableContext>
 
         <DragOverlay>
-           {/* Drag Overlay (sin cambios) */}
           {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
         </DragOverlay>
       </DndContext>
 
-      {/* --- MODIFICACIÓN: Añadir el AlertDialog de bienvenida --- */}
       <AlertDialog open={showWelcomePopup} onOpenChange={setShowWelcomePopup}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -634,16 +642,13 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            {/* Botón para cerrar simplemente */}
             <AlertDialogCancel>Dismiss</AlertDialogCancel>
-            {/* Botón que lleva a la página de ayuda */}
             <AlertDialogAction asChild>
               <Link href="/help">Go to Help Page</Link>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* --- FIN MODIFICACIÓN --- */}
     </>
   )
 }

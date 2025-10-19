@@ -112,13 +112,15 @@ export function CardItem({ card, isNew }: CardItemProps) { // <-- 3. RECIBIR 'is
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete card?</AlertDialogTitle>
-                      <AlertDialogDescription>This action cannot be undone. This will permanently delete this card.</AlertDialogDescription>
+                     <AlertDialogTitle>Move card to trash?</AlertDialogTitle>
+                     <AlertDialogDescription>
+                       This will move the card to the trash. You can restore it later or delete it permanently from there.
+                     </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                        {isDeleting ? "Deleting..." : "Delete"}
+                        {isDeleting ? "Moving..." : "Move to Trash"}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
