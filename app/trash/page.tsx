@@ -28,14 +28,14 @@ export default async function TrashPage() {
     .not("deleted_at", "is", null)
     .order("deleted_at", { ascending: false })
 
-  return (
+return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
+         <Link href="/" className="flex items-center gap-2">
             <Brain className="h-6 w-6" />
-            <span className="text-xl font-bold">Memoria</span>
-          </div>
+           <span className="text-xl font-bold select-none">Memoria</span> {/* Texto no seleccionable */}
+         </Link>
         </div>
       </header>
       <main className="flex-1">

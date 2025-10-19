@@ -39,15 +39,15 @@ export default async function DashboardPage() {
     cardCount: item.cards?.[0]?.count || 0,
   })) || []
 
-  return (
+return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
+         <Link href="/" className="flex items-center gap-2">
             <Brain className="h-6 w-6" />
-            <span className="text-xl font-bold">Memoria</span>
-          </div>
-
+           <span className="text-xl font-bold select-none">Memoria</span> {/* Texto no seleccionable */}
+         </Link>
+         
           {/* NAVEGACIÓN PARA ESCRITORIO (se oculta en móvil) */}
           <div className="hidden items-center gap-2 md:flex">
             <Button variant="ghost" size="sm" asChild>
