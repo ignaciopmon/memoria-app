@@ -569,8 +569,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
                className={cn(
                  "mt-8 rounded-lg border-2 border-dashed transition-all duration-150 ease-out",
                  isEditMode ? "min-h-[100px] border-border p-6" : "min-h-0 border-transparent p-0",
--                isEditMode && isDraggingOver && activeDragItem?.parent_id && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" // Solo resaltar si vienes de una carpeta
-+                isEditMode && isOverRootArea && activeDragItem?.parent_id && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" // Solo resaltar si vienes de una carpeta
+                 isEditMode && isOverRootArea && activeDragItem?.parent_id && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" // Solo resaltar si vienes de una carpeta
                )}
              >
               {isEditMode && (
