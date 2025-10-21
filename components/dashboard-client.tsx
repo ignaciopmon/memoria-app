@@ -110,7 +110,7 @@ function FolderView({
     });
 
     // --- Droppable para la TARJETA EXTERNA (para reordenar carpetas, no para meter decks) ---
-    const { setNodeRef: setCardDroppableNodeRef } = useDroppable({
+    const { setNodeRef: setCardDroppableNodeRef, isOver: isOverCard } = useDroppable({
         id: folder.id,
         disabled: !isEditMode || isFolderDragging,
     });
@@ -136,10 +136,12 @@ function FolderView({
 
     // Expandir si se arrastra sobre la tarjeta externa o el contenido
     useEffect(() => {
-        if (isEditMode && (shouldHighlightContentDrop) && !isExpanded) {
+        // Expandir si se arrastra sobre CUALQUIER PARTE de la carpeta (externa o interna)
+        if (isEditMode && (isOverContentArea || isOverCard) && !isExpanded) {
             setIsExpanded(true);
         }
-    }, [isEditMode, shouldHighlightContentDrop, isExpanded]);
+    }, [isEditMode, isOverContentArea, isOverCard, isExpanded]);
+
 
   return (
     <>
@@ -151,8 +153,6 @@ function FolderView({
         className={cn(
           "transition-colors duration-150 ease-out border-2 rounded-xl relative group bg-card", // Usar rounded-xl y bg-card
           `border-[${folderColor}]`,
-           // Resaltado sutil si se arrastra algo sobre la tarjeta externa (para reordenar)
-           // isDraggingOverCard && !shouldHighlightContentDrop ? "ring-1 ring-muted-foreground ring-offset-1" : ""
         )}
       >
         {isEditMode && ( /* Handle */
@@ -242,8 +242,8 @@ function FolderView({
 }
 
 
-// --- DraggableDeckItem (sin cambios respecto a la versión anterior) ---
-function DraggableDeckItem({ /* ...props... */
+// --- DraggableDeckItem (sin cambios) ---
+function DraggableDeckItem({
     item,
     isEditMode,
     onUpdate,
@@ -308,7 +308,7 @@ function DraggableDeckItem({ /* ...props... */
       )}
       {isEditMode && ( /* Botones */
         <div className="absolute top-2 right-2 z-20 flex items-center bg-background/80 backdrop-blur-sm rounded-full border p-0.5 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-             {/* ... */}
+            {/* ... */}
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsRenaming(true)} title="Rename" > <Edit className="h-4 w-4" /> </Button>
             <ColorPopover itemId={item.id} currentColor={item.color} onColorChange={(color) => { onUpdate((prev) => prev.map((it) => (it.id === item.id ? { ...it, color } : it)) ); }} />
             <AlertDialog>
@@ -329,9 +329,10 @@ function DraggableDeckItem({ /* ...props... */
   );
 }
 
+
 // ---- Componente Principal (MODIFICADO `handleDragEnd`) ----
 export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
-    // ... (Estados y Sensores sin cambios respecto a la última versión) ...
+    // ... (Estados y Sensores sin cambios) ...
     const [items, setItems] = useState<Item[]>(initialItems);
     const [activeDragItem, setActiveDragItem] = useState<Item | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -340,7 +341,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     const [showWelcomePopup, setShowWelcomePopup] = useState(false);
     const [overId, setOverId] = useState<UniqueIdentifier | null>(null);
 
-    const sensors = useSensors(
+     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 8, }}),
         useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6, }}),
         useSensor(PointerSensor, { activationConstraint: { distance: 10, }})
@@ -422,24 +423,26 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         return Math.max(1, Math.round(newPos));
     };
 
-
-   // --- handleDragEnd REFINADO para usar ID de contenido de carpeta ---
+   // --- handleDragEnd DEFINITIVO ---
    const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     const activeId = active.id;
     const overIdResolved = over?.id;
 
+    // Reset visual state immediately
     setActiveDragItem(null);
     setOverId(null);
 
     const activeItem = items.find((item) => item.id === activeId);
 
+    // Initial validations
     if (!activeItem || !isEditMode || activeId === overIdResolved) {
+        console.log("DragEnd: Invalid condition or no change.");
         return;
     }
 
     const supabase = createClient();
-    let initialItemsSnapshot = [...items];
+    let initialItemsSnapshot = [...items]; // Snapshot for potential revert
     let newItems = [...items];
     const updatesMap: Record<string, Partial<Item>> = {};
     let successMessage = "";
@@ -447,143 +450,143 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
 
     const oldIndex = newItems.findIndex((item) => item.id === activeId);
     const overItem = overIdResolved ? items.find((item) => item.id === overIdResolved) : null;
-    // --- NUEVO: Comprobar si se soltó sobre un área de contenido de carpeta ---
     const isOverFolderContent = typeof overIdResolved === 'string' && overIdResolved.startsWith(FOLDER_CONTENT_DROP_ID_PREFIX);
     const targetFolderIdFromContent = isOverFolderContent ? over?.data?.current?.folderId as string | undefined : undefined;
 
-
     const sourceContainerId = activeItem.parent_id;
-    let targetContainerId: string | null = null;
+    let targetContainerId: string | null = null; // null = root
 
-    // --- LÓGICA DE DETECCIÓN DE DESTINO MEJORADA ---
-    // 1. Prioridad MÁXIMA: ¿Se soltó DENTRO del área de contenido de una carpeta? (y es un mazo)
+    // --- Determine Target Container ID ---
     if (isOverFolderContent && targetFolderIdFromContent && !activeItem.is_folder) {
-        targetContainerId = targetFolderIdFromContent;
-        console.log(`Target determined: Folder Content Area ${targetContainerId}`);
-    }
-    // 2. ¿Se soltó sobre la tarjeta de una carpeta? (y es un mazo)
-    else if (overItem?.is_folder && !activeItem.is_folder) {
-        targetContainerId = overItem.id;
-        console.log(`Target determined: Folder Card ${overItem.id}`);
-    }
-    // 3. ¿Se soltó sobre el área raíz explícita?
-    else if (overIdResolved === ROOT_DROPPABLE_ID) {
+        targetContainerId = targetFolderIdFromContent; // Dropped inside a folder's content area
+    } else if (overItem?.is_folder && !activeItem.is_folder) {
+        targetContainerId = overItem.id; // Dropped on the folder card itself
+    } else if (overIdResolved === ROOT_DROPPABLE_ID) {
+        targetContainerId = null; // Dropped explicitly on the root drop area
+    } else if (overItem) {
+        // Dropped over another item (deck or folder) - inherit its parent
+        targetContainerId = overItem.parent_id;
+    } else if (activeItem.parent_id) {
+         // Dropped in empty space *and* came from a folder -> move to root
         targetContainerId = null;
-        console.log("Target determined: Root Area (explicit)");
+    } else {
+        // Dropped in empty space *and* already in root -> likely reorder attempt (handled later)
+        targetContainerId = null; // Stay in root
     }
-    // 4. ¿Se soltó sobre OTRO ITEM (mazo o carpeta)? Hereda su contenedor.
-    else if (overItem) {
-        // PERO, si es un mazo y el `overItem` es una carpeta, NO heredar (ya cubierto en paso 2)
-        if (!(overItem.is_folder && !activeItem.is_folder)) {
-            targetContainerId = overItem.parent_id;
-            console.log(`Target determined: Inherited from overItem ${overItem.id} -> parent ${overItem.parent_id}`);
-        } else {
-             console.log(`Drop over folder card ${overItem.id}, target already set.`);
-             targetContainerId = overItem.id; // Confirmar que es la carpeta
-        }
-    }
-    // 5. ¿Se soltó en espacio vacío Y venía de una carpeta? Mover a la raíz.
-    else if (!overItem && activeItem.parent_id) {
-        targetContainerId = null;
-        console.log("Target determined: Root Area (implicit from folder)");
-    }
-     // 6. ¿Se soltó en espacio vacío Y YA ESTABA en la raíz? Potencial reordenamiento al final.
-     else if (!overItem && !activeItem.parent_id) {
-         targetContainerId = null; // Sigue siendo raíz
-         console.log("Target determined: Root Area (implicit, potentially reorder to end)");
-     }
-    else {
-        // Caso no manejado o inválido
-        console.log("Target determination failed or invalid drop.");
+
+    // --- Prevent dropping folders into folders ---
+    if (activeItem.is_folder && targetContainerId !== null) {
+        console.log("DragEnd: Cannot drop folder into another folder.");
+        toast({ variant: "destructive", title: "Action Not Allowed", description: "Folders cannot be placed inside other folders." });
         return;
+    }
+
+     // --- Prevent dropping folders onto decks ---
+    if (activeItem.is_folder && overItem && !overItem.is_folder) {
+         console.log("DragEnd: Cannot drop folder onto a deck.");
+         // Allow reordering *relative* to the deck, but target remains root
+         targetContainerId = null;
     }
 
 
     try {
         const isMovingContainer = sourceContainerId !== targetContainerId;
-        const overIndex = overIdResolved && !isOverFolderContent // No usar overIndex si es sobre contenido
+        const overIndex = overIdResolved && !isOverFolderContent
             ? newItems.findIndex(item => item.id === overIdResolved)
-            : -1;
+            : -1; // -1 if dropped in content area or empty space
 
+        // 1. === Apply Local State Changes ===
         if (isMovingContainer) {
-             const movedItem = { ...newItems[oldIndex], parent_id: targetContainerId, position: null };
-             newItems.splice(oldIndex, 1);
+            const movedItem = { ...newItems[oldIndex], parent_id: targetContainerId, position: null }; // Reset position on move
+            newItems.splice(oldIndex, 1); // Remove from old position
 
             let targetInsertionIndex: number;
-             if (targetContainerId === null) { // Moviendo a la raíz
-                 if (overIndex !== -1 && (!newItems[overIndex]?.parent_id || newItems[overIndex]?.is_folder)) { // Sobre item raíz
-                     targetInsertionIndex = oldIndex < overIndex ? overIndex : overIndex + 1;
-                 } else { // Área raíz o final
+            const targetItems = newItems.filter(item => item.parent_id === targetContainerId);
+
+            if (targetContainerId === null) { // Moving to Root
+                 if (overIndex !== -1 && (!newItems[overIndex]?.parent_id || newItems[overIndex]?.is_folder)) { // Over a root item
+                    // Find the true index in the *full* array for relative positioning
+                     const actualOverIndex = newItems.findIndex(item => item.id === overIdResolved);
+                     targetInsertionIndex = actualOverIndex >= oldIndex ? actualOverIndex : actualOverIndex + 1;
+
+                } else { // To end of root items
                     const lastRootIndex = newItems.findLastIndex(item => !item.parent_id || item.is_folder);
                     targetInsertionIndex = lastRootIndex + 1;
                 }
-             } else { // Moviendo a una carpeta
-                const lastInFolderIndex = newItems.findLastIndex(item => item.parent_id === targetContainerId);
-                const folderItemIndex = newItems.findIndex(item => item.id === targetContainerId);
-                targetInsertionIndex = lastInFolderIndex !== -1 ? lastInFolderIndex + 1 : folderItemIndex + 1;
+            } else { // Moving to Folder
+                 // Insert at the end of the items currently in that folder visually
+                 const lastInFolderIndex = newItems.findLastIndex(item => item.parent_id === targetContainerId);
+                 const folderItemIndex = newItems.findIndex(item => item.id === targetContainerId); // Index of the folder itself
+                 // Insert after the last item, or right after the folder card if empty
+                 targetInsertionIndex = lastInFolderIndex !== -1 ? lastInFolderIndex + 1 : folderItemIndex + 1;
             }
 
             targetInsertionIndex = Math.max(0, Math.min(targetInsertionIndex, newItems.length));
             newItems.splice(targetInsertionIndex, 0, movedItem);
 
-            updatesMap[activeId] = { parent_id: targetContainerId };
-            successMessage = targetContainerId ? `Deck "${activeItem.name}" moved into folder.` : `Deck "${activeItem.name}" moved to root.`;
+            updatesMap[activeId] = { parent_id: targetContainerId }; // Mark for DB update
+            successMessage = targetContainerId ? `Moved into folder.` : `Moved to root.`;
 
-        } else if (overIndex !== -1 && targetContainerId === sourceContainerId) {
-             // Reordenar dentro del mismo contenedor
-             if(oldIndex === overIndex) return;
+        } else if (overIndex !== -1 && newItems[overIndex]?.parent_id === sourceContainerId) {
+             // Reordering within the same container
+             if (oldIndex === overIndex) return; // No actual change
             newItems = arrayMove(newItems, oldIndex, overIndex);
-            successMessage = activeItem.is_folder ? "Folder reordered." : "Deck reordered.";
-        } else if (!overIdResolved && targetContainerId === null && !activeItem.parent_id){
-             // Reordenar raíz soltando en vacío (mover al final)
-             const lastActualRootIndex = newItems.findLastIndex(item => !item.parent_id || item.is_folder);
-             if (oldIndex === lastActualRootIndex) return;
-             newItems = arrayMove(newItems, oldIndex, lastActualRootIndex);
-             successMessage = activeItem.is_folder ? "Folder reordered." : "Deck reordered.";
+            successMessage = "Item reordered.";
+        } else if (!overIdResolved && targetContainerId === sourceContainerId) {
+             // Reordering by dropping in empty space within the same container (move to end)
+             const itemsInContainer = newItems.filter(item => item.parent_id === sourceContainerId);
+             const lastIndexInContainer = itemsInContainer.length - 1;
+             const actualLastIndex = newItems.findLastIndex(item => item.parent_id === sourceContainerId);
+
+             if (oldIndex === actualLastIndex) return; // Already last
+             newItems = arrayMove(newItems, oldIndex, actualLastIndex);
+             successMessage = "Item moved to end.";
         }
          else {
-             console.log("Drag end condition not met for update (reorder/move).");
+             console.log("DragEnd: No valid move/reorder action determined.");
              return;
          }
 
 
-        // --- Recalcular Posiciones ---
-        // Contenedor de destino
-        const itemsToRepositionTarget = newItems.filter(item => item.parent_id === targetContainerId);
-        for (let i = 0; i < itemsToRepositionTarget.length; i++) {
-             const currentItem = itemsToRepositionTarget[i];
-             const prevItem = itemsToRepositionTarget[i - 1];
-             const nextItem = itemsToRepositionTarget[i + 1];
-             const calculatedPos = calculateNewPosition(prevItem?.position, nextItem?.position, i);
-             if (currentItem.position !== calculatedPos || currentItem.id === activeId) {
-                 updatesMap[currentItem.id] = { ...updatesMap[currentItem.id], position: calculatedPos };
-                 const idxInNewItems = newItems.findIndex(it => it.id === currentItem.id);
-                 if (idxInNewItems !== -1) newItems[idxInNewItems].position = calculatedPos;
-             }
+        // 2. === Recalculate Positions ===
+        const containersToUpdate = new Set<string | null>([targetContainerId]);
+        if (isMovingContainer && sourceContainerId !== undefined) {
+            containersToUpdate.add(sourceContainerId);
         }
-         // Contenedor de origen (si se movió entre contenedores)
-         if (isMovingContainer && sourceContainerId !== null) {
-            const itemsToRepositionSource = newItems.filter(item => item.parent_id === sourceContainerId);
-             for (let i = 0; i < itemsToRepositionSource.length; i++) {
-                 const currentItem = itemsToRepositionSource[i];
-                 const prevItem = itemsToRepositionSource[i - 1];
-                 const nextItem = itemsToRepositionSource[i + 1];
-                 const calculatedPos = calculateNewPosition(prevItem?.position, nextItem?.position, i);
-                 if (currentItem.position !== calculatedPos) { // No actualizar el item activo aquí si ya se movió
+
+        containersToUpdate.forEach(containerId => {
+            const itemsToReposition = newItems.filter(item => item.parent_id === containerId);
+            itemsToReposition.sort((a,b)=> newItems.indexOf(a) - newItems.indexOf(b)); // Ensure they are in current visual order
+
+            for (let i = 0; i < itemsToReposition.length; i++) {
+                const currentItem = itemsToReposition[i];
+                const prevItem = itemsToReposition[i - 1];
+                const nextItem = itemsToReposition[i + 1];
+                const calculatedPos = calculateNewPosition(prevItem?.position, nextItem?.position, i);
+
+                // Check if position needs update in DB
+                if (currentItem.position !== calculatedPos || currentItem.id === activeId) {
                      updatesMap[currentItem.id] = { ...updatesMap[currentItem.id], position: calculatedPos };
+                     // Update position in the working array `newItems` immediately
                      const idxInNewItems = newItems.findIndex(it => it.id === currentItem.id);
                      if (idxInNewItems !== -1) newItems[idxInNewItems].position = calculatedPos;
                  }
-             }
-         }
+            }
+        });
 
-        // Aplicar estado local final
+         // Ensure the moved item's parent_id is correctly set in updatesMap if moving container
+        if(isMovingContainer && updatesMap[activeId]){
+            updatesMap[activeId]!.parent_id = targetContainerId;
+        }
+
+
+        // 3. === Update Local State ===
         setItems(newItems);
 
-        // --- Actualizar Base de Datos ---
+        // 4. === Update Database ===
         if (Object.keys(updatesMap).length > 0) {
-           // ... (misma lógica de promesas y manejo de error/éxito)
-           const updatePromises = Object.entries(updatesMap).map(([id, updateData]) =>
+            console.log("Updating DB:", updatesMap);
+            const updatePromises = Object.entries(updatesMap).map(([id, updateData]) =>
                 supabase.from("decks").update(updateData).eq("id", id)
             );
             const results = await Promise.all(updatePromises);
@@ -602,7 +605,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     } catch (error: any) {
         console.error("Error during drag end:", error);
         toast({ variant: "destructive", title: "Error", description: error.message || "An error occurred during the update." });
-        setItems(initialItemsSnapshot); // Revertir
+        setItems(initialItemsSnapshot); // Revert on error
     }
 };
 
@@ -610,29 +613,30 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   return (
     <>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        {/* Header sin cambios */}
+         {/* ... Header ... */}
          <div> <h1 className="text-3xl font-bold">My Decks</h1> <p className="text-muted-foreground"> Manage your study flashcard decks </p> </div>
         <div className="flex items-center gap-2"> <Button variant={isEditMode ? "default" : "outline"} onClick={() => setIsEditMode((prev) => !prev)} > <Edit className="mr-2 h-4 w-4" /> {isEditMode ? "Done" : "Edit"} </Button> {isEditMode && <CreateFolderDialog onFolderCreated={() => router.refresh()} />} <CreateAIDeckDialog /> <CreateDeckDialog onDeckCreated={() => router.refresh()} /> </div>
       </div>
 
       {items.length === 0 && !isEditMode ? (
-         /* Mensaje vacío sin cambios */
+         /* ... Mensaje vacío ... */
          <div className="flex h-[60vh] flex-col items-center justify-center text-center"> <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" /> <h2 className="text-2xl font-semibold">Your dashboard is empty</h2> <p className="mb-6 text-muted-foreground"> Create your first deck to get started. </p> <div className="flex gap-2"> <CreateDeckDialog onDeckCreated={() => router.refresh()} size="lg" /> <CreateAIDeckDialog /> </div> </div>
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners} // <-- closestCorners
+          collisionDetection={closestCorners}
           onDragStart={handleDragStart}
-          onDragOver={handleDragOver} // Necesario para `overId`
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
           // modifiers={[restrictToParentElement]} // Opcional
         >
+          {/* --- Contenedor Principal Sortable --- */}
           <SortableContext items={rootLevelIds} strategy={verticalListSortingStrategy}>
             <div className="space-y-8">
               {/* Renderizar Carpetas y Contenedor de Mazos Raíz */}
                {rootLevelIds.map(id => {
                  if (id === ROOT_DECKS_CONTAINER_ID) {
-                   return ( /* Contenedor de mazos raíz */
+                   return ( /* Contenedor mazos raíz */
                      <div id={ROOT_DECKS_CONTAINER_ID} key={ROOT_DECKS_CONTAINER_ID} className="root-decks-container">
                        <SortableContext items={rootDecks.map(d => d.id)} strategy={rectSortingStrategy}>
                          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -642,7 +646,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
                          </div>
                          {isEditMode && rootDecks.length === 0 && ( /* Placeholder */
                            <div className="py-10 text-center text-sm text-muted-foreground border-2 border-dashed rounded-lg min-h-[100px] flex items-center justify-center">
-                             Decks outside folders will appear here.
+                             Decks outside folders will appear here. Drop decks here to move them out.
                            </div>
                          )}
                        </SortableContext>
@@ -661,17 +665,18 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
             </div>
           </SortableContext>
 
-          {/* Área de drop en la raíz */}
+          {/* Área de drop en la raíz (para sacar de carpetas) */}
           <div
             id={ROOT_DROPPABLE_ID}
             ref={setRootDroppableNodeRef}
-            className={cn(/* ... clases ... */
+            className={cn(
                 "mt-12 rounded-lg border-2 border-dashed transition-colors duration-150 ease-out",
                 isEditMode ? "min-h-[120px] border-border p-6" : "min-h-0 border-transparent p-0",
+                // Resaltar SÓLO si se arrastra un MAZO que viene DE UNA CARPETA
                 isEditMode && isOverRootArea && activeDragItem && !activeDragItem.is_folder && activeDragItem.parent_id && "border-primary bg-primary/5"
             )}
            >
-             {isEditMode && ( /* ... */
+             {isEditMode && (
                 <p className="flex items-center justify-center h-full text-center text-sm text-muted-foreground pointer-events-none">
                     Drop decks here to move them out of folders.
                 </p>
@@ -679,8 +684,8 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
           </div>
 
           <DragOverlay dropAnimation={null}>
-             {/* ... (Overlay sin cambios) ... */}
-              {activeDragItem ? (
+             {/* ... Overlay ... */}
+             {activeDragItem ? (
                  activeDragItem.is_folder ? (
                     <Card className="opacity-75 border-2 border-dashed border-muted-foreground bg-muted/30 shadow-lg">
                         <CardHeader className="flex-row items-center gap-4 p-4">
@@ -698,7 +703,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         </DndContext>
       )}
 
-      {/* Popup de bienvenida (sin cambios) */}
+      {/* Popup de bienvenida */}
       <AlertDialog open={showWelcomePopup} onOpenChange={setShowWelcomePopup}>
             {/* ... */}
             <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle className="flex items-center gap-2"> <Info className="h-5 w-5 text-blue-500" /> Welcome to Memoria! </AlertDialogTitle> <AlertDialogDescription> Memoria helps you learn faster using spaced repetition. To get the most out of it, check out the Help page to discover all the features and how it works. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel>Dismiss</AlertDialogCancel> <AlertDialogAction asChild> <Link href="/help">Go to Help Page</Link> </AlertDialogAction> </AlertDialogFooter> </AlertDialogContent>
