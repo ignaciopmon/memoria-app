@@ -8,19 +8,22 @@ import {
   DndContext,
   useDroppable,
   DragOverlay,
-  closestCenter, // Usaremos closestCenter, pero la lógica de 'over' cambiará
+  // --- MODIFICACIÓN: Cambiar a closestCorners para mejorar la detección de carpetas ---
+  closestCorners,
   PointerSensor,
   useSensor,
   useSensors,
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
+  UniqueIdentifier,
 } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
   arrayMove,
   rectSortingStrategy,
+  verticalListSortingStrategy, // <-- NUEVO: Usar esta estrategia para la lista principal (carpetas y mazos raíz)
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { createClient } from "@/lib/supabase/client";
@@ -71,31 +74,56 @@ type Item = {
   created_at?: string;
 };
 
-// --- Componente FolderView (Sin cambios respecto a la versión anterior) ---
+// --- Componente FolderView (MODIFICADO para usar SortableContext para sus decks) ---
 function FolderView({
   folder,
   decks,
   isEditMode,
   onUpdate,
-  isDraggingOver,
+  isDraggingOver, // Se mantiene para el resaltado visual
+  activeDragItem, // Añadido para lógica de drop
 }: {
   folder: Item;
   decks: Item[];
   isEditMode: boolean;
   onUpdate: (updater: (prev: Item[]) => Item[]) => void;
   isDraggingOver: boolean;
+  activeDragItem: Item | null; // <-- NUEVO
 }) {
   const [isRenaming, setIsRenaming] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const { setNodeRef: setDroppableNodeRef } = useDroppable({
+  const [isExpanded, setIsExpanded] = useState(true); // <-- Expandido por defecto en modo edición
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setSortableNodeRef, // <-- Ref para el elemento carpeta (arrastrable en la lista raíz)
+    transform,
+    transition,
+    isDragging: isFolderDragging,
+  } = useSortable({ id: folder.id, disabled: !isEditMode });
+
+  const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({ // 'isOver' detecta si se está arrastrando *sobre* esta carpeta
     id: folder.id,
-    disabled: !isEditMode,
+    disabled: !isEditMode || isFolderDragging, // Deshabilitar drop si la carpeta misma se está arrastrando
   });
 
   const folderColor = folder.color || "hsl(var(--border))";
-  const setNodeRef = useMemo(() => setDroppableNodeRef, [setDroppableNodeRef]);
 
-  if (!isEditMode && decks.length === 0 && !isExpanded) return null;
+  // Combina los refs
+  const combinedRef = (node: HTMLElement | null) => {
+    setSortableNodeRef(node);
+    setDroppableNodeRef(node);
+  };
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isFolderDragging ? 0.5 : 1,
+    zIndex: isFolderDragging ? 10 : undefined,
+  };
+
+  // Determinar si resaltar esta carpeta como zona de drop
+  const shouldHighlightDrop = isEditMode && isOver && activeDragItem && !activeDragItem.is_folder && activeDragItem.parent_id !== folder.id;
 
   return (
     <>
@@ -106,14 +134,22 @@ function FolderView({
           onClose={() => setIsRenaming(false)}
         />
       )}
+      {/* --- Aplicar estilo de arrastre y ref combinado --- */}
       <Card
-        ref={setNodeRef}
+        ref={combinedRef}
+        style={style}
         className={cn(
-          "transition-all duration-150 ease-out border-2",
-          isEditMode && isDraggingOver ? "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" : `border-[${folderColor}]`,
-          isEditMode && !isDraggingOver ? "hover:border-muted-foreground/50" : ""
+          "transition-all duration-150 ease-out border-2 relative group", // <-- Añadido relative group
+          shouldHighlightDrop ? "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" : `border-[${folderColor}]`,
+          isEditMode && !shouldHighlightDrop ? "hover:border-muted-foreground/50" : ""
         )}
       >
+        {/* --- Añadir el handle de arrastre para la carpeta --- */}
+        {isEditMode && (
+          <div {...listeners} {...attributes} className="absolute top-1/2 -left-3 transform -translate-y-1/2 z-10 p-1 cursor-grab touch-none opacity-0 group-hover:opacity-100 transition-opacity" title="Move Folder">
+            <GripVertical className="h-5 w-5 text-muted-foreground" />
+          </div>
+        )}
         <CardHeader
           className="flex-row items-center justify-between space-y-0 p-4 cursor-pointer"
           onClick={() => !isEditMode && setIsExpanded(!isExpanded)}
@@ -139,24 +175,27 @@ function FolderView({
             )
           )}
         </CardHeader>
+        {/* --- Usar SortableContext para los decks *dentro* de la carpeta --- */}
         {(isEditMode || isExpanded) && (
           <CardContent className={cn("pt-0", isEditMode ? "p-4 min-h-[80px]" : "p-4")}>
-            {decks.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                {isEditMode ? "Drop decks here" : "This folder is empty"}
-              </p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {decks.map((deck) => (
-                  <DraggableDeckItem
-                    key={deck.id}
-                    item={deck}
-                    isEditMode={isEditMode}
-                    onUpdate={onUpdate}
-                  />
-                ))}
-              </div>
-            )}
+            <SortableContext items={decks.map(d => d.id)} strategy={rectSortingStrategy}>
+              {decks.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {isEditMode ? "Drop decks here" : "This folder is empty"}
+                </p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {decks.map((deck) => (
+                    <DraggableDeckItem
+                      key={deck.id}
+                      item={deck}
+                      isEditMode={isEditMode}
+                      onUpdate={onUpdate}
+                    />
+                  ))}
+                </div>
+              )}
+            </SortableContext>
           </CardContent>
         )}
       </Card>
@@ -164,7 +203,7 @@ function FolderView({
   );
 }
 
-// --- Componente DraggableDeckItem (Sin cambios) ---
+// --- Componente DraggableDeckItem (ligeramente modificado para el handle) ---
 function DraggableDeckItem({
   item,
   isEditMode,
@@ -195,7 +234,8 @@ function DraggableDeckItem({
   };
 
   const handleDelete = async () => {
-    setIsDeleting(true);
+    // ... (sin cambios)
+     setIsDeleting(true);
     const supabase = createClient();
     const { error } = await supabase
       .from("decks")
@@ -223,6 +263,12 @@ function DraggableDeckItem({
           onClose={() => setIsRenaming(false)}
         />
       )}
+      {/* --- Mover el handle de arrastre fuera de los botones de acción --- */}
+      {isEditMode && (
+         <div {...listeners} {...attributes} className="absolute top-1/2 -left-3 transform -translate-y-1/2 z-10 p-1 cursor-grab touch-none opacity-0 group-hover:opacity-100 transition-opacity" title="Move Deck">
+            <GripVertical className="h-5 w-5 text-muted-foreground" />
+          </div>
+      )}
       {isEditMode && (
         <div className="absolute top-2 right-2 z-20 flex items-center bg-background/80 backdrop-blur-sm rounded-full border p-0.5 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsRenaming(true)} title="Rename" > <Edit className="h-4 w-4" /> </Button>
@@ -238,7 +284,7 @@ function DraggableDeckItem({
               <AlertDialogFooter> <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" > {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Move to Trash </AlertDialogAction> </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          <div {...listeners} {...attributes} className={`cursor-grab p-1 touch-none ${isDeleting ? 'cursor-not-allowed' : ''}`} title="Move deck" style={{ touchAction: 'none' }} > <GripVertical className="h-5 w-5 text-muted-foreground" /> </div>
+          {/* --- El handle se movió fuera --- */}
         </div>
       )}
       <DeckCard deck={item} isEditMode={isEditMode} />
@@ -246,7 +292,10 @@ function DraggableDeckItem({
   );
 }
 
-// ---- Componente Principal del Dashboard (handleDragEnd MODIFICADO) ----
+// ---- Componente Principal del Dashboard (MUY MODIFICADO) ----
+// Define un ID constante para el área raíz
+const ROOT_DROPPABLE_ID = 'root-drop-area';
+
 export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   const [items, setItems] = useState<Item[]>(initialItems);
   const [activeDragItem, setActiveDragItem] = useState<Item | null>(null);
@@ -254,25 +303,35 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   const router = useRouter();
   const { toast } = useToast();
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
-  const [overId, setOverId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<UniqueIdentifier | null>(null); // Usar UniqueIdentifier
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
+        // Exigir mover un poco más antes de iniciar el arrastre
         distance: 10,
       },
     })
   );
 
-  useEffect(() => {
+   // --- NUEVO: Orden inicial mejorado ---
+   useEffect(() => {
     const sortedInitial = [...initialItems].sort((a, b) => {
+      // Prioridad: Carpetas primero, luego mazos raíz
+      if (a.is_folder && !b.is_folder) return -1;
+      if (!a.is_folder && b.is_folder) return 1;
+
+      // Orden secundario: por posición (nulls/Infinity al final)
       const posA = a.position ?? Infinity;
       const posB = b.position ?? Infinity;
       if (posA !== posB) return posA - posB;
-      return (a.created_at && b.created_at) ? a.created_at.localeCompare(b.created_at) : 0;
+
+      // Orden terciario: por fecha de creación (los más nuevos primero si position es igual)
+      return (b.created_at ?? "").localeCompare(a.created_at ?? "");
     });
     setItems(sortedInitial);
 
+    // Lógica del popup sin cambios
     const hasSeenPopup = localStorage.getItem('hasSeenWelcomePopup');
     if (!hasSeenPopup && initialItems.length > 0) {
       setShowWelcomePopup(true);
@@ -280,18 +339,20 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     }
   }, [initialItems]);
 
-  const { folders, rootDecks, decksInFolders } = useMemo(() => {
+  // --- REFACTORIZADO: Separar la lógica de cálculo de listas ---
+  const { folders, rootDecks, decksInFolders, rootItemIds } = useMemo(() => {
     const foldersMap = new Map<string, Item>();
     const rootDecksList: Item[] = [];
     const decksInFoldersMap = new Map<string, Item[]>();
-     const sortedItems = [...items].sort((a, b) => {
-        if (a.is_folder && !b.is_folder) return -1;
-        if (!a.is_folder && b.is_folder) return 1;
+
+    // Ordenar primero por posición (nulls al final), luego por creación
+    const sortedItems = [...items].sort((a, b) => {
         const posA = a.position ?? Infinity;
         const posB = b.position ?? Infinity;
         if (posA !== posB) return posA - posB;
-        return (a.created_at && b.created_at) ? a.created_at.localeCompare(b.created_at) : 0;
+        return (b.created_at ?? "").localeCompare(a.created_at ?? ""); // Más nuevos primero si no hay posición
     });
+
 
     for (const item of sortedItems) {
       if (item.is_folder) {
@@ -301,189 +362,226 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         }
       } else if (item.parent_id) {
         if (!decksInFoldersMap.has(item.parent_id)) {
-          decksInFoldersMap.set(item.parent_id, []);
+          // Si la carpeta padre no existe (raro), lo tratamos como raíz por seguridad
+           console.warn(`Deck ${item.id} has parent_id ${item.parent_id} but folder not found. Treating as root.`);
+           rootDecksList.push(item);
+        } else {
+          decksInFoldersMap.get(item.parent_id)!.push(item);
         }
-        decksInFoldersMap.get(item.parent_id)!.push(item);
       } else {
         rootDecksList.push(item);
       }
     }
-    const sortedFolders = Array.from(foldersMap.values());
-    return { folders: sortedFolders, rootDecks: rootDecksList, decksInFolders: decksInFoldersMap };
+
+    // Ordenar las carpetas según el orden general
+    const sortedFolders = Array.from(foldersMap.values()).sort((a, b) => {
+        const posA = a.position ?? Infinity;
+        const posB = b.position ?? Infinity;
+        if (posA !== posB) return posA - posB;
+        return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+    });
+
+    // Crear una lista combinada de IDs en el nivel raíz (carpetas + mazos raíz) para SortableContext
+    const combinedRootItemIds = [...sortedFolders.map(f => f.id), ...rootDecksList.map(d => d.id)];
+
+
+    return {
+      folders: sortedFolders,
+      rootDecks: rootDecksList, // Ya están ordenados por la clasificación inicial
+      decksInFolders: decksInFoldersMap,
+      rootItemIds: combinedRootItemIds, // IDs ordenados para el nivel raíz
+    };
   }, [items]);
 
-  const draggableItemIds = useMemo(() => items.filter(item => !item.is_folder).map(item => item.id), [items]);
+
+  // --- Draggable items son TODOS los items (carpetas y mazos) ---
+  const draggableItemIds = useMemo(() => items.map(item => item.id), [items]);
 
   const handleDragStart = (event: DragStartEvent) => {
     if (!isEditMode) return;
     const { active } = event;
     const item = items.find((i) => i.id === active.id);
-    if (item && !item.is_folder) {
-      setActiveDragItem(item);
-      setOverId(null);
-    } else {
-      setActiveDragItem(null);
-    }
+    setActiveDragItem(item || null);
+    setOverId(null);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
     const { over } = event;
-    setOverId(over ? over.id as string : null);
+    setOverId(over ? over.id : null);
   };
 
+  // --- Droppable para el área raíz ---
   const { setNodeRef: setRootDroppableNodeRef, isOver: isOverRootArea } = useDroppable({
-    id: 'root-drop-area',
+    id: ROOT_DROPPABLE_ID, // Usar el ID constante
     disabled: !isEditMode,
   });
 
-  const calculateNewPosition = (
+  // --- Función auxiliar para calcular posición (sin cambios) ---
+ const calculateNewPosition = (
     prevPos: number | null | undefined,
     nextPos: number | null | undefined,
-    currentIndex: number
+    currentIndex: number // <-- Añadido índice actual para desempate inicial/final
   ): number => {
-    const defaultIncrement = 1000;
+    const defaultIncrement = 1000; // Incremento base para el espaciado
+    let newPos: number;
+
     if (prevPos === null || prevPos === undefined) {
-      return nextPos !== null && nextPos !== undefined ? nextPos / 2 : defaultIncrement * (currentIndex + 1);
+      // Es el primer elemento
+      if (nextPos !== null && nextPos !== undefined) {
+        newPos = nextPos / 2; // Colocar a la mitad del espacio antes del siguiente
+      } else {
+        newPos = defaultIncrement; // Es el único elemento
+      }
+    } else if (nextPos === null || nextPos === undefined) {
+      // Es el último elemento
+      newPos = prevPos + defaultIncrement; // Colocar después del anterior
+    } else {
+      // Está entre dos elementos
+      newPos = prevPos + (nextPos - prevPos) / 2; // Colocar a la mitad del espacio entre ellos
     }
-    if (nextPos === null || nextPos === undefined) {
-      return prevPos + defaultIncrement;
-    }
-    return prevPos + (nextPos - prevPos) / 2;
+
+    // Asegurarse de que la posición sea un número válido y positivo
+    return Math.max(1, Math.round(newPos));
   };
 
-  // --- handleDragEnd MODIFICADO ---
-  const handleDragEnd = async (event: DragEndEvent) => {
+
+  // --- handleDragEnd REFACTORIZADO ---
+ const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+    const activeId = active.id;
+    const overIdResolved = over?.id; // Puede ser null si se suelta fuera
 
     setActiveDragItem(null);
-    setOverId(null); // Reset visual state regardless of outcome
+    setOverId(null);
 
-    const activeItem = items.find((item) => item.id === active.id);
+    const activeItem = items.find((item) => item.id === activeId);
 
-    // Basic validation
-    if (!activeItem || activeItem.is_folder || !over || active.id === over.id) {
-      return;
+    // Validaciones iniciales
+    if (!activeItem || !isEditMode || activeId === overIdResolved) {
+      return; // No hacer nada si no hay item activo, no estamos en modo edición, o se suelta sobre sí mismo
     }
 
-    const activeId = active.id as string;
-    const overIdResolved = over.id as string;
     const supabase = createClient();
     let newItems = [...items];
+    const updatesMap: Record<string, Partial<Item>> = {}; // Para guardar cambios de BD
     let successMessage = "";
-    let errorMessage = "";
-    const updatesMap: Record<string, { position: number | null; parent_id: string | null }> = {};
+    let errorMessage = "Failed to update item."; // Mensaje genérico
+
     const oldIndex = newItems.findIndex((item) => item.id === activeId);
 
-    // Determine the target: is it a folder, the root area, or another root deck?
-    const isOverFolder = folders.some((f) => f.id === overIdResolved);
-    const overItem = items.find((item) => item.id === overIdResolved);
-    const isOverRootDeck = Boolean(overItem && !overItem.is_folder && !overItem.parent_id);
-
-    // --- NUEVA LÓGICA DE DETECCIÓN DE DESTINO ---
-    // Consideramos que el destino es la raíz si:
-    // 1. Se suelta explícitamente sobre 'root-drop-area'.
-    // 2. Se suelta sobre un mazo que ya está en la raíz.
-    // 3. Se suelta sobre un elemento (`overItem`) que NO es una carpeta Y NO es un mazo dentro de la misma carpeta de origen del item activo.
-    const isMovingToRoot = isOverRootArea || isOverRootDeck ||
-                           (overItem && !overItem.is_folder && activeItem.parent_id && overItem.parent_id !== activeItem.parent_id);
-
-    // --- FIN NUEVA LÓGICA ---
-
-
     try {
-      // Caso 1: Mover a una carpeta diferente
-      if (isOverFolder && activeItem.parent_id !== overIdResolved) {
-        newItems[oldIndex] = { ...activeItem, parent_id: overIdResolved, position: null };
-        updatesMap[activeId] = { parent_id: overIdResolved, position: null };
-        successMessage = "Deck moved into folder.";
-        errorMessage = "Failed to move deck into folder.";
-      }
-      // Caso 2: Mover desde una carpeta hacia la raíz
-      else if (activeItem.parent_id && isMovingToRoot) {
-        let targetIndex = -1;
+      // --- Determinar el contenedor de destino ---
+      let targetParentId: string | null = null;
+      let targetContainerItems: Item[] = []; // Items en el contenedor de destino
+      let targetContainerType: 'root' | 'folder' = 'root';
 
-        // Si se suelta sobre un deck raíz específico, usar su índice como referencia
-        if (isOverRootDeck) {
-          targetIndex = newItems.findIndex((item) => item.id === overIdResolved);
+      if (overIdResolved === ROOT_DROPPABLE_ID) {
+        // Soltado explícitamente en el área raíz
+        targetParentId = null;
+        targetContainerItems = newItems.filter(item => !item.parent_id); // Incluye carpetas y mazos raíz
+        targetContainerType = 'root';
+      } else {
+        const overItem = items.find((item) => item.id === overIdResolved);
+        if (overItem) {
+          if (overItem.is_folder) {
+            // Soltado sobre una carpeta (o dentro de ella si DND Kit lo resuelve así)
+             if (!activeItem.is_folder) { // Solo mover mazos a carpetas
+                targetParentId = overItem.id;
+                targetContainerItems = newItems.filter(item => item.parent_id === overItem.id);
+                targetContainerType = 'folder';
+             } else {
+                 // No permitir mover carpetas dentro de otras carpetas por ahora
+                 console.log("Cannot move folders into other folders.");
+                 return;
+             }
+          } else {
+            // Soltado sobre un item (mazo o carpeta raíz)
+            targetParentId = overItem.parent_id; // Hereda el padre del item sobre el que se soltó
+            targetContainerItems = newItems.filter(item => item.parent_id === targetParentId);
+            targetContainerType = targetParentId ? 'folder' : 'root';
+          }
         } else {
-          // Si se suelta en el área general raíz (o sobre un elemento que no es carpeta/deck_raiz),
-          // encontrar el índice del último elemento raíz (carpeta o deck sin parent) para colocarlo después.
-          const lastRootIndex = newItems.findLastIndex((item) => item.is_folder || !item.parent_id);
-           // Si el índice original era menor o igual al último índice raíz,
-           // el nuevo índice es después del último raíz actual.
-           // Si era mayor (un mazo en una carpeta al final), el targetIndex debería ser justo después del último raíz.
-           targetIndex = lastRootIndex + 1;
-
+           // Soltado fuera de cualquier área válida, probablemente mover a la raíz por defecto
+           targetParentId = null;
+           targetContainerItems = newItems.filter(item => !item.parent_id);
+           targetContainerType = 'root';
         }
-
-        // Mueve el elemento en el array local y actualiza su parent_id
-        const movedItem = { ...newItems[oldIndex], parent_id: null };
-        newItems.splice(oldIndex, 1);
-        targetIndex = Math.max(0, Math.min(targetIndex, newItems.length)); // Asegurar límites
-        newItems.splice(targetIndex, 0, movedItem);
-
-        // Recalcular posiciones solo para elementos raíz
-        const rootItemsAfterMove = newItems.filter((item) => item.is_folder || !item.parent_id);
-        for (let i = 0; i < rootItemsAfterMove.length; i++) {
-          const currentItem = rootItemsAfterMove[i];
-          const prevItem = rootItemsAfterMove[i - 1];
-          const nextItem = rootItemsAfterMove[i + 1];
-          const calculatedPos = calculateNewPosition(prevItem?.position, nextItem?.position, i);
-          if (currentItem.id === activeId || currentItem.position !== calculatedPos) {
-            updatesMap[currentItem.id] = { position: calculatedPos, parent_id: null };
-          }
-        }
-        // Aplicar localmente
-        newItems = newItems.map((item) => updatesMap[item.id] ? { ...item, position: updatesMap[item.id].position } : item);
-
-        successMessage = "Deck moved out of folder.";
-        errorMessage = "Failed to move deck out of folder.";
       }
-      // Caso 3: Reordenar dentro de la raíz (solo si se suelta sobre otro deck raíz)
-      else if (!activeItem.parent_id && isOverRootDeck) {
-        const targetIndex = newItems.findIndex((item) => item.id === overIdResolved);
-        if (oldIndex === targetIndex) return; // No hay cambio
 
-        newItems = arrayMove(newItems, oldIndex, targetIndex);
+       // --- Lógica de movimiento y reordenación ---
+        const isMovingContainer = activeItem.parent_id !== targetParentId;
+        const targetIndex = overIdResolved && overIdResolved !== ROOT_DROPPABLE_ID
+            ? newItems.findIndex((item) => item.id === overIdResolved)
+            : newItems.length -1; // Si no hay 'over' específico, intentar poner al final
 
-        // Recalcular posiciones para todos los elementos raíz
-        const rootItemsAfterMove = newItems.filter((item) => item.is_folder || !item.parent_id);
-        for (let i = 0; i < rootItemsAfterMove.length; i++) {
-          const currentItem = rootItemsAfterMove[i];
-          const prevItem = rootItemsAfterMove[i - 1];
-          const nextItem = rootItemsAfterMove[i + 1];
-          const calculatedPos = calculateNewPosition(prevItem?.position, nextItem?.position, i);
-          if (currentItem.position !== calculatedPos) {
-             updatesMap[currentItem.id] = { position: calculatedPos, parent_id: null };
+        let finalIndex = targetIndex;
+
+      if (isMovingContainer) {
+          // Mover entre contenedores (raíz <-> carpeta)
+          const movedItem = { ...newItems[oldIndex], parent_id: targetParentId };
+          newItems.splice(oldIndex, 1); // Quitar del origen
+
+          // Encontrar dónde insertar en el destino
+          // Si targetContainerType es 'folder', añadimos al final de esa carpeta
+          // Si es 'root', usamos el targetIndex calculado antes (puede ser sobre otro item raíz)
+          if (targetContainerType === 'folder') {
+             // Encontrar el índice del último item de esa carpeta o la carpeta misma
+              const lastItemIndexInFolder = newItems.findLastIndex(item => item.parent_id === targetParentId || item.id === targetParentId);
+              finalIndex = lastItemIndexInFolder >= 0 ? lastItemIndexInFolder + 1 : newItems.length;
+          } else {
+               // Ya tenemos targetIndex, ajustarlo si el índice original afectaba
+                finalIndex = oldIndex < targetIndex ? targetIndex : targetIndex + 1;
           }
-        }
-         // Aplicar localmente
-        newItems = newItems.map((item) => updatesMap[item.id] ? { ...item, position: updatesMap[item.id].position } : item);
 
-        successMessage = "Deck reordered.";
-        errorMessage = "Failed to reorder deck.";
+          finalIndex = Math.max(0, Math.min(finalIndex, newItems.length)); // Asegurar límites
+          newItems.splice(finalIndex, 0, movedItem);
+
+          updatesMap[activeId] = { parent_id: targetParentId };
+          successMessage = targetParentId ? "Deck moved into folder." : "Deck moved to root.";
+
+      } else {
+           // Reordenar dentro del mismo contenedor
+            const overItemIndex = newItems.findIndex((item) => item.id === overIdResolved);
+            if (overItemIndex === -1) return; // No se encontró el item sobre el que se soltó
+            finalIndex = overItemIndex;
+
+            newItems = arrayMove(newItems, oldIndex, finalIndex);
+            successMessage = activeItem.is_folder ? "Folder reordered." : "Deck reordered.";
       }
-      // Caso 4: Reordenar dentro de la MISMA carpeta (si 'over' es un mazo en la misma carpeta)
-       else if (activeItem.parent_id && overItem && !overItem.is_folder && overItem.parent_id === activeItem.parent_id) {
-           // Lógica de reordenamiento DENTRO de la carpeta (si la necesitas).
-           // Por ahora, no haremos nada para mantenerlo simple, ya que DndKit maneja el orden visual dentro del SortableContext de la carpeta si lo implementas así.
-           // Si necesitas guardar el orden en la BD, tendrías que recalcular 'position' para los items de esa carpeta aquí.
-           // console.log("Reordering within the same folder - no DB action implemented yet.");
-           return; // Salir sin hacer cambios en la BD por ahora
+
+      // --- Recalcular posiciones para el contenedor afectado ---
+      const itemsToReposition = newItems.filter(item => item.parent_id === targetParentId);
+      for (let i = 0; i < itemsToReposition.length; i++) {
+        const currentItem = itemsToReposition[i];
+        const prevItem = itemsToReposition[i - 1];
+        const nextItem = itemsToReposition[i + 1];
+        const calculatedPos = calculateNewPosition(prevItem?.position, nextItem?.position, i);
+
+        // Solo actualizar si la posición cambió o es el item movido
+        if (currentItem.position !== calculatedPos || currentItem.id === activeId) {
+             updatesMap[currentItem.id] = { ...updatesMap[currentItem.id], position: calculatedPos };
+             // Actualizar también en el array local para la siguiente iteración
+            const idxInNewItems = newItems.findIndex(it => it.id === currentItem.id);
+            if (idxInNewItems !== -1) {
+                newItems[idxInNewItems].position = calculatedPos;
+            }
+        }
+      }
+
+      // Aplicar estado local final (asegurándose de que el item movido tenga la posición correcta)
+       const finalMovedItemIndex = newItems.findIndex(it => it.id === activeId);
+       if (finalMovedItemIndex !== -1 && updatesMap[activeId]?.position) {
+           newItems[finalMovedItemIndex].position = updatesMap[activeId].position;
+           newItems[finalMovedItemIndex].parent_id = targetParentId;
        }
-      else {
-        // Soltado en un lugar no válido o sin cambio funcional
-        // console.log("Drop target not valid or no change needed.");
-        return;
-      }
 
-      // Actualizar estado local
-      setItems(newItems);
+
+      setItems(newItems); // Actualizar UI inmediatamente
 
       // Enviar actualizaciones a BD
       if (Object.keys(updatesMap).length > 0) {
         const updatePromises = Object.entries(updatesMap).map(([id, updateData]) =>
-          supabase.from("decks").update({ position: updateData.position, parent_id: updateData.parent_id }).eq("id", id)
+          supabase.from("decks").update(updateData).eq("id", id)
         );
         const results = await Promise.all(updatePromises);
         const firstError = results.find((r) => r.error);
@@ -499,13 +597,8 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     } catch (error: any) {
       console.error("Error during drag end:", error);
       toast({ variant: "destructive", title: "Error", description: error.message || "An error occurred during the update." });
-      // Revertir
-      const sortedInitial = [...initialItems].sort((a, b) => {
-        const posA = a.position ?? Infinity; const posB = b.position ?? Infinity;
-        if (posA !== posB) return posA - posB;
-        return a.created_at && b.created_at ? a.created_at.localeCompare(b.created_at) : 0;
-      });
-      setItems(sortedInitial);
+      // Revertir al estado inicial en caso de error
+      setItems(initialItems);
     }
   };
 
@@ -513,76 +606,105 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   return (
     <>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        {/* ... (Header sin cambios) ... */}
+        {/* Header sin cambios */}
          <div> <h1 className="text-3xl font-bold">My Decks</h1> <p className="text-muted-foreground"> Manage your study flashcard decks </p> </div>
         <div className="flex items-center gap-2"> <Button variant={isEditMode ? "default" : "outline"} onClick={() => setIsEditMode((prev) => !prev)} > <Edit className="mr-2 h-4 w-4" /> {isEditMode ? "Done" : "Edit"} </Button> {isEditMode && <CreateFolderDialog onFolderCreated={() => router.refresh()} />} <CreateAIDeckDialog /> <CreateDeckDialog onDeckCreated={() => router.refresh()} /> </div>
       </div>
 
       {items.length === 0 && !isEditMode ? (
-        // ... (Mensaje de dashboard vacío sin cambios) ...
+        // Mensaje de dashboard vacío sin cambios
          <div className="flex h-[60vh] flex-col items-center justify-center text-center"> <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" /> <h2 className="text-2xl font-semibold">Your dashboard is empty</h2> <p className="mb-6 text-muted-foreground"> Create your first deck to get started. </p> <div className="flex gap-2"> <CreateDeckDialog onDeckCreated={() => router.refresh()} size="lg" /> <CreateAIDeckDialog /> </div> </div>
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={closestCorners} // <-- Usar closestCorners
           onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
+          onDragOver={handleDragOver} // Necesario para detectar sobre qué se está arrastrando
           onDragEnd={handleDragEnd}
         >
-          {/* Contenedor principal para toda el área arrastrable */}
-          <div className="space-y-8">
-            {/* Renderizar carpetas y sus contenidos */}
-            {folders.map((folder) => {
-              const decksInCurrentFolder = decksInFolders.get(folder.id) || [];
-              // Usar SortableContext *dentro* de cada carpeta si quieres reordenar dentro de ellas
-              return (
-                 <SortableContext key={folder.id} items={decksInCurrentFolder.map(d => d.id)} strategy={rectSortingStrategy}>
+          {/* --- Usar SortableContext para la lista raíz (carpetas y mazos raíz) --- */}
+          <SortableContext items={rootItemIds} strategy={verticalListSortingStrategy}>
+            <div className="space-y-8">
+              {/* Renderizar carpetas y mazos raíz en el orden correcto */}
+              {rootItemIds.map(id => {
+                const item = items.find(i => i.id === id);
+                if (!item) return null;
+
+                if (item.is_folder) {
+                  const decksInCurrentFolder = decksInFolders.get(item.id) || [];
+                  return (
                     <FolderView
-                        folder={folder}
-                        decks={decksInCurrentFolder}
-                        isEditMode={isEditMode}
-                        onUpdate={setItems}
-                        isDraggingOver={overId === folder.id}
+                      key={item.id}
+                      folder={item}
+                      decks={decksInCurrentFolder}
+                      isEditMode={isEditMode}
+                      onUpdate={setItems}
+                      isDraggingOver={overId === item.id}
+                      activeDragItem={activeDragItem} // Pasar item activo
                     />
-                 </SortableContext>
-              );
-            })}
+                  );
+                } else {
+                  // Renderizar mazo raíz directamente
+                  return (
+                     <div key={item.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Ajusta el grid según necesites */}
+                        <DraggableDeckItem
+                            item={item}
+                            isEditMode={isEditMode}
+                            onUpdate={setItems}
+                        />
+                     </div>
+                  );
+                }
+              })}
 
-            {/* Renderizar mazos raíz */}
-            <SortableContext items={rootDecks.map(d => d.id)} strategy={rectSortingStrategy}>
-                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {rootDecks.map((deck) => (
-                    <DraggableDeckItem
-                        key={deck.id}
-                        item={deck}
-                        isEditMode={isEditMode}
-                        onUpdate={setItems}
-                    />
-                    ))}
-                </div>
-            </SortableContext>
+               {/* Renderizar mazos raíz que podrían no estar en rootItemIds si hubo un error de orden */}
+               {rootDecks.filter(d => !rootItemIds.includes(d.id)).map(deck => (
+                    <div key={deck.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                         <DraggableDeckItem
+                            item={deck}
+                            isEditMode={isEditMode}
+                            onUpdate={setItems}
+                         />
+                    </div>
+               ))}
 
-             {/* Área de drop en la raíz */}
-            <div
-               id="root-drop-area"
-               ref={setRootDroppableNodeRef}
-               className={cn(
-                 "mt-8 rounded-lg border-2 border-dashed transition-all duration-150 ease-out",
-                 isEditMode ? "min-h-[100px] border-border p-6" : "min-h-0 border-transparent p-0",
-                 isEditMode && isOverRootArea && activeDragItem?.parent_id && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" // Solo resaltar si vienes de una carpeta
-               )}
-             >
-              {isEditMode && (
-                <p className="p-4 text-center text-sm text-muted-foreground pointer-events-none">
-                  Drop decks here to move them out of folders.
-                </p>
-              )}
+
             </div>
+          </SortableContext>
+
+          {/* Área de drop en la raíz (MODIFICADA para mejor visibilidad) */}
+          <div
+            id={ROOT_DROPPABLE_ID}
+            ref={setRootDroppableNodeRef}
+            className={cn(
+              "mt-12 rounded-lg border-2 border-dashed transition-all duration-150 ease-out", // Más margen superior
+              isEditMode ? "min-h-[120px] border-border p-6" : "min-h-0 border-transparent p-0", // Más alto
+              // Resaltar si se está arrastrando sobre ella Y el item viene de una carpeta
+              isEditMode && isOverRootArea && activeDragItem && activeDragItem.parent_id && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5"
+            )}
+          >
+            {isEditMode && (
+              <p className="flex items-center justify-center h-full text-center text-sm text-muted-foreground pointer-events-none">
+                Drop decks here to move them out of folders.
+              </p>
+            )}
           </div>
 
-
           <DragOverlay>
-            {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode={isEditMode} /> : null}
+            {activeDragItem ? (
+                 activeDragItem.is_folder ? (
+                    // Placeholder visual para arrastrar carpeta (simplificado)
+                     <Card className="opacity-75 border-2 border-dashed border-muted-foreground bg-muted/30">
+                        <CardHeader className="flex-row items-center gap-4 p-4">
+                             <Folder className="h-6 w-6 text-muted-foreground" />
+                             <CardTitle>{activeDragItem.name}</CardTitle>
+                        </CardHeader>
+                     </Card>
+                 ) : (
+                    // Usar DeckCard para arrastrar mazos
+                    <DeckCard deck={activeDragItem} isEditMode={isEditMode} />
+                 )
+            ) : null}
           </DragOverlay>
         </DndContext>
       )}
