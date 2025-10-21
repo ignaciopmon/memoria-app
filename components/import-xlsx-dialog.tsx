@@ -47,17 +47,34 @@ export function ImportXLSXDialog({ deckId, open, onOpenChange }: ImportXLSXDialo
         const workbook = XLSX.read(data, { type: "array" })
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][]
-        const filteredData = jsonData.filter(row => row.some(cell => cell && cell.toString().trim() !== ''))
-        if (filteredData.length === 0) {
-          setError("The selected Excel sheet is empty or contains no data."); setIsLoading(false); return;
+        // Asegurarse de que header: 1 convierte todo a string[][]
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false }) as string[][]
+        // Filtrar filas completamente vacías o con solo espacios
+        const filteredData = jsonData.filter(row => row && row.some(cell => cell && cell.toString().trim() !== ''))
+
+        if (filteredData.length === 0 || filteredData.every(row => row.every(cell => !cell || cell.toString().trim() === ''))) {
+           setError("The selected Excel sheet appears empty or contains no processable data.");
+           setIsLoading(false);
+           setSheetData([]); // Limpiar datos si no son válidos
+           return;
         }
+
         setSheetData(filteredData)
-        if (filteredData.length > 0 && filteredData[0].length >= 2) {
+        // Auto-seleccionar columnas si hay datos y al menos 2 columnas
+        if (filteredData.length > 0 && filteredData[0] && filteredData[0].length >= 2) {
           setFrontColumn("0"); setBackColumn("1");
+        } else if (filteredData.length > 0 && filteredData[0] && filteredData[0].length === 1) {
+          // Si solo hay una columna, seleccionar la primera para ambos por defecto
+          setFrontColumn("0"); setBackColumn("0");
+          setError("Only one column detected. Please verify Front and Back column selections."); // Añadir aviso
+        } else {
+             // Resetear columnas si no hay suficientes
+             setFrontColumn(""); setBackColumn("");
         }
+
       } catch (err) {
-        setError("Error processing the Excel file."); console.error(err);
+        setError("Error processing the Excel file. Ensure it's a valid .xlsx format."); console.error(err);
+        setSheetData([]); // Limpiar datos en caso de error
       } finally {
         setIsLoading(false);
       }
@@ -67,37 +84,71 @@ export function ImportXLSXDialog({ deckId, open, onOpenChange }: ImportXLSXDialo
   }
 
   const handleImport = async () => {
-    if (!sheetData.length || frontColumn === "" || backColumn === "") {
-      setError("Please select the columns for Front and Back"); return;
+    // Verificar que sheetData tenga al menos la fila de cabecera y una fila de datos
+    if (!sheetData || sheetData.length < 2 || frontColumn === "" || backColumn === "") {
+       setError("Please select a file with data and the columns for Front and Back.");
+       return;
     }
     setIsLoading(true); setError(null);
     const supabase = createClient();
     try {
       const frontIdx = Number.parseInt(frontColumn);
       const backIdx = Number.parseInt(backColumn);
-      const cardsToInsert = sheetData.slice(1).map((row) => ({
-        deck_id: deckId, front: row[frontIdx] ? row[frontIdx].toString() : "", back: row[backIdx] ? row[backIdx].toString() : "",
-        ease_factor: 2.5, interval: 0, repetitions: 0, next_review_date: new Date().toISOString(),
-      })).filter(card => card.front.trim() && card.back.trim());
 
-      if (validCards.length === 0) {
-        setError("No valid cards found in the file."); setIsLoading(false); return;
+       // Validar índices contra la longitud de la cabecera (primera fila)
+       const headerLength = sheetData[0]?.length ?? 0;
+       if (frontIdx < 0 || frontIdx >= headerLength || backIdx < 0 || backIdx >= headerLength) {
+           setError("Selected column index is out of bounds for the detected data.");
+           setIsLoading(false);
+           return;
+       }
+
+
+      // --- CORRECCIÓN AQUÍ ---
+      // Procesar filas a partir de la segunda (índice 1)
+      const cardsToInsert = sheetData.slice(1).map((row) => {
+          // Asegurarse de que row existe y tiene suficientes elementos
+          const frontValue = row && row[frontIdx] ? row[frontIdx].toString() : "";
+          const backValue = row && row[backIdx] ? row[backIdx].toString() : "";
+          return {
+            deck_id: deckId,
+            front: frontValue,
+            back: backValue,
+            ease_factor: 2.5,
+            interval: 0,
+            repetitions: 0,
+            next_review_date: new Date().toISOString(),
+          };
+      }).filter(card => card.front.trim() && card.back.trim()); // Filtrar tarjetas vacías
+
+      // --- CORRECCIÓN AQUÍ ---
+      // Usar cardsToInsert en lugar de validCards
+      if (cardsToInsert.length === 0) {
+        setError("No valid cards found in the file after filtering. Check column selection and data.");
+        setIsLoading(false);
+        return;
       }
-      
-      const { error: insertError } = await supabase.from("cards").insert(validCards);
+
+      // --- CORRECCIÓN AQUÍ ---
+      // Usar cardsToInsert en lugar de validCards
+      const { error: insertError } = await supabase.from("cards").insert(cardsToInsert);
       if (insertError) throw insertError;
-      
-      setImportSuccess(true); setImportedCount(validCards.length);
+
+      // --- CORRECCIÓN AQUÍ ---
+      // Usar cardsToInsert en lugar de validCards
+      setImportSuccess(true); setImportedCount(cardsToInsert.length);
       router.refresh();
       setTimeout(() => { onOpenChange(false); resetState(); }, 2000);
     } catch (error: any) {
       setError(error.message || "Error importing the cards");
+      console.error("Import error details:", error); // Log detallado del error
     } finally {
       setIsLoading(false);
     }
   }
 
-  const columns = sheetData.length > 0 ? sheetData[0] : []
+  // Extraer columnas de la primera fila si existe
+  const columns = sheetData && sheetData.length > 0 && sheetData[0] ? sheetData[0] : []
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { onOpenChange(isOpen); if (!isOpen) resetState(); }}>
@@ -105,7 +156,7 @@ export function ImportXLSXDialog({ deckId, open, onOpenChange }: ImportXLSXDialo
         <DialogHeader>
           <DialogTitle>Import cards from XLSX</DialogTitle>
           <DialogDescription>
-            Upload an .xlsx file and select the columns for the card's front and back.
+            Upload an .xlsx file and select the columns for the card's front and back. The first row should be headers.
           </DialogDescription>
         </DialogHeader>
         {importSuccess ? (
@@ -118,39 +169,67 @@ export function ImportXLSXDialog({ deckId, open, onOpenChange }: ImportXLSXDialo
           <>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <input id="xlsx-file-input" type="file" accept=".xlsx" onChange={handleFileChange} className="hidden" />
+                <input id="xlsx-file-input" type="file" accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={handleFileChange} className="hidden" />
                 <Button type="button" variant="outline" onClick={() => document.getElementById("xlsx-file-input")?.click()} className="w-full" disabled={isLoading}>
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                   {file ? file.name : "Select .xlsx file"}
                 </Button>
               </div>
-              {sheetData.length > 0 && (
+              {/* Solo mostrar selectores si hay datos y columnas */}
+              {sheetData.length > 0 && columns.length > 0 && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="front-column">Front Column</Label>
-                      <Select value={frontColumn} onValueChange={setFrontColumn}>
+                      <Select value={frontColumn} onValueChange={setFrontColumn} disabled={isLoading}>
                         <SelectTrigger id="front-column"><SelectValue placeholder="Select a column" /></SelectTrigger>
-                        <SelectContent>{columns.map((col, idx) => <SelectItem key={idx} value={idx.toString()}>Col {idx + 1}: {col || "(empty)"}</SelectItem>)}</SelectContent>
+                        <SelectContent>
+                          {/* Mostrar índice + valor (o placeholder si está vacío) */}
+                          {columns.map((col, idx) => (
+                            <SelectItem key={`front-${idx}`} value={idx.toString()}>
+                              Col {idx + 1}: {col?.toString().trim() || "(empty header)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="back-column">Back Column</Label>
-                      <Select value={backColumn} onValueChange={setBackColumn}>
+                      <Select value={backColumn} onValueChange={setBackColumn} disabled={isLoading}>
                         <SelectTrigger id="back-column"><SelectValue placeholder="Select a column" /></SelectTrigger>
-                        <SelectContent>{columns.map((col, idx) => <SelectItem key={idx} value={idx.toString()}>Col {idx + 1}: {col || "(empty)"}</SelectItem>)}</SelectContent>
+                        <SelectContent>
+                          {columns.map((col, idx) => (
+                            <SelectItem key={`back-${idx}`} value={idx.toString()}>
+                              Col {idx + 1}: {col?.toString().trim() || "(empty header)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                   </div>
+                   {/* Mostrar una vista previa de los datos si es posible */}
+                   {sheetData.length > 1 && (
+                     <div className="mt-2 text-xs text-muted-foreground">
+                       Preview (first data row):{' '}
+                       <strong>Front:</strong> "{sheetData[1]?.[parseInt(frontColumn, 10)] || 'N/A'}",{' '}
+                       <strong>Back:</strong> "{sheetData[1]?.[parseInt(backColumn, 10)] || 'N/A'}"
+                     </div>
+                   )}
                 </>
               )}
+               {/* Mostrar el botón de importar solo si hay datos válidos */}
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>Cancel</Button>
-              <Button type="button" onClick={handleImport} disabled={isLoading || !sheetData.length || frontColumn === "" || backColumn === ""}>
+               {/* Deshabilitar si no hay datos suficientes o no se seleccionaron columnas */}
+              <Button
+                type="button"
+                onClick={handleImport}
+                disabled={isLoading || sheetData.length < 2 || frontColumn === "" || backColumn === ""}
+              >
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {isLoading ? "Importing..." : `Import ${sheetData.length > 0 ? sheetData.length -1 : 0} Cards`}
+                {isLoading ? "Importing..." : `Import ${Math.max(0, sheetData.length - 1)} Cards`}
               </Button>
             </DialogFooter>
           </>
