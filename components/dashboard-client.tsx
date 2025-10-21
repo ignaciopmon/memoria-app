@@ -384,7 +384,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     // 1. Se suelta explícitamente sobre 'root-drop-area'.
     // 2. Se suelta sobre un mazo que ya está en la raíz.
     // 3. Se suelta sobre un elemento (`overItem`) que NO es una carpeta Y NO es un mazo dentro de la misma carpeta de origen del item activo.
-    const isMovingToRoot = isOverRootDropArea || isOverRootDeck ||
+    const isMovingToRoot = isOverRootArea || isOverRootDeck ||
                            (overItem && !overItem.is_folder && activeItem.parent_id && overItem.parent_id !== activeItem.parent_id);
 
     // --- FIN NUEVA LÓGICA ---
@@ -564,14 +564,15 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
 
              {/* Área de drop en la raíz */}
             <div
-              id="root-drop-area"
-              ref={setRootDroppableNodeRef}
-              className={cn(
-                "mt-8 rounded-lg border-2 border-dashed transition-all duration-150 ease-out",
-                isEditMode ? "min-h-[100px] border-border p-6" : "min-h-0 border-transparent p-0",
-                isEditMode && isDraggingOver && activeDragItem?.parent_id && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" // Solo resaltar si vienes de una carpeta
-              )}
-            >
+               id="root-drop-area"
+               ref={setRootDroppableNodeRef}
+               className={cn(
+                 "mt-8 rounded-lg border-2 border-dashed transition-all duration-150 ease-out",
+                 isEditMode ? "min-h-[100px] border-border p-6" : "min-h-0 border-transparent p-0",
+-                isEditMode && isDraggingOver && activeDragItem?.parent_id && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" // Solo resaltar si vienes de una carpeta
++                isEditMode && isOverRootArea && activeDragItem?.parent_id && "border-primary ring-2 ring-primary ring-offset-2 bg-primary/5" // Solo resaltar si vienes de una carpeta
+               )}
+             >
               {isEditMode && (
                 <p className="p-4 text-center text-sm text-muted-foreground pointer-events-none">
                   Drop decks here to move them out of folders.
