@@ -1,45 +1,19 @@
+// components/create-folder-dialog.tsx
 "use client"
 
 import type React from "react"
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+// Removidos imports innecesarios: useRouter, createClient, Input, Label
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { FolderPlus, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { FolderPlus, Construction } from "lucide-react" // Añadido Construction
 
-export function CreateFolderDialog({ onFolderCreated }: { onFolderCreated: () => void }) {
+// Removido onFolderCreated de las props, ya no es necesario
+export function CreateFolderDialog() {
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  // Removidos estados de name y isLoading
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    const supabase = createClient()
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error("User not authenticated")
-
-      const { error } = await supabase.from("decks").insert({
-        name,
-        user_id: user.id,
-        is_folder: true,
-      })
-      if (error) throw error
-
-      setName("")
-      setOpen(false)
-      onFolderCreated()
-    } catch (error) {
-      console.error("Error creating folder:", error)
-      alert("Error creating folder.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // Removida función handleSubmit
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -49,33 +23,23 @@ export function CreateFolderDialog({ onFolderCreated }: { onFolderCreated: () =>
           New Folder
         </Button>
       </DialogTrigger>
+      {/* Contenido modificado para mostrar mensaje */}
       <DialogContent>
-        <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Create a new folder</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+                <Construction className="h-5 w-5 text-orange-500"/>
+                Feature Under Maintenance
+            </DialogTitle>
+            <DialogDescription>
+                The folder organization feature is temporarily unavailable while we make improvements. Your existing decks remain accessible. We apologize for any inconvenience!
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Folder Name *</Label>
-              <Input
-                id="name"
-                placeholder="E.g., Biology"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-          </div>
+           {/* Solo botón para cerrar */}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading || !name.trim()}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? "Creating..." : "Create Folder"}
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
-        </form>
       </DialogContent>
     </Dialog>
   )
