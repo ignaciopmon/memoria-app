@@ -69,7 +69,7 @@ type Item = {
   created_at?: string;
 };
 
-// --- Componente FolderView (sin cambios) ---
+// --- Componente FolderView (sin cambios respecto a la versión anterior) ---
 function FolderView({
   folder,
   decks,
@@ -91,7 +91,7 @@ function FolderView({
   const folderColor = folder.color || "hsl(var(--border))";
   const setNodeRef = useMemo(() => setDroppableNodeRef, [setDroppableNodeRef]);
 
-  // FIX: Solo no renderizar si NO está en modo edición Y está vacía
+  // FIX: Solo no renderizar si NO está en modo edición Y está vacía Y NO está expandida
   if (!isEditMode && decks.length === 0 && !isExpanded) return null;
 
   return (
@@ -157,7 +157,7 @@ function FolderView({
               />
             </div>
           ) : (
-             // Mostrar botón solo si hay mazos o está en modo edición
+             // Mostrar botón solo si hay mazos dentro o si estamos en modo edición (para coherencia visual)
             (decks.length > 0 || isEditMode) && (
                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}>
                     {isExpanded ? <ChevronDown /> : <ChevronRight />}
@@ -191,7 +191,7 @@ function FolderView({
   );
 }
 
-// --- Componente DraggableDeckItem (sin cambios) ---
+// --- Componente DraggableDeckItem (sin cambios respecto a la versión anterior) ---
 function DraggableDeckItem({
   item,
   isEditMode,
@@ -229,15 +229,17 @@ function DraggableDeckItem({
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", item.id);
     if (error) {
-      setIsDeleting(false);
+      setIsDeleting(false); // Resetear solo en caso de error
       toast({
         variant: "destructive",
         title: "Error",
         description: "Error sending deck to trash.",
       });
     } else {
+      // Dejar que el padre (DashboardClient) maneje el re-renderizado
       onUpdate((prevItems) => prevItems.filter((i) => i.id !== item.id));
       toast({ title: "Success", description: "Deck moved to trash." });
+      // No necesitamos setIsDeleting(false) aquí, el componente se desmontará o re-renderizará
     }
   };
 
@@ -309,7 +311,7 @@ function DraggableDeckItem({
           <div
             {...listeners}
             {...attributes}
-            className={`cursor-grab p-1 touch-none ${isDeleting ? 'cursor-not-allowed' : ''}`}
+            className={`cursor-grab p-1 touch-none ${isDeleting ? 'cursor-not-allowed opacity-50' : ''}`} // Estilo si está borrando
             title="Move deck"
             style={{ touchAction: 'none' }}
           >
@@ -322,7 +324,7 @@ function DraggableDeckItem({
   );
 }
 
-// ---- Componente Principal del Dashboard (Refactorizado) ----
+// ---- Componente Principal del Dashboard (Refactorizado v2) ----
 export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   const [items, setItems] = useState<Item[]>(initialItems);
   const [activeDragItem, setActiveDragItem] = useState<Item | null>(null);
@@ -331,7 +333,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
   const { toast } = useToast();
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
-  // *** Hooks siempre se llaman ***
+  // Hooks siempre se llaman
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -358,22 +360,15 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     }
   }, [initialItems]);
 
-  // *** useMemo siempre se llama ***
+  // useMemo siempre se llama
   const { folders, rootDecks, decksInFolders } = useMemo(() => {
     const foldersMap = new Map<string, Item>();
     const rootDecksList: Item[] = [];
     const decksInFoldersMap = new Map<string, Item[]>();
-    // Ordenar items aquí dentro si es necesario, o basarse en el estado `items` ya ordenado
-     const sortedItems = [...items].sort((a, b) => {
-        if (a.is_folder && !b.is_folder) return -1;
-        if (!a.is_folder && b.is_folder) return 1;
-        const posA = a.position ?? Infinity;
-        const posB = b.position ?? Infinity;
-        if (posA !== posB) return posA - posB;
-        return (a.created_at && b.created_at) ? a.created_at.localeCompare(b.created_at) : 0;
-    });
+    // Usar el estado `items` directamente, ya que useEffect lo ordena inicialmente
+    const currentItems = items; // Podrías re-ordenar aquí si fuera necesario en cada render
 
-    for (const item of sortedItems) {
+    for (const item of currentItems) {
       if (item.is_folder) {
         foldersMap.set(item.id, item);
         if (!decksInFoldersMap.has(item.id)) {
@@ -384,21 +379,25 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
           decksInFoldersMap.set(item.parent_id, []);
         }
         decksInFoldersMap.get(item.parent_id)!.push(item);
-        // Ordenar mazos dentro de carpetas si es necesario
-        // decksInFoldersMap.get(item.parent_id)!.sort(...);
+        // Opcional: Ordenar mazos dentro de carpetas si es relevante para la UI
+        // decksInFoldersMap.get(item.parent_id)!.sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity));
       } else {
         rootDecksList.push(item);
       }
     }
-    const sortedFolders = Array.from(foldersMap.values())//.sort(/* Criterio de ordenación para carpetas */);
-    return { folders: sortedFolders, rootDecks: rootDecksList, decksInFolders: decksInFoldersMap };
+    // Ordenar carpetas y mazos raíz basados en 'position' o 'created_at' como fallback
+    const sortedFolders = Array.from(foldersMap.values()).sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity) || (a.created_at && b.created_at ? a.created_at.localeCompare(b.created_at) : 0));
+    const sortedRootDecks = rootDecksList.sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity) || (a.created_at && b.created_at ? a.created_at.localeCompare(b.created_at) : 0));
+
+    return { folders: sortedFolders, rootDecks: sortedRootDecks, decksInFolders: decksInFoldersMap };
   }, [items]);
 
-  // *** useMemo siempre se llama ***
+  // useMemo siempre se llama
   const draggableItemIds = useMemo(() => items.filter(item => !item.is_folder).map(item => item.id), [items]);
 
-  // Funciones handler (sin cambios internos significativos, solo llamadas a setState)
-   const handleDragStart = (event: DragStartEvent) => {
+  // --- Funciones Handler (sin cambios internos, solo usan el estado y lo actualizan) ---
+  const handleDragStart = (event: DragStartEvent) => {
+    // ... (sin cambios)
      if (!isEditMode) return
     const { active } = event
     const item = items.find((i) => i.id === active.id)
@@ -407,9 +406,9 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     } else {
       setActiveDragItem(null)
     }
-  }
-
+  };
   const handleDragEnd = async (event: DragEndEvent) => {
+    // ... (sin cambios lógicos internos, solo usa `items`, `folders`, `initialItems`)
      setActiveDragItem(null)
     const { active, over } = event
     const activeItem = items.find((item) => item.id === active.id)
@@ -418,135 +417,155 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     const overId = over.id as string
     if (activeId === overId) return
     const supabase = createClient()
-    let dbUpdate: Partial<Item> = {}
+    let dbUpdate: Partial<Item> = {} // Update for the dragged item specifically
     let newItems = [...items]
     let successMessage = ""
     let errorMessage = ""
     const isOverFolder = folders.some((f) => f.id === overId)
     const isOverRootArea = overId === 'root-drop-area';
     const overItem = items.find(item => item.id === overId);
+    // isOverRootDeck: Check if dropping over a deck that is NOT in a folder
     const isOverRootDeck = overItem && !overItem.is_folder && !overItem.parent_id;
     const oldIndex = newItems.findIndex((item) => item.id === activeId)
 
+    // Store updates for multiple items if reordering occurs
+    const batchUpdates: { [id: string]: Partial<Item> } = {};
+
     try {
+      // 1. Moving INTO a folder
       if (isOverFolder && activeItem.parent_id !== overId) {
-        newItems[oldIndex] = { ...activeItem, parent_id: overId, position: null };
-        dbUpdate = { parent_id: overId, position: null };
+        dbUpdate = { parent_id: overId, position: null }; // Reset position when moving into folder
+        newItems = newItems.map(item => item.id === activeId ? { ...item, ...dbUpdate } : item);
         successMessage = "Deck moved into folder.";
         errorMessage = "Failed to move deck into folder.";
       }
+      // 2. Moving OUT of a folder (to root area or over another root deck)
       else if (activeItem.parent_id && (isOverRootArea || isOverRootDeck)) {
-         let newIndex = -1;
+         let targetIndex = -1;
          if (isOverRootDeck) {
-             newIndex = newItems.findIndex(item => item.id === overId);
-         } else {
-             // Encuentra el índice del último elemento raíz (carpeta o mazo raíz)
+             // Find the index of the item being dropped onto
+             targetIndex = newItems.findIndex(item => item.id === overId);
+         } else { // Dropping onto the root drop area
+             // Find the index AFTER the last root item (folder or root deck)
              const lastRootIndex = newItems.findLastIndex(item => item.is_folder || !item.parent_id);
-             newIndex = lastRootIndex + 1;
+             targetIndex = lastRootIndex + 1;
          }
-         
-         // Actualizar parent_id antes de mover para el cálculo correcto
-         newItems = newItems.map(item => item.id === activeId ? { ...item, parent_id: null } : item);
-         const oldIndexAfterParentUpdate = newItems.findIndex((item) => item.id === activeId); // Re-buscar índice por si acaso
 
-         newItems = arrayMove(newItems, oldIndexAfterParentUpdate, newIndex);
-         
-         // Recalcular posiciones solo para los elementos raíz
+         // Update parent_id before moving for correct context
+         const itemWithUpdatedParent = { ...activeItem, parent_id: null };
+         newItems.splice(oldIndex, 1); // Remove from old position
+         newItems.splice(targetIndex > oldIndex ? targetIndex -1 : targetIndex, 0, itemWithUpdatedParent); // Insert at new position
+
+         // --- Recalculate positions ONLY for ROOT items ---
          const rootItemsAfterMove = newItems.filter(item => item.is_folder || !item.parent_id);
-         const updatedPositions: { [id: string]: { position: number, parent_id: string | null } } = {};
-         
          for (let i = 0; i < rootItemsAfterMove.length; i++) {
+             const currentItem = rootItemsAfterMove[i];
              const prevPos = rootItemsAfterMove[i - 1]?.position;
              const nextPos = rootItemsAfterMove[i + 1]?.position;
-             const currentItem = rootItemsAfterMove[i];
              const calculatedPos = calculateNewPosition(prevPos, nextPos, i);
-             
-             // Marcar para actualización si es el item movido o si su posición calculada es diferente
-             if(currentItem.id === activeId || currentItem.position !== calculatedPos) {
-                  updatedPositions[currentItem.id] = { position: calculatedPos, parent_id: currentItem.parent_id }; // Usar parent_id null aquí
+
+             if (currentItem.position !== calculatedPos || currentItem.id === activeId) {
+                // Ensure parent_id is null for root items being updated
+                batchUpdates[currentItem.id] = { position: calculatedPos, parent_id: null };
+                // Update newItems array immediately for next iteration's prevPos/nextPos
+                const idxInNewItems = newItems.findIndex(it => it.id === currentItem.id);
+                if (idxInNewItems > -1) {
+                    newItems[idxInNewItems] = { ...newItems[idxInNewItems], position: calculatedPos, parent_id: null };
+                }
              }
          }
+         // Ensure the main dbUpdate for the moved item is captured if it was recalculated
+         if (batchUpdates[activeId]) {
+            dbUpdate = batchUpdates[activeId];
+         } else {
+             // If its position wasn't recalculated but it moved out, ensure parent_id is null
+             dbUpdate = { parent_id: null, position: itemWithUpdatedParent.position }; // Keep existing position if not recalculated
+             batchUpdates[activeId] = dbUpdate; // Add to batch
+         }
+         // --- End Recalculation ---
 
-        newItems = newItems.map(item => {
-             if (updatedPositions[item.id] !== undefined) {
-                 if (item.id === activeId) {
-                     dbUpdate = { parent_id: null, position: updatedPositions[activeId].position };
-                 }
-                 return { ...item, position: updatedPositions[item.id].position, parent_id: updatedPositions[item.id].parent_id };
-             }
-             return item;
-         });
-        successMessage = "Deck moved out of folder.";
-        errorMessage = "Failed to move deck out of folder.";
+         successMessage = "Deck moved out of folder.";
+         errorMessage = "Failed to move deck out of folder.";
       }
+      // 3. Reordering within ROOT decks
        else if (!activeItem.parent_id && isOverRootDeck) {
-         const newIndex = newItems.findIndex(item => item.id === overId);
-         if (oldIndex === newIndex) return; // No hay cambio real
-         
-         newItems = arrayMove(newItems, oldIndex, newIndex);
+         const targetIndex = newItems.findIndex(item => item.id === overId);
+         if (oldIndex === targetIndex) return; // No change
 
-         // Recalcular posiciones solo para los elementos raíz
+         newItems = arrayMove(newItems, oldIndex, targetIndex);
+
+          // --- Recalculate positions ONLY for ROOT items ---
          const rootItemsAfterMove = newItems.filter(item => item.is_folder || !item.parent_id);
-         const updatedPositions: { [id: string]: { position: number, parent_id: string | null } } = {};
-
          for (let i = 0; i < rootItemsAfterMove.length; i++) {
+             const currentItem = rootItemsAfterMove[i];
              const prevPos = rootItemsAfterMove[i - 1]?.position;
              const nextPos = rootItemsAfterMove[i + 1]?.position;
-             const currentItem = rootItemsAfterMove[i];
              const calculatedPos = calculateNewPosition(prevPos, nextPos, i);
 
-             if(currentItem.id === activeId || currentItem.position !== calculatedPos) {
-                  updatedPositions[currentItem.id] = { position: calculatedPos, parent_id: currentItem.parent_id };
+             if (currentItem.position !== calculatedPos) {
+                batchUpdates[currentItem.id] = { position: calculatedPos, parent_id: null }; // parent_id should already be null
+                // Update newItems array immediately
+                const idxInNewItems = newItems.findIndex(it => it.id === currentItem.id);
+                 if (idxInNewItems > -1) {
+                    newItems[idxInNewItems] = { ...newItems[idxInNewItems], position: calculatedPos };
+                }
              }
          }
+         // Ensure the dragged item's update is captured
+         if (batchUpdates[activeId]) {
+             dbUpdate = batchUpdates[activeId];
+         } else if (newItems.find(it=>it.id===activeId)?.position !== activeItem.position) {
+             // If only the moved item's effective position changed but wasn't in batch
+              const finalPos = newItems.find(it=>it.id===activeId)?.position;
+              dbUpdate = { position: finalPos, parent_id: null };
+              batchUpdates[activeId] = dbUpdate;
+         }
+         // --- End Recalculation ---
 
-         dbUpdate = updatedPositions[activeId] || {}; // Update para el item movido
-         
-         newItems = newItems.map(item => {
-             if (updatedPositions[item.id] !== undefined) {
-                 return { ...item, position: updatedPositions[item.id].position, parent_id: updatedPositions[item.id].parent_id };
-             }
-             return item;
-         });
          successMessage = "Deck reordered.";
          errorMessage = "Failed to reorder deck.";
       } else {
-        // No hacer nada si se suelta sobre sí mismo o en un área no válida dentro de su contexto actual
+        // Dropped in an invalid location (e.g., inside same folder, on root area when already root)
         return;
       }
-      
-      // Actualizar estado local inmediatamente
+
+      // Update local state IMMEDIATELY with the potentially reordered and position-updated array
       setItems(newItems);
 
-      // --- Actualización de la Base de Datos ---
-      if (Object.keys(dbUpdate).length > 0) {
-        const updatePromises = Object.entries(updatedPositions).map(([id, updateData]) =>
-            supabase.from("decks").update({ position: updateData.position, parent_id: updateData.parent_id }).eq("id", id)
+      // --- Database Update ---
+      if (Object.keys(batchUpdates).length > 0) {
+        const updatePromises = Object.entries(batchUpdates).map(([id, updateData]) =>
+            supabase.from("decks").update(updateData).eq("id", id)
         );
-        // Asegurarse de que el elemento arrastrado se actualiza si no estaba en updatedPositions
-        if (!updatedPositions[activeId] && Object.keys(dbUpdate).length > 0) {
-             updatePromises.push(supabase.from("decks").update(dbUpdate).eq("id", activeId));
-        }
 
         const results = await Promise.all(updatePromises);
-        const firstError = results.find(result => result.error);
+        const firstErrorResult = results.find(result => result.error);
 
-        if (firstError) {
-            throw new Error(errorMessage + ` (${firstError.error.message})`);
+        if (firstErrorResult) {
+            throw new Error(errorMessage + ` (${firstErrorResult.error.message})`);
         } else {
             toast({ title: "Success", description: successMessage });
-             // No es necesario llamar a router.refresh() si la UI ya está actualizada
+            // Refresh might still be needed if counts or other derived data changed server-side
+            // Consider if router.refresh() is necessary based on what needs updating visually
+             // router.refresh();
         }
-      } else {
-          console.warn("DragEnd handled but no DB update was generated for activeId:", activeId);
-          // Si no hay dbUpdate pero sí hubo movimiento local (arrayMove),
-          // podría indicar un error lógico o un caso no manejado.
-          // Considera revertir el estado local si es necesario.
+      } else if (Object.keys(dbUpdate).length > 0 && !batchUpdates[activeId]) {
+         // Handle cases where only the single dragged item needs updating (like moving into a folder)
+          const { error } = await supabase.from("decks").update(dbUpdate).eq("id", activeId);
+          if (error) {
+              throw new Error(errorMessage + ` (${error.message})`);
+          } else {
+              toast({ title: "Success", description: successMessage });
+              // router.refresh();
+          }
       }
+       else {
+           console.warn("DragEnd handled but no DB update was needed for activeId:", activeId);
+       }
 
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message || "An error occurred." });
-        // Revertir al estado inicial ordenado en caso de error
+        // Revert UI to initial state on error
         const sortedInitial = [...initialItems].sort((a, b) => {
              const posA = a.position ?? Infinity;
              const posB = b.position ?? Infinity;
@@ -555,14 +574,15 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         });
         setItems(sortedInitial);
     }
-  }
+  };
 
   const calculateNewPosition = (
-      prevPos: number | null | undefined,
-      nextPos: number | null | undefined,
-      currentIndex: number // El índice DESPUÉS de mover el elemento
+    prevPos: number | null | undefined,
+    nextPos: number | null | undefined,
+    currentIndex: number
   ): number => {
-    const BASE_INCREMENT = 1000;
+    // ... (sin cambios)
+     const BASE_INCREMENT = 1000;
     const MIN_POSITION = BASE_INCREMENT / 2; // Empezar con algo de espacio
 
     let newPos: number;
@@ -584,21 +604,18 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
     // Manejo de colisiones o precisión insuficiente
     if (newPos <= (prevPos ?? 0) || newPos >= (nextPos ?? Infinity) || newPos === prevPos || newPos === nextPos) {
        console.warn("Potential position collision or precision issue, recalculating based on index as fallback.");
-       // Fallback simple: usar índice * incremento. Necesitará reordenar más elementos.
-       // O podrías implementar una lógica más compleja para reasignar posiciones alrededor.
        newPos = (currentIndex + 1) * BASE_INCREMENT;
     }
 
-
-    // Asegurar que la posición sea al menos 1 (o un mínimo positivo)
     return Math.max(1, newPos);
   };
 
-  // *** Renderizado condicional DENTRO del return ***
+  // *** Renderizado principal ***
   return (
     <>
+      {/* Header (sin cambios) */}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
+         <div>
           <h1 className="text-3xl font-bold">My Decks</h1>
           <p className="text-muted-foreground">
             Manage your study flashcard decks
@@ -618,71 +635,95 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
         </div>
       </div>
 
+      {/* *** Lógica condicional movida aquí DENTRO del return *** */}
       {items.length === 0 && !isEditMode ? (
-         <div className="flex h-[60vh] flex-col items-center justify-center text-center">
-            <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
-            <h2 className="text-2xl font-semibold">Your dashboard is empty</h2>
-            <p className="mb-6 text-muted-foreground">
+        // --- Renderizado cuando está vacío y NO en modo edición ---
+        <div className="flex h-[60vh] flex-col items-center justify-center text-center">
+          <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
+          <h2 className="text-2xl font-semibold">Your dashboard is empty</h2>
+          <p className="mb-6 text-muted-foreground">
             Create your first deck to get started.
-            </p>
-            <div className="flex gap-2">
+          </p>
+          <div className="flex gap-2">
             <CreateDeckDialog onDeckCreated={() => router.refresh()} size="lg" />
             <CreateAIDeckDialog />
-            </div>
+          </div>
         </div>
-        ) : (
+      ) : (
+        // --- Renderizado cuando HAY items O estamos en modo edición ---
         <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         >
-            <SortableContext items={draggableItemIds} strategy={rectSortingStrategy}>
+          <SortableContext items={draggableItemIds} strategy={rectSortingStrategy}>
             <div className="space-y-8">
-                {folders.map((folder) => {
+              {/* Renderizar carpetas */}
+              {folders.map((folder) => {
                 const decksInCurrentFolder = decksInFolders.get(folder.id) || [];
+                // Asegurarse de que FolderView maneje correctamente el caso de 0 decks
                 return (
-                    <FolderView
+                  <FolderView
                     key={folder.id}
                     folder={folder}
                     decks={decksInCurrentFolder}
                     isEditMode={isEditMode}
                     onUpdate={setItems}
-                    />
+                  />
                 );
-                })}
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {rootDecks.map((deck) => (
+              })}
+
+              {/* Renderizar mazos raíz */}
+              {rootDecks.length > 0 && (
+                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {rootDecks.map((deck) => (
                     <DraggableDeckItem
-                    key={deck.id}
-                    item={deck}
-                    isEditMode={isEditMode}
-                    onUpdate={setItems}
+                        key={deck.id}
+                        item={deck}
+                        isEditMode={isEditMode}
+                        onUpdate={setItems}
                     />
-                ))}
-                </div>
+                    ))}
+                 </div>
+              )}
+
+              {/* Mensaje si está vacío PERO en modo edición */}
+              {items.length === 0 && isEditMode && (
+                <p className="text-center text-muted-foreground py-8">
+                  Dashboard is empty. Add a deck or folder using the buttons above.
+                </p>
+              )}
             </div>
-            {/* Área de drop en la raíz */}
+             {/* Área de drop en la raíz - visible en modo edición */}
             <div
                 id="root-drop-area"
                 ref={useDroppable({ id: 'root-drop-area', disabled: !isEditMode }).setNodeRef}
-                className={`min-h-10 mt-8 rounded-md border-2 border-dashed transition-colors ${isEditMode ? 'border-border' : 'border-transparent'}`} // Estilo visible en modo edición
+                 className={`min-h-20 mt-8 rounded-lg border-2 border-dashed transition-colors duration-300 ease-in-out ${
+                    isEditMode
+                    ? 'border-border hover:border-primary/50' // Visible y con feedback hover
+                    : 'border-transparent' // Invisible si no está en modo edición
+                 }`}
             >
                 {isEditMode && (
-                     <p className="p-4 text-center text-sm text-muted-foreground">
-                        Drop decks here to move them out of folders or reorder root decks.
-                     </p>
+                     <div className="flex items-center justify-center h-full">
+                        <p className="p-4 text-center text-sm text-muted-foreground">
+                            Drop decks here to move to root or reorder.
+                        </p>
+                     </div>
                  )}
             </div>
-            </SortableContext>
-            <DragOverlay>
+          </SortableContext>
+          <DragOverlay>
             {activeDragItem ? <DeckCard deck={activeDragItem} isEditMode /> : null}
-            </DragOverlay>
+          </DragOverlay>
         </DndContext>
-       )}
+      )}
 
+      {/* Popup de bienvenida (sin cambios) */}
       <AlertDialog open={showWelcomePopup} onOpenChange={setShowWelcomePopup}>
-        <AlertDialogContent>
+        {/* ... contenido del AlertDialog ... */}
+         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Info className="h-5 w-5 text-blue-500" /> Welcome to Memoria!
