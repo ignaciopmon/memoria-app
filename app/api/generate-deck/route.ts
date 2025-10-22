@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import pdfParse from 'pdf-parse'; // <-- CORRECCIÓN DE IMPORTACIÓN
+const pdfParse = require('pdf-parse');
 
 export const dynamic = "force-dynamic";
 

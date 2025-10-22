@@ -114,19 +114,18 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
     const file = e.target.files?.[0];
     if (file && file.type === "application/pdf") {
       setPdfFile(file);
-      setError("");
+      setErrorMessage("");
     } else {
       setPdfFile(null);
-      setError("Please select a valid PDF file.");
+      setErrorMessage("Please select a valid PDF file.");
       if (fileInputRef.current) fileInputRef.current.value = ""; // Clear invalid file
     }
   };
 
   // Determine if submit should be disabled
-  const isSubmitDisabled = isLoading || !deckName.trim() ||
+const isSubmitDisabled = view === 'loading' || !deckName.trim() || // <-- Changed isLoading
                            (generationSource === 'topic' && !topic.trim()) ||
                            (generationSource === 'pdf' && !pdfFile);
-
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { setOpen(isOpen); if (!isOpen) setTimeout(resetForm, 300)}}>
       <DialogTrigger asChild>
@@ -190,7 +189,7 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
                         <Upload className="mr-2 h-4 w-4" />
                         {pdfFile ? pdfFile.name : "Select PDF File"}
                       </Button>
-                      {error && !pdfFile && <p className="text-sm text-destructive">{error}</p>}
+                      {errorMessage && !pdfFile && <p className="text-sm text-destructive">{errorMessage}</p>}
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="pageRange">Page Range (Optional)</Label>
@@ -262,15 +261,14 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
                     </div>
                 </div>
                  {/* Display general error if exists and not related to file */}
-                {error && pdfFile && <p className="text-sm text-destructive">{error}</p>}
+                {errorMessage && pdfFile && <p className="text-sm text-destructive">{errorMessage}</p>}
               </div>
 <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
                 {/* Updated disable logic - CORREGIDO isSubmitDisabled */}
                 <Button type="submit" disabled={isSubmitDisabled}>
-                    {/* CORREGIDO isLoading */}
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Sparkles className="mr-2 h-4 w-4"/>}
-                    Generate Deck
+                    {view === 'loading' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Sparkles className="mr-2 h-4 w-4"/>}
+                    {view === 'loading' ? 'Generating...' : 'Generate Deck'}
                 </Button>
               </DialogFooter>            </>
           )}
