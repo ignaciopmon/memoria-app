@@ -264,15 +264,15 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
                  {/* Display general error if exists and not related to file */}
                 {error && pdfFile && <p className="text-sm text-destructive">{error}</p>}
               </div>
-              <DialogFooter>
+<DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                {/* Updated disable logic */}
+                {/* Updated disable logic - CORREGIDO isSubmitDisabled */}
                 <Button type="submit" disabled={isSubmitDisabled}>
+                    {/* CORREGIDO isLoading */}
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Sparkles className="mr-2 h-4 w-4"/>}
                     Generate Deck
                 </Button>
-              </DialogFooter>
-            </>
+              </DialogFooter>            </>
           )}
 
           {/* Loading View */}

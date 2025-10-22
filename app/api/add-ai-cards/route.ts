@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import pdf from 'pdf-parse'; // Import pdf-parse
+import pdfParse from 'pdf-parse'; // <-- CORRECCIÓN DE IMPORTACIÓN
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         try {
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-            const data = await pdf(buffer);
+            const data = await pdfParse(buffer); // <-- USO CORREGIDO
             const totalPages = data.numpages;
             let targetPages: number[] | null = null;
 
@@ -237,8 +237,12 @@ export async function POST(request: Request) {
     const limitedCardsToInsert = cardsToInsert.slice(0, cardCount);
 
     if (limitedCardsToInsert.length === 0) {
-        return NextResponse.json({ success: true, addedCount: 0, message: "No new cards generated or all generated cards were potentially duplicates." });
+        // It's possible the AI generated nothing new, or only duplicates it identified.
+        // Return success but indicate zero cards were added.
+        console.warn("AI generated 0 valid new cards after filtering duplicates/similar content or based on source material.")
+        return NextResponse.json({ success: true, addedCount: 0, message: "No new unique cards could be generated based on the provided context and existing cards." });
     }
+
 
     const { error: cardsError } = await supabase
         .from('cards')

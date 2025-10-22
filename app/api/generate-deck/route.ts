@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import pdf from 'pdf-parse'; // Import pdf-parse
+import pdfParse from 'pdf-parse'; // <-- CORRECCIÓN DE IMPORTACIÓN
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
         try {
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-            const data = await pdf(buffer);
+            const data = await pdfParse(buffer); // <-- USO CORREGIDO
 
             const totalPages = data.numpages;
             let targetPages: number[] | null = null;
