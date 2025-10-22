@@ -24,23 +24,39 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-  // Modificar la consulta para excluir explícitamente las carpetas
+  // --- CORRECCIÓN EN LA CONSULTA ---
+  // Modificar la consulta para contar solo las tarjetas NO borradas
   const { data: allItems, error } = await supabase
     .from("decks")
-    .select(`*, cards:cards(count)`)
-    .is("deleted_at", null)
-    .eq("is_folder", false) // <-- AÑADIDO: Excluir carpetas aquí
-    .order("position", { ascending: true, nullsFirst: false }) // <-- Ordenar por posición (nulls al final)
-    .order("created_at", { ascending: false }) // <-- Orden secundario por creación
+    .select(`
+      id,
+      name,
+      description,
+      color,
+      position,
+      created_at,
+      cards!inner(count)
+    `)                             // Selecciona explícitamente y pide el count de 'cards'
+    .is("deleted_at", null)      // Asegura que el deck no esté borrado
+    .eq("is_folder", false)     // Asegura que no sea una carpeta
+    .is('cards.deleted_at', null) // <<< FILTRA LAS TARJETAS QUE SE CUENTAN
+    .order("position", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+  // --- FIN DE LA CORRECCIÓN ---
 
   if (error) {
-    console.error("Error fetching decks:", error)
+    console.error("Error fetching decks with active card count:", error)
+    // Considera devolver un estado de error o un array vacío si prefieres
   }
 
-  // El mapeo ya no necesita filtrar, solo calcular cardCount
+  // El mapeo sigue funcionando porque la estructura devuelta es la misma,
+  // pero el 'count' ahora está filtrado por la consulta.
   const itemsWithCount = allItems?.map((item) => ({
     ...item,
-    cardCount: item.cards?.[0]?.count || 0,
+    cardCount: item.cards && item.cards.length > 0 ? item.cards[0].count : 0, // Ajuste para manejar el caso donde cards puede ser [] si no hay activas
+    // Asegurarse de que las propiedades esperadas por DraggableDeckItem estén presentes
+    is_folder: false, // Añadir explícitamente si es necesario en el componente hijo
+    parent_id: null,  // Añadir explícitamente si es necesario en el componente hijo
   })) || []
 
 return (
@@ -98,7 +114,7 @@ return (
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8">
-          {/* Pasar solo los mazos filtrados */}
+          {/* Pasar los items con el conteo ya corregido */}
           <DashboardClient initialItems={itemsWithCount} />
         </div>
       </main>
