@@ -221,7 +221,7 @@ export async function POST(request: Request) {
 
     try {
         console.log("Calling AI model...");
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Or "gemini-pro"
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" }); // Or "gemini-pro"
         const result = await model.generateContent(prompt);
         const response = await result.response;
         text = response.text();
