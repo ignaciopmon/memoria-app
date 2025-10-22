@@ -43,7 +43,7 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
   const [language, setLanguage] = useState("Spanish")
   const [difficulty, setDifficulty] = useState("medium")
 
-  const [errorMessage, setErrorMessage] = useState("")
+  const [errorMessage, setErrorMessage] = useState("") // Renamed 'error' state to 'errorMessage' for clarity
   const [addedCount, setAddedCount] = useState(0)
 
   const router = useRouter()
@@ -58,7 +58,7 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
     setCardCount("10")
     setLanguage("Spanish")
     setDifficulty("medium")
-    setErrorMessage("")
+    setErrorMessage("") // Use setErrorMessage
     setAddedCount(0)
     setView('form')
   }
@@ -67,7 +67,7 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setView('loading')
-    setErrorMessage("")
+    setErrorMessage("") // Use setErrorMessage
 
     const formData = new FormData();
     formData.append('deckId', deckId); // Keep existing deck ID
@@ -78,12 +78,17 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
     formData.append('generationSource', generationSource); // Send source type
 
     if (generationSource === 'topic') {
+      if (!topic.trim()) { // Added check here
+         setErrorMessage("Please provide a topic description.");
+         setView('form');
+         return;
+      }
       formData.append('topic', topic);
     } else if (generationSource === 'pdf' && pdfFile) {
       formData.append('pdfFile', pdfFile);
       formData.append('pageRange', pageRange); // Send page range
     } else if (generationSource === 'pdf' && !pdfFile) {
-        setErrorMessage("Please select a PDF file.");
+        setErrorMessage("Please select a PDF file."); // Use setErrorMessage
         setView('form');
         return;
     }
@@ -106,7 +111,7 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
       router.refresh() // Refresh the deck page
 
     } catch (error: unknown) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to add cards.")
+      setErrorMessage(error instanceof Error ? error.message : "Failed to add cards.") // Use setErrorMessage
       setView('error')
     }
   }
@@ -115,19 +120,21 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
     const file = e.target.files?.[0];
     if (file && file.type === "application/pdf") {
       setPdfFile(file);
-      setError(""); // Use setError for consistency
+      setErrorMessage(""); // Use setErrorMessage
     } else {
       setPdfFile(null);
-      setError("Please select a valid PDF file.");
+      setErrorMessage("Please select a valid PDF file."); // Use setErrorMessage
       if (fileInputRef.current) fileInputRef.current.value = ""; // Clear invalid file
     }
   };
 
   // Determine if submit should be disabled
-   const isSubmitDisabled = isLoading ||
+   const isSubmitDisabled = view === 'loading' || // Also disable if loading
                            (generationSource === 'topic' && !topic.trim()) ||
                            (generationSource === 'pdf' && !pdfFile);
 
+
+  // *** The actual JSX rendering starts here ***
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { setOpen(isOpen); if (!isOpen) setTimeout(resetForm, 300)}}>
       <DialogTrigger asChild>
@@ -186,8 +193,8 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
                         <Upload className="mr-2 h-4 w-4" />
                         {pdfFile ? pdfFile.name : "Select PDF File"}
                       </Button>
-                      {/* Changed 'error' state usage */}
-                      {error && !pdfFile && <p className="text-sm text-destructive">{error}</p>}
+                      {/* Changed 'errorMessage' state usage */}
+                      {errorMessage && !pdfFile && <p className="text-sm text-destructive">{errorMessage}</p>}
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="pageRange">Page Range (Optional)</Label>
@@ -259,18 +266,19 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
                     </div>
                 </div>
                  {/* Display general error if exists and not related to file */}
-                {/* Changed 'error' state usage */}
-                {error && pdfFile && <p className="text-sm text-destructive">{error}</p>}
+                {/* Changed 'errorMessage' state usage */}
+                {errorMessage && pdfFile && <p className="text-sm text-destructive">{errorMessage}</p>}
               </div>
-<DialogFooter>
+              <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                 {/* Updated disable logic - CORREGIDO isSubmitDisabled */}
+                {/* Updated disable logic */}
                 <Button type="submit" disabled={isSubmitDisabled}>
-                     {/* CORREGIDO isLoading */}
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Sparkles className="mr-2 h-4 w-4"/>}
-                    Generate Cards
+                    {view === 'loading' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Sparkles className="mr-2 h-4 w-4"/>}
+                    {view === 'loading' ? 'Generating...' : 'Generate Cards'}
                 </Button>
               </DialogFooter>
+            </>
+          )}
 
            {/* Loading View */}
           {view === 'loading' && (
@@ -309,5 +317,5 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
         </form>
       </DialogContent>
     </Dialog>
-  )
-}
+  ); // Added closing parenthesis and semicolon for the return statement
+} // Added closing brace for the component function
