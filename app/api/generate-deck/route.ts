@@ -4,14 +4,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-// Use require for pdf-parse for better compatibility in Node.js environments
-const pdfParse = require('pdf-parse');
+// Use the fixed fork
+const pdfParse = require('@cyber2024/pdf-parse-fixed');
 
 export const dynamic = "force-dynamic";
 
 // Helper function to parse page ranges (e.g., "1-3, 5, 7-")
 function parsePageRange(rangeString: string | null | undefined, maxPages: number): number[] | null {
-    if (!rangeString || rangeString.trim() === '') return null;
+    if (!rangeString || rangeString.trim() === '') return null; // Return null if empty or null/undefined
 
     const pages: number[] = [];
     const ranges = rangeString.split(',');
@@ -22,6 +22,7 @@ function parsePageRange(rangeString: string | null | undefined, maxPages: number
             if (trimmedRange.includes('-')) {
                 const [startStr, endStr] = trimmedRange.split('-');
                 const start = parseInt(startStr, 10);
+                // Handle open-ended ranges like "7-"
                 const end = endStr.trim() === '' ? maxPages : parseInt(endStr, 10);
 
                 if (isNaN(start) || isNaN(end) || start < 1 || start > end || end > maxPages) {
@@ -38,6 +39,7 @@ function parsePageRange(rangeString: string | null | undefined, maxPages: number
                 pages.push(page);
             }
         }
+        // Remove duplicates and sort
         return [...new Set(pages)].sort((a, b) => a - b);
     } catch (error) {
         console.error("Error parsing page range:", error);
@@ -117,6 +119,7 @@ export async function POST(request: Request) {
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             console.log(`PDF buffer size: ${buffer.length} bytes`);
+            // Use the pdfParse variable which now requires the fork
             const data = await pdfParse(buffer);
             console.log(`PDF parsed: ${data.numpages} pages.`);
 
@@ -160,15 +163,24 @@ export async function POST(request: Request) {
             const message = pdfError.message?.includes('password')
                 ? "Failed to process PDF: The file might be password-protected."
                 : "Failed to process the PDF file. It might be corrupted.";
+            // Return valid JSON error
             return NextResponse.json({ error: message }, { status: 500 });
         }
     }
     // --- End PDF Processing Logic ---
 
-    const cardTypeInstructions = { /* ... (keep as before) ... */ };
-    const difficultyInstructions = { /* ... (keep as before) ... */ };
+    const cardTypeInstructions = {
+        qa: 'Each card must be a clear question in the "front" and a concise answer in the "back".',
+        vocabulary: 'Each card must contain a term or word in the "front" and its definition or translation in the "back".',
+        facts: 'Each card must present a key piece of information, with a prompt in the "front" (like a fill-in-the-blank or a name) and the corresponding fact in the "back".'
+    };
+    const difficultyInstructions = {
+        easy: "The cards should cover the most basic and fundamental concepts. Ideal for a beginner.",
+        medium: "The cards should cover a balance of core concepts and some detailed information. Assume intermediate knowledge.",
+        hard: "The cards should focus on complex, nuanced, or advanced details of the topic. Ideal for an expert."
+    };
 
-    // --- Prompt definition (keep as before) ---
+    // --- Prompt definition ---
     const sourceMaterial = generationSource === 'pdf' ? `\n${contextDescription}\n\n"""\n${pdfTextContent}\n"""` : topic;
     const prompt = `
       You are an expert in creating educational content. Your task is to generate a set of flashcards for a user based on the provided source.
@@ -201,7 +213,7 @@ export async function POST(request: Request) {
 
     try {
         console.log("Calling AI model...");
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Or "gemini-pro"
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const result = await model.generateContent(prompt);
         const response = await result.response;
         text = response.text();
@@ -213,31 +225,25 @@ export async function POST(request: Request) {
 
         // --- More Robust JSON Extraction ---
         let jsonString = text.trim();
-
-        // 1. Try finding JSON within markdown ```json ... ```
         const markdownMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
         if (markdownMatch && markdownMatch[1]) {
             jsonString = markdownMatch[1].trim();
             console.log("Extracted JSON from markdown block.");
         } else {
-             // 2. Try finding a JSON array `[...]` anywhere in the string
             const arrayMatch = jsonString.match(/(\[\s*\{[\s\S]*?\}\s*])/);
             if (arrayMatch && arrayMatch[0]) {
                 jsonString = arrayMatch[0].trim();
                  console.log("Extracted JSON array using regex match.");
             } else {
                  console.log("No clear JSON structure found via regex, attempting direct parse.");
-                // If neither works, assume the whole string might be JSON (or fail)
             }
         }
 
-        // 3. Check if the result looks like JSON before parsing
         if (!jsonString.startsWith('[') || !jsonString.endsWith(']')) {
              console.error("Cleaned text does not appear to be a JSON array:", jsonString);
              throw new Error("AI response did not contain a valid JSON array structure.");
         }
 
-        // 4. Attempt to parse
         generatedCards = JSON.parse(jsonString);
 
         if (!Array.isArray(generatedCards) || generatedCards.some(c => typeof c.front !== 'string' || typeof c.back !== 'string')) {
@@ -249,11 +255,11 @@ export async function POST(request: Request) {
 
     } catch (aiError: any) {
         console.error("Error during AI call or JSON parsing:", aiError);
-        console.error("Raw AI Text when error occurred:", text); // Log text again on error
-        // Provide a clearer error message
+        console.error("Raw AI Text when error occurred:", text);
         const message = aiError.message?.includes("JSON")
             ? "Failed to process the AI's response. It returned an invalid format. Please try again or check the source content."
             : "An error occurred while generating content with the AI.";
+        // Return valid JSON error
         return NextResponse.json({ error: message }, { status: 500 });
     }
 
@@ -269,9 +275,11 @@ export async function POST(request: Request) {
         .select('id')
         .single();
 
+    // Check specifically for deck creation error
     if (deckError || !newDeck) {
         console.error("Supabase error creating deck:", deckError);
-        throw new Error("Could not create the new deck in the database."); // Will be caught below
+        // Return valid JSON error
+        return NextResponse.json({ error: deckError?.message || "Could not create the new deck in the database." }, { status: 500 });
     }
      console.log(`Deck created successfully with ID: ${newDeck.id}`);
 
@@ -292,11 +300,13 @@ export async function POST(request: Request) {
         .from('cards')
         .insert(limitedCardsToInsert);
 
+    // Check specifically for card insertion error
     if (cardsError) {
         console.error("Supabase error inserting cards:", cardsError);
          console.log(`Rolling back deck creation (ID: ${newDeck.id}) due to card insertion error.`);
         await supabase.from('decks').delete().eq('id', newDeck.id); // Rollback deck
-        throw new Error("Could not save the generated cards to the database after deck creation."); // Will be caught below
+        // Return valid JSON error
+        return NextResponse.json({ error: cardsError.message || "Could not save the generated cards to the database after deck creation." }, { status: 500 });
     }
      console.log("Cards inserted successfully.");
 
@@ -304,14 +314,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, deckId: newDeck.id });
 
   } catch (error: any) {
-    console.error("!!! Critical Error in generate-deck API route:", error); // Log clearly it's the final catch
-    const errorMessage = error.message || "An unknown server error occurred during deck generation.";
-    const statusCode = error.message?.includes("database") ? 500 : 400; // Guess status based on likely cause
+    // This is the final catch-all for unexpected errors
+    console.error("!!! Critical Unhandled Error in generate-deck API route:", error);
+    const errorMessage = error.message || "An critical unknown server error occurred during deck generation.";
 
     // Ensure this ALWAYS returns valid JSON
     return NextResponse.json(
         { error: errorMessage },
-        { status: statusCode }
+        { status: 500 } // General server error
     );
   }
 }

@@ -4,7 +4,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-const pdfParse = require('pdf-parse');
+// Use the fixed fork
+const pdfParse = require('@cyber2024/pdf-parse-fixed');
 
 export const dynamic = "force-dynamic";
 
@@ -41,15 +42,20 @@ if (!apiKey) {
   console.error("CRITICAL: GOOGLE_API_KEY is not set in environment variables.");
 }
 
-const genAI = new GoogleGenerativeAI(apiKey || "");
+// export const maxDuration = 60; // Uncomment if on a Vercel Pro plan
 
 export async function POST(request: Request) {
+    console.log("add-ai-cards API route started.");
   if (!apiKey) {
+    console.error("API key missing in add-ai-cards.");
     return NextResponse.json(
       { error: "Server configuration error: The API Key is missing." },
       { status: 500 }
     );
   }
+
+  const genAI = new GoogleGenerativeAI(apiKey); // Moved instantiation here
+
 
   try {
     const cookieStore = cookies();
@@ -57,8 +63,10 @@ export async function POST(request: Request) {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
+        console.error("Authentication failed in add-ai-cards.");
       return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
     }
+     console.log("User authenticated.");
 
     // Read FormData
     const formData = await request.formData();
@@ -71,19 +79,24 @@ export async function POST(request: Request) {
     const topic = formData.get('topic') as string | null;
     const pdfFile = formData.get('pdfFile') as File | null;
     const pageRangeStr = formData.get('pageRange') as string | null;
+    console.log("Form data received:", { deckId, cardType, cardCountStr, language, difficulty, generationSource, topic: topic?.substring(0, 50) + '...', pdfFileName: pdfFile?.name, pageRangeStr });
 
     const cardCount = cardCountStr ? parseInt(cardCountStr, 10) : 0;
 
      // --- VALIDATIONS ---
     if (!deckId || !cardType || !cardCount || !language || !difficulty || !generationSource) {
+        console.error("Validation failed: Missing required fields.");
       return NextResponse.json({ error: "Missing required fields in form data." }, { status: 400 });
     }
-    if (generationSource === 'topic' && !topic) {
+    if (generationSource === 'topic' && (!topic || !topic.trim())) {
+        console.error("Validation failed: Topic required but missing/empty.");
         return NextResponse.json({ error: "Topic description is required for topic-based generation." }, { status: 400 });
     }
     if (generationSource === 'pdf' && !pdfFile) {
+        console.error("Validation failed: PDF required but missing.");
         return NextResponse.json({ error: "PDF file is required for PDF-based generation." }, { status: 400 });
     }
+     console.log("Initial validations passed.");
     // --- END VALIDATIONS ---
 
 
@@ -92,23 +105,32 @@ export async function POST(request: Request) {
     let sourceDescription = `Topic: ${topic}`; // Default
 
     if (generationSource === 'pdf' && pdfFile) {
+        console.log("Starting PDF processing...");
         try {
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-            const data = await pdfParse(buffer); // <-- USO CORREGIDO
+            console.log(`PDF buffer size: ${buffer.length} bytes`);
+             // Use the pdfParse variable which now requires the fork
+            const data = await pdfParse(buffer);
+            console.log(`PDF parsed: ${data.numpages} pages.`);
             const totalPages = data.numpages;
             let targetPages: number[] | null = null;
 
             if (pageRangeStr && pageRangeStr.trim() !== '') {
                 targetPages = parsePageRange(pageRangeStr, totalPages);
                  if (targetPages === null) {
+                    console.error("PDF page range parsing failed.");
                     return NextResponse.json({ error: "Invalid page range format provided. Use commas and hyphens, e.g., 1-3, 5, 7-10." }, { status: 400 });
                 }
+                 console.log(`Target pages parsed: ${targetPages.join(', ')}`);
+            } else {
+                 console.log("No specific page range provided, using all pages.");
             }
 
 
             if (targetPages) {
                 const allPagesText = data.text.split(/\f/);
+                 console.log(`Total text chunks (split by page break): ${allPagesText.length}`);
                 pdfTextContent = targetPages
                                 .map(pageNum => allPagesText[pageNum - 1])
                                 .filter(text => text)
@@ -118,18 +140,26 @@ export async function POST(request: Request) {
                 pdfTextContent = data.text;
                 sourceDescription = `Content from PDF '${pdfFile.name}' (All Pages)`;
             }
+             console.log(`Extracted PDF text length: ${pdfTextContent.length} characters.`);
              if (!pdfTextContent.trim()) {
+                 console.error("PDF text content is empty after processing.");
                 return NextResponse.json({ error: "Could not extract text from the specified PDF pages or the PDF is empty." }, { status: 400 });
             }
-        } catch (pdfError) {
-            console.error("Error processing PDF:", pdfError);
-            return NextResponse.json({ error: "Failed to process the PDF file." }, { status: 500 });
+             console.log("PDF processing successful.");
+        } catch (pdfError: any) {
+            console.error("Error during PDF processing:", pdfError);
+            const message = pdfError.message?.includes('password')
+                ? "Failed to process PDF: The file might be password-protected."
+                : "Failed to process the PDF file. It might be corrupted.";
+            // Return valid JSON error
+            return NextResponse.json({ error: message }, { status: 500 });
         }
     }
     // --- End PDF Processing Logic ---
 
 
-    // --- Fetch existing cards (unchanged) ---
+    // --- Fetch existing cards ---
+    console.log(`Fetching existing cards for deck ${deckId}...`);
     const { data: existingCards, error: existingCardsError } = await supabase
         .from('cards')
         .select('front, back')
@@ -139,35 +169,31 @@ export async function POST(request: Request) {
         .limit(15);
 
     if (existingCardsError) {
-        throw new Error("Could not fetch existing cards to prevent duplication.");
+        console.error("Supabase error fetching existing cards:", existingCardsError);
+        // Return valid JSON error
+        return NextResponse.json({ error: "Could not fetch existing cards to prevent duplication." }, { status: 500 });
     }
     const existingCardsJson = JSON.stringify(existingCards.map(c => ({ front: c.front, back: c.back })));
+     console.log(`Found ${existingCards.length} existing cards.`);
     // --- End Fetch existing cards ---
 
 
-    // --- Prompt definitions (unchanged) ---
-    const cardTypeInstructions = {
-        qa: 'Each card must be a clear question in the "front" and a concise answer in the "back".',
-        vocabulary: 'Each card must contain a term or word in the "front" and its definition or translation in the "back".',
-        facts: 'Each card must present a key piece of information, with a prompt in the "front" (like a fill-in-the-blank or a name) and the corresponding fact in the "back".'
-    }
-    const difficultyInstructions = {
-        easy: "The cards should cover the most basic and fundamental concepts. Ideal for a beginner.",
-        medium: "The cards should cover a balance of core concepts and some detailed information. Assume intermediate knowledge.",
-        hard: "The cards should focus on complex, nuanced, or advanced details of the topic. Ideal for an expert."
-    }
+    // --- Prompt definitions ---
+    const cardTypeInstructions = { /* ... (keep as before) ... */ };
+    const difficultyInstructions = { /* ... (keep as before) ... */ };
     // --- End Prompt definitions ---
 
 
     // --- Modified Prompt ---
+    const sourceMaterial = generationSource === 'pdf' ? `\n${sourceDescription}\n\n"""\n${pdfTextContent}\n"""` : topic;
     const prompt = `
       You are an expert in creating educational content. Your task is to generate a set of **new** flashcards to be added to an existing deck, based on the provided source material.
 
-      **Source Material:** ${generationSource === 'pdf' ? `\n${sourceDescription}\n\n"""\n${pdfTextContent}\n"""` : topic}
+      **Source Material:** ${sourceMaterial}
       **Language:** ${language}
       **Number of New Cards to Generate:** ${cardCount}
-      **Card Type:** ${cardTypeInstructions[cardType]}
-      **Difficulty Level:** ${difficultyInstructions[difficulty]}
+      **Card Type:** ${cardTypeInstructions[cardType!]}
+      **Difficulty Level:** ${difficultyInstructions[difficulty!]}
 
       **Existing Card Examples (Analyze these for style, format, tone, and content to avoid):**
       ${existingCardsJson}
@@ -189,37 +215,60 @@ export async function POST(request: Request) {
     `;
     // --- End Modified Prompt ---
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Using a potentially more capable model
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-
+    console.log("Generating AI prompt...");
     let generatedCards;
-     try {
-        // Attempt to clean potential markdown and parse JSON
-        const jsonString = text.trim().replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        generatedCards = JSON.parse(jsonString);
-        if (!Array.isArray(generatedCards) || generatedCards.some(c => typeof c.front !== 'string' || typeof c.back !== 'string')) {
-            throw new Error("Invalid JSON structure from AI.");
+    let text = '';
+
+    try {
+        console.log("Calling AI model...");
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Or "gemini-pro"
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        text = response.text();
+        console.log("Raw AI Response Text:", text);
+
+        if (!text || !text.trim()) {
+            throw new Error("AI returned an empty response.");
         }
-    } catch (parseError) {
-      console.error("Failed to parse JSON from AI response. Raw text was:", text, parseError);
-      // Try to extract JSON array even if there's surrounding text
-      const jsonMatch = text.match(/\[\s*\{[\s\S]*?\}\s*]/);
-       if (jsonMatch) {
-            try {
-                generatedCards = JSON.parse(jsonMatch[0]);
-                 if (!Array.isArray(generatedCards) || generatedCards.some(c => typeof c.front !== 'string' || typeof c.back !== 'string')) {
-                    throw new Error("Invalid JSON structure within extracted array.");
-                 }
-                 console.warn("Successfully parsed JSON array found within potentially malformed AI response.");
-            } catch (nestedParseError) {
-                 console.error("Failed even trying to parse extracted JSON array:", nestedParseError);
-                 throw new Error("The AI returned an invalid response format that could not be automatically corrected. Please try again.");
+
+        // --- More Robust JSON Extraction ---
+        let jsonString = text.trim();
+        const markdownMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
+        if (markdownMatch && markdownMatch[1]) {
+            jsonString = markdownMatch[1].trim();
+            console.log("Extracted JSON from markdown block.");
+        } else {
+            const arrayMatch = jsonString.match(/(\[\s*\{[\s\S]*?\}\s*])/);
+            if (arrayMatch && arrayMatch[0]) {
+                jsonString = arrayMatch[0].trim();
+                 console.log("Extracted JSON array using regex match.");
+            } else {
+                 console.log("No clear JSON structure found via regex, attempting direct parse.");
             }
-       } else {
-            throw new Error("The AI returned an invalid response format. Please try again.");
-       }
+        }
+
+        if (!jsonString.startsWith('[') || !jsonString.endsWith(']')) {
+             console.error("Cleaned text does not appear to be a JSON array:", jsonString);
+             throw new Error("AI response did not contain a valid JSON array structure.");
+        }
+
+        generatedCards = JSON.parse(jsonString);
+
+        if (!Array.isArray(generatedCards) || generatedCards.some(c => typeof c.front !== 'string' || typeof c.back !== 'string')) {
+             console.error("Parsed JSON has invalid structure:", generatedCards);
+            throw new Error("Invalid JSON structure received from AI after parsing.");
+        }
+        console.log(`Successfully parsed ${generatedCards.length} cards from AI response.`);
+        // --- End JSON Extraction ---
+
+    } catch (aiError: any) {
+        console.error("Error during AI call or JSON parsing:", aiError);
+        console.error("Raw AI Text when error occurred:", text);
+        const message = aiError.message?.includes("JSON")
+            ? "Failed to process the AI's response. It returned an invalid format. Please try again or check the source content."
+            : "An error occurred while generating content with the AI.";
+        // Return valid JSON error
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 
     // --- DATABASE INSERTION (Ensure limit) ---
@@ -235,11 +284,12 @@ export async function POST(request: Request) {
 
     // Ensure we don't insert more cards than requested
     const limitedCardsToInsert = cardsToInsert.slice(0, cardCount);
+    console.log(`Attempting to insert ${limitedCardsToInsert.length} cards into database...`);
+
 
     if (limitedCardsToInsert.length === 0) {
-        // It's possible the AI generated nothing new, or only duplicates it identified.
+        console.warn("AI generated 0 valid new cards after filtering or based on source material.")
         // Return success but indicate zero cards were added.
-        console.warn("AI generated 0 valid new cards after filtering duplicates/similar content or based on source material.")
         return NextResponse.json({ success: true, addedCount: 0, message: "No new unique cards could be generated based on the provided context and existing cards." });
     }
 
@@ -250,18 +300,22 @@ export async function POST(request: Request) {
 
     if (cardsError) {
         console.error("Supabase error inserting cards:", cardsError);
-        throw new Error("Could not save the generated cards to the database.");
+        // Return valid JSON error
+        return NextResponse.json({ error: cardsError.message || "Could not save the generated cards to the database." }, { status: 500 });
     }
+     console.log("Cards inserted successfully.");
 
+    console.log("add-ai-cards API route finished successfully.");
     return NextResponse.json({ success: true, addedCount: limitedCardsToInsert.length });
 
-  } catch (error) {
-    console.error("Error in add-ai-cards API route:", error);
-    const errorMessage = error instanceof Error ? error.message : "An unknown server error occurred.";
-     // Provide more specific error message if it's about PDF parsing
-    if (errorMessage.includes("PDF")) {
-         return NextResponse.json({ error: errorMessage }, { status: 400 }); // Bad request for PDF issues
-    }
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  } catch (error: any) {
+    // Final catch-all
+    console.error("!!! Critical Unhandled Error in add-ai-cards API route:", error);
+    const errorMessage = error.message || "An critical unknown server error occurred while adding cards.";
+    // Ensure this ALWAYS returns valid JSON
+    return NextResponse.json(
+        { error: errorMessage },
+        { status: 500 }
+    );
   }
 }
