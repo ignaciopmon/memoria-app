@@ -33,7 +33,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     .order("next_review_date", { ascending: true })
 
   if (cardsError) {
-    console.error("[v0] Error fetching cards:", cardsError)
+    console.error("Error fetching cards:", cardsError)
   }
 
   return <StudySession deck={deck} initialCards={cards || []} />
