@@ -54,8 +54,8 @@ export async function POST(request: Request) {
       ${JSON.stringify(selectedCards)}
     `;
 
-    // UPDATED MODEL TO gemini-3-flash
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash" });
+    // UPDATED MODEL TO gemini-2.0-flash
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
