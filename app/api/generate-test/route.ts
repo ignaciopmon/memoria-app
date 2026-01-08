@@ -5,6 +5,17 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// Helper para limpiar JSON rebelde
+function cleanAndParseJSON(text: string) {
+    let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    const firstOpen = cleanText.indexOf('[');
+    const lastClose = cleanText.lastIndexOf(']');
+    if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+        cleanText = cleanText.substring(firstOpen, lastClose + 1);
+    }
+    return JSON.parse(cleanText);
+}
+
 type Card = {
   front: string;
   back: string;
@@ -54,7 +65,7 @@ export async function POST(request: Request) {
       ${JSON.stringify(selectedCards)}
     `;
 
-    // CAMBIO A MODELO ESTABLE: gemini-1.5-flash
+    // MODELO ELEGIDO POR TI
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
     
     const result = await model.generateContent(prompt);
@@ -63,10 +74,9 @@ export async function POST(request: Request) {
     
     let testData;
     try {
-      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
-      const jsonString = jsonMatch ? jsonMatch[1] : text;
-      testData = JSON.parse(jsonString);
+      testData = cleanAndParseJSON(text);
     } catch (parseError) {
+      console.error("Parse Error:", parseError, "Raw Text:", text);
       throw new Error("AI response format invalid.");
     }
     

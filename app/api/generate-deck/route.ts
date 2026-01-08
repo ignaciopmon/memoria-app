@@ -9,6 +9,23 @@ const pdfParse = require('@cyber2024/pdf-parse-fixed');
 
 export const dynamic = "force-dynamic";
 
+// Helper para limpiar JSON rebelde
+function cleanAndParseJSON(text: string) {
+    // 1. Quitar bloques de código markdown si existen
+    let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    
+    // 2. Buscar estrictamente el primer '[' y el último ']'
+    const firstOpen = cleanText.indexOf('[');
+    const lastClose = cleanText.lastIndexOf(']');
+    
+    if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+        cleanText = cleanText.substring(firstOpen, lastClose + 1);
+    }
+    
+    // 3. Intentar parsear
+    return JSON.parse(cleanText);
+}
+
 // Helper function to parse page ranges
 function parsePageRange(rangeString: string | null | undefined, maxPages: number): number[] | null {
     if (!rangeString || rangeString.trim() === '') return null;
@@ -163,22 +180,14 @@ export async function POST(request: Request) {
     let generatedCards;
 
     try {
-        // CAMBIO A MODELO ESTABLE: gemini-1.5-flash
+        // MODELO ELEGIDO POR TI
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const text = response.text();
 
-        let jsonString = text.trim();
-        const markdownMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
-        if (markdownMatch && markdownMatch[1]) {
-            jsonString = markdownMatch[1].trim();
-        } else {
-             const arrayMatch = jsonString.match(/(\[\s*\{[\s\S]*?\}\s*])/);
-             if (arrayMatch) jsonString = arrayMatch[0].trim();
-        }
-
-        generatedCards = JSON.parse(jsonString);
+        // Limpieza robusta
+        generatedCards = cleanAndParseJSON(text);
 
         if (!Array.isArray(generatedCards)) {
             throw new Error("Invalid JSON structure.");
@@ -186,7 +195,7 @@ export async function POST(request: Request) {
 
     } catch (aiError: any) {
         console.error("AI Error:", aiError);
-        return NextResponse.json({ error: "Failed to generate content with AI." }, { status: 500 });
+        return NextResponse.json({ error: "Failed to generate content with AI. " + aiError.message }, { status: 500 });
     }
 
     // --- DATABASE INSERTION ---
