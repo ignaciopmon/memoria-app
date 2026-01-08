@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
   try {
     const cookieStore = await cookies();
-    const supabase = await createClient(cookieStore); // Supabase client updated for latest version
+    const supabase = await createClient(cookieStore);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -163,8 +163,8 @@ export async function POST(request: Request) {
     let generatedCards;
 
     try {
-        // UPDATED MODEL TO gemini-2.0-flash
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        // CAMBIO A MODELO ESTABLE: gemini-1.5-flash
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const text = response.text();
