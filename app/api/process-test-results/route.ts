@@ -161,7 +161,7 @@ export async function POST(request: Request) {
         Example (CORRECT, trivial): { "rating": 4, "reason": "You've mastered this! Moving it way back." }
       `;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
       const aiResult = await model.generateContent(prompt);
       const aiResponseText = aiResult.response.text().replace(/```json\n?/, "").replace(/\n?```$/, "");
       
