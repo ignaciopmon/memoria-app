@@ -7,6 +7,10 @@
       "sharp"
     ]
   },
+  "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom"
+  },
   "scripts": {
     "build": "next build",
     "dev": "next dev",
