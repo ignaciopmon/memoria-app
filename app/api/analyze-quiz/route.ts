@@ -8,34 +8,48 @@ const genAI = new GoogleGenerativeAI(apiKey || "");
 
 export async function POST(request: Request) {
   try {
-    const { wrongQuestions, language } = await request.json();
+    // Recibimos la dificultad aquí
+    const { wrongQuestions, language, difficulty } = await request.json();
 
-    // Instrucciones de "Entrenador de Estudio" para la IA
+    // Definimos la personalidad según la dificultad
+    let toneInstruction = "";
+    if (difficulty === "hard") {
+        toneInstruction = "Tone: Rigorous, academic, and detailed. Focus on nuances, exceptions, and deep connections. Treat the user as an advanced student.";
+    } else if (difficulty === "easy") {
+        toneInstruction = "Tone: Gentle, encouraging, and simple. Focus on the absolute basics and mnemonics. Treat the user as a beginner.";
+    } else {
+        toneInstruction = "Tone: Balanced, clear, and efficient. Focus on standard concepts.";
+    }
+
     const prompt = `
-      You are an elite study coach (a friendly, encouraging mentor). The user just made mistakes on a test.
+      You are an elite study coach. The user just failed a ${difficulty} difficulty test.
       
       **Context:**
       - Language: ${language} (Write STRICTLY in this language).
       - Mistakes: ${JSON.stringify(wrongQuestions)}
+      - ${toneInstruction}
 
-      **Your Goal:** Don't just list the answers. Explain the *logic* so they never forget it again. Be concise but highly effective.
-
-      **Strict Formatting Rules:**
-      1. Use Emojis for section headers.
-      2. Use **Bold** for key concepts.
-      3. **CRITICAL:** Use DOUBLE LINE BREAKS (\n\n) between every single paragraph or list item. The text must breathe.
+      **Formatting Rules (CRITICAL):**
+      1. Use **Bold** for key terms.
+      2. Use Emojis for section headers.
+      3. **MANDATORY:** Use double line breaks (\n\n) between EVERY single paragraph or list item to ensure good readability. Do not output big blocks of text.
 
       **Required Structure:**
 
       ## 🧐 Diagnosis
-      (A 2-sentence encouraging summary of why they might have failed. E.g., "You mixed up dates," or "You need to review the core concepts of X.")
+      (A short paragraph explaining the *pattern* of their mistakes. Why did they fail? Be specific.)
 
-      ## 🧠 Mental Fixes
-      (Go through the mistakes. Do NOT just give the answer. Give a logic, a trick, or a connection to remember it.)
-      - **[Concept Name]**: Explain the correct fact clearly.
+      ## 🧠 Knowledge Fixes
+      (Go through the concepts they missed. Don't just give the answer. Explain the *logic* or *trick* to remember it forever.)
       
-      ## 🚀 Next Step
-      (One single, powerful action they can take right now to master this topic).
+      *List each concept like this, with a blank line between them:*
+      
+      - **[Concept Name]**: Explanation...
+      
+      - **[Concept Name]**: Explanation...
+
+      ## 🚀 Action Plan
+      (One concrete thing they should do right now, tailored to the ${difficulty} level).
     `;
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });

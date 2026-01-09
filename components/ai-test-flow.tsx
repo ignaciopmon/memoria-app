@@ -122,12 +122,13 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
     setStep("results");
   };
 
-  const handleAnalyze = async () => {
+const handleAnalyze = async () => {
     setIsAnalyzing(true);
     try {
       const res = await fetch("/api/analyze-quiz", {
         method: "POST",
-        body: JSON.stringify({ wrongQuestions: wrongAnswers, language }),
+        // AHORA ENVIAMOS TAMBIÉN LA DIFICULTAD ('difficulty')
+        body: JSON.stringify({ wrongQuestions: wrongAnswers, language, difficulty }),
         headers: { "Content-Type": "application/json" }
       });
       const data = await res.json();
