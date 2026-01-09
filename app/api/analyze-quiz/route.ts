@@ -11,17 +11,25 @@ export async function POST(request: Request) {
     const { wrongQuestions, language } = await request.json();
 
     const prompt = `
-      You are a helpful tutor. The user just failed a test.
-      **Language:** ${language} (Write the report in this language).
+      You are an expert tutor. The user failed a test.
+      **Language:** ${language} (Write strictly in this language).
       
       **Failed Questions:**
       ${JSON.stringify(wrongQuestions)}
 
       **Task:**
-      1. Analyze why the user might have failed (patterns, specific missing concepts).
-      2. Provide a concise "Study Report" with tips to memorize these specific facts.
-      3. Be encouraging but direct about the knowledge gaps.
-      4. Use Markdown formatting (bolding key terms).
+      Create a structured study report using Markdown.
+      
+      **Structure Required:**
+      1. Start with an encouraging title (use ##).
+      2. Analyze the main knowledge gaps (use normal paragraphs with **bold** concepts).
+      3. Provide a list of "Key Facts to Remember" (use bullet points -).
+      4. End with a quick study tip.
+
+      **IMPORTANT FORMATTING RULES:**
+      - Use **double line breaks** between every paragraph.
+      - Do not simply list the questions again. Synthesize the missing knowledge.
+      - Keep it concise but helpful.
     `;
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
