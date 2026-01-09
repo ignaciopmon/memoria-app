@@ -1,4 +1,3 @@
-// components/dashboard-client.tsx
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -15,13 +14,12 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
-  UniqueIdentifier,
 } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
   arrayMove,
-  rectSortingStrategy, // <-- Única estrategia necesaria ahora
+  rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { createClient } from "@/lib/supabase/client";
@@ -32,18 +30,13 @@ import {
   GripVertical,
   Trash2,
   Edit,
-  Paintbrush,
   Loader2,
   BookOpen,
   Info,
-  FolderPlus, // <-- Mantenemos el icono por ahora
 } from "lucide-react";
-// Removidos imports de FolderView y DeleteFolderDialog
 import { RenameDialog } from "./rename-dialog";
 import { ColorPopover } from "./color-popover";
 import { CreateDeckDialog } from "./create-deck-dialog";
-// Importar CreateFolderDialog para el mensaje de mantenimiento
-import { CreateFolderDialog } from "./create-folder-dialog";
 import { CreateAIDeckDialog } from "./create-ai-deck-dialog";
 import {
   AlertDialog,
@@ -56,23 +49,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
 
-// Tipo Item simplificado (ya no necesita parent_id ni is_folder relevantemente)
 type Item = {
   id: string;
   name: string;
   description: string | null;
   cardCount: number;
-  // is_folder: boolean; // Ya no es necesario para la lógica principal
-  // parent_id: string | null; // Ya no es necesario para la lógica principal
   color: string | null;
   position: number | null;
   created_at?: string;
+  // Campos "is_folder" eliminados para limpieza
 };
 
-
-// --- Componente DraggableDeckItem (Ajuste menor en handle y props) ---
 function DraggableDeckItem({
   item,
   isEditMode,
@@ -105,11 +93,11 @@ function DraggableDeckItem({
   const handleDelete = async () => {
     setIsDeleting(true);
     const supabase = createClient();
-    // Actualizar para usar "update" y marcar como borrado en lugar de "delete"
     const { error } = await supabase
       .from("decks")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", item.id);
+      
     if (error) {
       setIsDeleting(false);
       toast({
@@ -118,19 +106,16 @@ function DraggableDeckItem({
         description: "Error sending deck to trash.",
       });
     } else {
-      // Filtrar el item del estado local
       onUpdate((prevItems) => prevItems.filter((i) => i.id !== item.id));
       toast({ title: "Success", description: "Deck moved to trash." });
-      // No necesitamos router.refresh() aquí si actualizamos el estado local
     }
   };
 
   return (
     <div ref={setNodeRef} style={style} className="relative group touch-manipulation">
       {isRenaming && (
-        // Pasar is_folder como false o quitarlo si RenameDialog ya no lo necesita
         <RenameDialog
-          item={{...item, is_folder: false}} // Asegurarse que se pasa como no-carpeta
+          item={{...item, is_folder: false}} 
           isOpen={isRenaming}
           onClose={() => setIsRenaming(false)}
         />
@@ -157,145 +142,101 @@ function DraggableDeckItem({
             </AlertDialog>
         </div>
       )}
-      <DeckCard deck={item} isEditMode={isEditMode} />
+      <DeckCard deck={{...item, is_folder: false, parent_id: null}} isEditMode={isEditMode} />
     </div>
   );
 }
 
-// ---- Componente Principal ----
 export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
-    // Filtrar explícitamente las carpetas al inicio
-    const initialDecksOnly = useMemo(() => initialItems.filter(item => !item.is_folder), [initialItems]);
-    const [items, setItems] = useState<Item[]>(initialDecksOnly); // Estado solo con mazos
-
+    // Estado solo con mazos, eliminada la lógica compleja de carpetas
+    const [items, setItems] = useState<Item[]>(initialItems);
     const [activeDragItem, setActiveDragItem] = useState<Item | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
     const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
-     const sensors = useSensors(
-        useSensor(MouseSensor, { activationConstraint: { distance: 8, }}),
-        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6, }}),
-        useSensor(PointerSensor, { activationConstraint: { distance: 10, }})
+    const sensors = useSensors(
+        useSensor(MouseSensor, { activationConstraint: { distance: 8 }}),
+        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 }}),
+        useSensor(PointerSensor, { activationConstraint: { distance: 10 }})
     );
 
      useEffect(() => {
-         // Ordenar los mazos iniciales
-         const sortedDecks = [...initialDecksOnly].sort((a, b) => {
+         const sortedDecks = [...initialItems].sort((a, b) => {
             const posA = a.position ?? Infinity;
             const posB = b.position ?? Infinity;
             if (posA !== posB) return posA - posB;
-            return (b.created_at ?? "").localeCompare(a.created_at ?? ""); // Más nuevos primero si no hay posición
+            return (b.created_at ?? "").localeCompare(a.created_at ?? "");
         });
         setItems(sortedDecks);
 
-        // Lógica del popup
         const hasSeenPopup = localStorage.getItem('hasSeenWelcomePopup');
-        // Mostrar popup solo si hay mazos (o ajustar según prefieras)
         if (!hasSeenPopup && sortedDecks.length > 0) {
             setShowWelcomePopup(true);
             localStorage.setItem('hasSeenWelcomePopup', 'true');
         }
-     }, [initialDecksOnly]); // Depender de initialDecksOnly
+     }, [initialItems]);
 
-    // IDs de los items (solo mazos)
     const itemIds = useMemo(() => items.map(item => item.id), [items]);
 
     const handleDragStart = (event: DragStartEvent) => {
          if (!isEditMode) return;
         const { active } = event;
-        // Asegurarse de que solo se pueden arrastrar mazos
-        const item = items.find((i) => i.id === active.id /* && !i.is_folder */); // Comprobación extra (aunque ya no debería haber carpetas)
+        const item = items.find((i) => i.id === active.id);
         setActiveDragItem(item || null);
      };
 
-    const calculateNewPosition = (
-        prevPos: number | null | undefined,
-        nextPos: number | null | undefined,
-        currentIndex: number
-    ): number => {
+    const calculateNewPosition = (prevPos: number | null | undefined, nextPos: number | null | undefined, idx: number): number => {
         const defaultIncrement = 1000;
-        let newPos: number;
-        if (prevPos === null || prevPos === undefined) newPos = nextPos !== null && nextPos !== undefined ? nextPos / 2 : defaultIncrement * (currentIndex + 1);
-        else if (nextPos === null || nextPos === undefined) newPos = prevPos + defaultIncrement;
-        else newPos = prevPos + (nextPos - prevPos) / 2;
-        return Math.max(1, Math.round(newPos));
+        if (prevPos == null) return nextPos ? nextPos / 2 : defaultIncrement * (idx + 1);
+        if (nextPos == null) return prevPos + defaultIncrement;
+        return prevPos + (nextPos - prevPos) / 2;
     };
 
-   // --- handleDragEnd SIMPLIFICADO (solo reordenamiento de mazos) ---
    const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    const activeId = active.id;
-    const overIdResolved = over?.id;
-
-    setActiveDragItem(null);
-
-    const activeItem = items.find((item) => item.id === activeId);
-
-    // Solo proceder si se arrastró un mazo y se soltó sobre otro mazo
-    if (!activeItem || !overIdResolved || activeId === overIdResolved) {
-        console.log("DragEnd: No valid reorder action.");
+    if (!active || !over || active.id === over.id) {
+        setActiveDragItem(null);
         return;
     }
 
-    const oldIndex = items.findIndex((item) => item.id === activeId);
-    const newIndex = items.findIndex((item) => item.id === overIdResolved);
-
-    if (oldIndex === newIndex) {
-         console.log("DragEnd: Indices are the same.");
-        return; // No hubo cambio
-    }
+    const oldIndex = items.findIndex((item) => item.id === active.id);
+    const newIndex = items.findIndex((item) => item.id === over.id);
 
     const supabase = createClient();
-    let initialItemsSnapshot = [...items];
-    const newItemsOrder = arrayMove(items, oldIndex, newIndex);
+    let initialSnapshot = [...items];
+    const newOrder = arrayMove(items, oldIndex, newIndex);
     const updatesMap: Record<string, Partial<Item>> = {};
-    let successMessage = "Deck reordered.";
-    let errorMessage = "Failed to reorder deck.";
 
     try {
-        // Recalcular posiciones para todos los mazos en el nuevo orden
-        for (let i = 0; i < newItemsOrder.length; i++) {
-            const currentItem = newItemsOrder[i];
-            const prevItem = newItemsOrder[i - 1];
-            const nextItem = newItemsOrder[i + 1];
-            const calculatedPos = calculateNewPosition(prevItem?.position, nextItem?.position, i);
+        for (let i = 0; i < newOrder.length; i++) {
+            const current = newOrder[i];
+            const prev = newOrder[i - 1];
+            const next = newOrder[i + 1];
+            const newPos = calculateNewPosition(prev?.position, next?.position, i);
 
-            // Marcar para actualización si la posición calculada es diferente a la actual
-            if (currentItem.position !== calculatedPos) {
-                 updatesMap[currentItem.id] = { position: calculatedPos };
-                 // Actualizar posición en el array de trabajo para cálculos siguientes
-                 newItemsOrder[i].position = calculatedPos;
+            if (current.position !== newPos) {
+                 updatesMap[current.id] = { position: newPos };
+                 newOrder[i].position = newPos;
              }
         }
 
-        // Aplicar estado local
-        setItems(newItemsOrder);
+        setItems(newOrder);
+        setActiveDragItem(null);
 
-        // Actualizar Base de Datos
         if (Object.keys(updatesMap).length > 0) {
-            console.log("Updating DB positions:", updatesMap);
-            const updatePromises = Object.entries(updatesMap).map(([id, updateData]) =>
-                supabase.from("decks").update(updateData).eq("id", id)
+            const promises = Object.entries(updatesMap).map(([id, data]) =>
+                supabase.from("decks").update(data).eq("id", id)
             );
-            const results = await Promise.all(updatePromises);
-            const firstError = results.find((r) => r.error);
-
-            if (firstError) {
-                console.error("Supabase position update error:", firstError.error);
-                throw new Error(errorMessage + ` (${firstError.error.message})`);
-            } else {
-                toast({ title: "Success", description: successMessage });
-            }
-        } else {
-            console.log("No position updates needed for DB.");
+            await Promise.all(promises);
+            toast({ title: "Success", description: "Deck order saved." });
         }
 
     } catch (error: any) {
-        console.error("Error during drag end:", error);
-        toast({ variant: "destructive", title: "Error", description: error.message || "An error occurred during reordering." });
-        setItems(initialItemsSnapshot); // Revertir
+        console.error("Reorder error:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to save order." });
+        setItems(initialSnapshot);
     }
    };
 
@@ -305,36 +246,31 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
          <div> <h1 className="text-3xl font-bold">My Decks</h1> <p className="text-muted-foreground"> Manage your study flashcard decks </p> </div>
         <div className="flex items-center gap-2">
             <Button variant={isEditMode ? "default" : "outline"} onClick={() => setIsEditMode((prev) => !prev)} > <Edit className="mr-2 h-4 w-4" /> {isEditMode ? "Done" : "Edit"} </Button>
-            {/* --- Botón Crear Carpeta ahora usa el diálogo de mantenimiento --- */}
-            {isEditMode && <CreateFolderDialog onFolderCreated={() => { /* No hacer nada aquí */ }} />}
             <CreateAIDeckDialog />
             <CreateDeckDialog onDeckCreated={() => router.refresh()} />
          </div>
       </div>
 
       {items.length === 0 && !isEditMode ? (
-         // --- Mensaje de dashboard vacío con botones alineados ---
-         <div className="flex h-[60vh] flex-col items-center justify-center text-center">
-            <BookOpen className="mb-4 h-16 w-16 text-muted-foreground" />
-            <h2 className="text-2xl font-semibold">Your dashboard is empty</h2>
-            <p className="mb-6 text-muted-foreground"> Create your first deck to get started. </p>
-            {/* Envolver botones en un div con flex para controlar alineación y espacio */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-                {/* Asegurarse que ambos diálogos/botones usen el mismo tamaño */}
+         <div className="flex h-[60vh] flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-500">
+            <div className="bg-muted/30 p-6 rounded-full mb-6">
+                <BookOpen className="h-12 w-12 text-muted-foreground" />
+            </div>
+            <h2 className="text-2xl font-semibold mb-2">Your dashboard is empty</h2>
+            <p className="mb-6 text-muted-foreground max-w-sm"> Create your first deck manually or let our AI generate one for you in seconds. </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <CreateDeckDialog onDeckCreated={() => router.refresh()} size="lg" />
-                {/* Pasar size="lg" a CreateAIDeckDialog si es necesario (depende de su implementación interna) */}
+                <span className="text-sm text-muted-foreground font-medium">OR</span>
                 <CreateAIDeckDialog />
             </div>
          </div>
       ) : (
-        // --- Contexto DND simplificado ---
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          {/* Único SortableContext para todos los mazos */}
           <SortableContext items={itemIds} strategy={rectSortingStrategy}>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {items.map((deck) => (
@@ -348,20 +284,18 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
             </div>
           </SortableContext>
 
-          {/* Overlay (sin cambios) */}
           <DragOverlay dropAnimation={null}>
-              {activeDragItem && !activeDragItem.is_folder ? ( // Asegurarse que solo se muestre overlay para mazos
-                    <div className="shadow-xl rounded-xl">
-                      <DeckCard deck={activeDragItem} isEditMode={isEditMode} />
+              {activeDragItem ? (
+                    <div className="shadow-2xl rounded-xl scale-105 cursor-grabbing">
+                      <DeckCard deck={{...activeDragItem, is_folder: false, parent_id: null}} isEditMode={isEditMode} />
                     </div>
               ) : null}
           </DragOverlay>
         </DndContext>
       )}
 
-      {/* Popup de bienvenida (sin cambios) */}
       <AlertDialog open={showWelcomePopup} onOpenChange={setShowWelcomePopup}>
-            <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle className="flex items-center gap-2"> <Info className="h-5 w-5 text-blue-500" /> Welcome to Memoria! </AlertDialogTitle> <AlertDialogDescription> Memoria helps you learn faster using spaced repetition. To get the most out of it, check out the Help page to discover all the features and how it works. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel>Dismiss</AlertDialogCancel> <AlertDialogAction asChild> <Link href="/help">Go to Help Page</Link> </AlertDialogAction> </AlertDialogFooter> </AlertDialogContent>
+            <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle className="flex items-center gap-2"> <Info className="h-5 w-5 text-primary" /> Welcome to Memoria! </AlertDialogTitle> <AlertDialogDescription> Memoria helps you learn faster using spaced repetition. To get the most out of it, check out the Help page to discover all the features and how it works. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel>Dismiss</AlertDialogCancel> <AlertDialogAction asChild> <Link href="/help">Go to Help Page</Link> </AlertDialogAction> </AlertDialogFooter> </AlertDialogContent>
       </AlertDialog>
     </>
   );

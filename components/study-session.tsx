@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, ArrowLeft, CheckCircle } from "lucide-react"
+import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import type { Shortcuts } from "@/components/shortcuts-form"
 import { ImageViewerDialog } from "./image-viewer-dialog"
+import { calculateNextReview, type UserSettings, type Rating } from "@/lib/srs" // Importamos la lógica compartida
 
 interface StudySessionProps {
   deck: { id: string; name: string }
@@ -26,15 +27,6 @@ interface StudySessionProps {
     last_rating: number | null
   }>
 }
-
-interface UserSettings {
-    again_interval_minutes: number
-    hard_interval_days: number
-    good_interval_days: number
-    easy_interval_days: number
-}
-
-type Rating = 1 | 2 | 3 | 4
 
 export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [cards, setCards] = useState(initialCards)
@@ -64,72 +56,34 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const progress = (currentIndex / (cards.length || 1)) * 100
   const isComplete = currentIndex >= cards.length
 
-  const calculateNextReview = (card: (typeof cards)[0], rating: Rating) => {
-    let { ease_factor, interval, repetitions, last_rating } = card;
-    const settings = {
-        again: userSettings?.again_interval_minutes ?? 1,
-        hard: userSettings?.hard_interval_days ?? 1,
-        good: userSettings?.good_interval_days ?? 3,
-        easy: userSettings?.easy_interval_days ?? 7,
-    };
-
-    const now = new Date();
-    let nextReviewDate = new Date();
-
-    if (rating < 3) { 
-        repetitions = 0;
-        if (rating === 1) { 
-            interval = 0;
-            nextReviewDate.setMinutes(now.getMinutes() + settings.again);
-        } else { 
-            if (last_rating === 2) {
-                interval = Math.max(1, Math.ceil(interval * 0.5));
-            } else {
-                interval = settings.hard;
-            }
-        }
-    } else { 
-        repetitions += 1;
-        if (repetitions === 1) {
-            interval = settings.good;
-        } else if (repetitions === 2) {
-            interval = settings.easy;
-        } else {
-            interval = Math.ceil(interval * ease_factor);
-        }
-    }
-
-    ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02)));
-
-    if (rating > 1) { 
-        nextReviewDate.setDate(now.getDate() + interval);
-    }
-    
-    return { ease_factor, interval, repetitions, next_review_date: nextReviewDate.toISOString(), last_rating: rating };
-  }
-
   const handleRating = useCallback(async (rating: Rating) => {
     if (!currentCard || isSubmitting) return
     setIsSubmitting(true)
     const supabase = createClient()
+    
+    // Usar valores por defecto seguros si aún no han cargado los settings
+    const currentSettings = userSettings || {
+        again_interval_minutes: 1,
+        hard_interval_days: 1,
+        good_interval_days: 3,
+        easy_interval_days: 7
+    };
+
     try {
-      const updates = calculateNextReview(currentCard, rating)
+      // USAMOS LA LÓGICA CENTRALIZADA
+      const updates = calculateNextReview(currentCard, rating, currentSettings)
       
-      // ***** INICIO DE LA MODIFICACIÓN *****
-      // Al calificar manualmente, borramos la sugerencia de la IA.
       await supabase
         .from("cards")
         .update({ 
           ...updates, 
-          ai_suggestion: null, // <-- AQUÍ SE LIMPIA LA ESTRELLA
+          ai_suggestion: null,
           updated_at: new Date().toISOString() 
         })
         .eq("id", currentCard.id)
-      // ***** FIN DE LA MODIFICACIÓN *****
         
       await supabase.from("card_reviews").insert({ card_id: currentCard.id, rating })
       
-      // Si la calificación fue 'Again' (1), vuelve a añadir la tarjeta al final de la cola
       if (rating === 1) {
         setCards(prevCards => [...prevCards, currentCard]);
       }
@@ -138,7 +92,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       setShowAnswer(false)
     } catch (error) {
       console.error("Error submitting rating:", error)
-      alert("Error saving the response")
+      // Feedback visual simple podría ir aquí (toast)
     } finally {
       setIsSubmitting(false)
     }
@@ -155,13 +109,16 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           event.preventDefault()
           setShowAnswer(true)
         } else if (showAnswer) {
-          event.preventDefault()
-          switch (key) {
-            case s.rate_again.toLowerCase(): handleRating(1); break;
-            case s.rate_hard.toLowerCase(): handleRating(2); break;
-            case s.rate_good.toLowerCase(): handleRating(3); break;
-            case s.rate_easy.toLowerCase(): handleRating(4); break;
-          }
+            // No prevenimos default para teclas numéricas si no hay conflicto, pero aquí es seguro
+            if ([s.rate_again, s.rate_hard, s.rate_good, s.rate_easy].some(k => k.toLowerCase() === key)) {
+                event.preventDefault()
+            }
+            switch (key) {
+                case s.rate_again.toLowerCase(): handleRating(1); break;
+                case s.rate_hard.toLowerCase(): handleRating(2); break;
+                case s.rate_good.toLowerCase(): handleRating(3); break;
+                case s.rate_easy.toLowerCase(): handleRating(4); break;
+            }
         }
     }
 
@@ -187,148 +144,188 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     return ""
   }
 
-  // --- LÓGICA DE 'NADA QUE REPASAR' ---
   if (initialCards.length === 0) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <header className="border-b">
-          <div className="container mx-auto flex h-16 items-center px-4">
-             <Button variant="ghost" size="icon" asChild>
-                <Link href="/dashboard"><ArrowLeft className="h-4 w-4" /></Link>
-            </Button>
-            <div className="flex items-center gap-2">
-              <Brain className="h-6 w-6" />
-              <span className="text-xl font-bold">Memoria</span>
-            </div>
-          </div>
-        </header>
-        <main className="flex flex-1 items-center justify-center">
-          <div className="container mx-auto max-w-2xl px-4 text-center">
-            <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-500" />
-            <h1 className="mb-2 text-3xl font-bold">All caught up!</h1>
-            <p className="mb-6 text-muted-foreground">There are no cards due for review in this deck.</p>
-            <Button asChild>
-              <Link href="/dashboard">Back to Dashboard</Link>
-            </Button>
-          </div>
-        </main>
+      <div className="flex min-h-screen flex-col items-center justify-center p-4 text-center">
+        <div className="bg-muted/30 p-8 rounded-full mb-6">
+            <CheckCircle className="h-12 w-12 text-primary" />
+        </div>
+        <h1 className="mb-2 text-3xl font-bold tracking-tight">All caught up!</h1>
+        <p className="mb-8 text-muted-foreground max-w-md">There are no cards due for review in this deck right now. Great job keeping up with your studies.</p>
+        <Button asChild size="lg">
+          <Link href="/dashboard">Back to Dashboard</Link>
+        </Button>
       </div>
     )
   }
 
-  // --- LÓGICA DE 'SESIÓN COMPLETA' ---
   if (isComplete) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <header className="border-b">
-          <div className="container mx-auto flex h-16 items-center px-4">
-            <Button variant="ghost" size="icon" asChild>
-                <Link href="/dashboard"><ArrowLeft className="h-4 w-4" /></Link>
-            </Button>
-            <div className="flex items-center gap-2">
-              <Brain className="h-6 w-6" />
-              <span className="text-xl font-bold">Memoria</span>
-            </div>
-          </div>
-        </header>
-        <main className="flex flex-1 items-center justify-center">
-          <div className="container mx-auto max-w-2xl px-4 text-center">
-            <CheckCircle className="mx-auto mb-4 h-16 w-16 text-green-500" />
-            <h1 className="mb-2 text-3xl font-bold">Session complete!</h1>
-            <p className="mb-6 text-muted-foreground">
-              You have reviewed {cards.length} card{cards.length !== 1 ? "s" : ""}.
-            </p>
-            <div className="flex justify-center gap-4">
-              <Button asChild variant="outline">
-                <Link href={`/deck/${deck.id}`}>View Deck</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/dashboard">Go to Dashboard</Link>
-              </Button>
-            </div>
-          </div>
-        </main>
+      <div className="flex min-h-screen flex-col items-center justify-center p-4 text-center">
+        <div className="bg-primary/10 p-8 rounded-full mb-6 animate-in zoom-in duration-300">
+            <Sparkles className="h-12 w-12 text-primary" />
+        </div>
+        <h1 className="mb-2 text-3xl font-bold tracking-tight">Session complete!</h1>
+        <p className="mb-8 text-muted-foreground">
+          You have reviewed <span className="font-semibold text-foreground">{cards.length}</span> card{cards.length !== 1 ? "s" : ""}.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Button asChild variant="outline" size="lg">
+            <Link href={`/deck/${deck.id}`}>View Deck</Link>
+          </Button>
+          <Button asChild size="lg">
+            <Link href="/dashboard">Go to Dashboard</Link>
+          </Button>
+        </div>
       </div>
     )
   }
 
-  // --- RENDERIZADO DE LA SESIÓN PRINCIPAL ---
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" asChild>
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
+        <div className="container mx-auto flex h-14 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" asChild className="-ml-2">
               <Link href="/dashboard">
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
-            <div className="flex items-center gap-2">
-              <Brain className="h-6 w-6" />
-              <span className="text-xl font-bold">Memoria</span>
-            </div>
+            <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">
+                {deck.name}
+            </span>
           </div>
-          <div className="text-sm text-muted-foreground">
-            {currentIndex + 1} / {cards.length}
+          <div className="flex items-center gap-2 text-sm font-medium tabular-nums">
+             <span className="text-primary">{currentIndex + 1}</span>
+             <span className="text-muted-foreground">/</span>
+             <span className="text-muted-foreground">{cards.length}</span>
           </div>
         </div>
+        <Progress value={progress} className="h-1 w-full rounded-none bg-muted" />
       </header>
-      <div className="container mx-auto px-4 py-4">
-        <Progress value={progress} className="h-2" />
-      </div>
-      <main className="flex flex-1 items-center justify-center">
-        <div className="container mx-auto max-w-3xl px-4">
-          <Card className="mb-6">
-            <CardContent className="flex min-h-[250px] flex-col justify-center p-4 md:min-h-[300px] md:p-8">
-              <div className="mb-6 text-center">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">QUESTION</p>
+      
+      <main className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8">
+        <div className="w-full max-w-2xl perspective-1000">
+          <Card className="overflow-hidden shadow-lg border-muted/60 min-h-[400px] flex flex-col">
+            <CardContent className="flex-1 flex flex-col justify-center p-6 sm:p-10 text-center">
+              
+              {/* FRONT (QUESTION) */}
+              <div className="flex-1 flex flex-col justify-center items-center space-y-4">
+                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary/10 text-primary uppercase tracking-wider">
+                    Question
+                </span>
+                
                 {currentCard.front_image_url && (
-                  <ImageViewerDialog src={currentCard.front_image_url} alt="Front image" triggerClassName="mb-4" />
+                  <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-64 w-full flex justify-center">
+                     <ImageViewerDialog src={currentCard.front_image_url} alt="Front image" triggerClassName="w-auto h-auto max-h-64 object-contain" />
+                  </div>
                 )}
-                <h2 className="text-balance text-xl font-semibold md:text-2xl">{currentCard.front}</h2>
+                
+                <h2 className="text-2xl sm:text-3xl font-bold text-balance leading-tight">
+                    {currentCard.front}
+                </h2>
               </div>
+
+              {/* DIVIDER */}
               {showAnswer && (
-                <div className="border-t pt-6 text-center">
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">ANSWER</p>
+                  <div className="my-8 border-t border-dashed" />
+              )}
+
+              {/* BACK (ANSWER) */}
+              {showAnswer && (
+                <div className="flex-1 flex flex-col justify-center items-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-muted text-muted-foreground uppercase tracking-wider">
+                    Answer
+                  </span>
+                  
                    {currentCard.back_image_url && (
-                    <ImageViewerDialog src={currentCard.back_image_url} alt="Back image" triggerClassName="mb-4" />
+                    <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-64 w-full flex justify-center">
+                        <ImageViewerDialog src={currentCard.back_image_url} alt="Back image" triggerClassName="w-auto h-auto max-h-64 object-contain" />
+                    </div>
                   )}
-                  <p className="text-balance text-lg text-muted-foreground md:text-xl">{currentCard.back}</p>
+                  
+                  <p className="text-xl sm:text-2xl text-muted-foreground text-balance">
+                    {currentCard.back}
+                  </p>
                 </div>
               )}
             </CardContent>
           </Card>
+        </div>
+
+        {/* CONTROLS */}
+        <div className="w-full max-w-2xl mt-8 h-24 flex items-end justify-center">
           {!showAnswer ? (
-            <div className="flex justify-center">
-              <Button size="lg" onClick={() => setShowAnswer(true)} className="min-w-48">
-                Show Answer
-              </Button>
-            </div>
+            <Button size="lg" onClick={() => setShowAnswer(true)} className="w-full sm:w-auto min-w-[200px] text-lg h-12 shadow-md hover:shadow-lg transition-all">
+              Show Answer <span className="ml-2 text-xs opacity-50 bg-primary-foreground/20 px-1.5 py-0.5 rounded">SPACE</span>
+            </Button>
           ) : (
-            <div className="space-y-4">
-              <p className="text-center text-sm text-muted-foreground">How well did you remember this card?</p>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Button variant="outline" className="h-auto flex-col gap-1 py-4 hover:border-red-500 hover:bg-red-50 hover:text-red-700 bg-transparent" onClick={() => handleRating(1)} disabled={isSubmitting}>
-                  <span className="text-lg font-semibold">Again</span>
-                  <span className="text-xs text-muted-foreground">{getIntervalText(1)}</span>
-                </Button>
-                <Button variant="outline" className="h-auto flex-col gap-1 py-4 hover:border-orange-500 hover:bg-orange-50 hover:text-orange-700 bg-transparent" onClick={() => handleRating(2)} disabled={isSubmitting}>
-                  <span className="text-lg font-semibold">Hard</span>
-                  <span className="text-xs text-muted-foreground">{getIntervalText(2)}</span>
-                </Button>
-                <Button variant="outline" className="h-auto flex-col gap-1 py-4 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700 bg-transparent" onClick={() => handleRating(3)} disabled={isSubmitting}>
-                  <span className="text-lg font-semibold">Good</span>
-                  <span className="text-xs text-muted-foreground">{getIntervalText(3)}</span>
-                </Button>
-                <Button variant="outline" className="h-auto flex-col gap-1 py-4 hover:border-green-500 hover:bg-green-50 hover:text-green-700 bg-transparent" onClick={() => handleRating(4)} disabled={isSubmitting}>
-                  <span className="text-lg font-semibold">Easy</span>
-                  <span className="text-xs text-muted-foreground">{getIntervalText(4)}</span>
-                </Button>
-              </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+              <RatingButton 
+                rating={1} 
+                label="Again" 
+                icon={<RotateCcw className="h-4 w-4" />} 
+                interval={getIntervalText(1)} 
+                colorClass="hover:border-destructive hover:bg-destructive/5 hover:text-destructive"
+                onClick={() => handleRating(1)} 
+                disabled={isSubmitting} 
+                shortcut={shortcuts?.rate_again || '1'}
+              />
+              <RatingButton 
+                rating={2} 
+                label="Hard" 
+                icon={<Clock className="h-4 w-4" />} 
+                interval={getIntervalText(2)} 
+                colorClass="hover:border-orange-500 hover:bg-orange-500/5 hover:text-orange-600 dark:hover:text-orange-400"
+                onClick={() => handleRating(2)} 
+                disabled={isSubmitting} 
+                shortcut={shortcuts?.rate_hard || '2'}
+              />
+              <RatingButton 
+                rating={3} 
+                label="Good" 
+                icon={<ThumbsUp className="h-4 w-4" />} 
+                interval={getIntervalText(3)} 
+                colorClass="hover:border-blue-500 hover:bg-blue-500/5 hover:text-blue-600 dark:hover:text-blue-400"
+                onClick={() => handleRating(3)} 
+                disabled={isSubmitting} 
+                shortcut={shortcuts?.rate_good || '3'}
+              />
+              <RatingButton 
+                rating={4} 
+                label="Easy" 
+                icon={<Sparkles className="h-4 w-4" />} 
+                interval={getIntervalText(4)} 
+                colorClass="hover:border-green-500 hover:bg-green-500/5 hover:text-green-600 dark:hover:text-green-400"
+                onClick={() => handleRating(4)} 
+                disabled={isSubmitting} 
+                shortcut={shortcuts?.rate_easy || '4'}
+              />
             </div>
           )}
         </div>
       </main>
     </div>
   )
+}
+
+// Subcomponente para botones limpios
+function RatingButton({ rating, label, icon, interval, colorClass, onClick, disabled, shortcut }: any) {
+    return (
+        <Button 
+            variant="outline" 
+            className={`h-auto flex-col gap-1.5 py-3 transition-all duration-200 border-muted-foreground/20 ${colorClass}`} 
+            onClick={onClick} 
+            disabled={disabled}
+        >
+            <div className="flex items-center gap-2">
+                {icon}
+                <span className="font-semibold">{label}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>{interval}</span>
+                <span className="border rounded px-1 min-w-[1.2rem] text-center opacity-70 hidden sm:inline-block">{shortcut}</span>
+            </div>
+        </Button>
+    )
 }
