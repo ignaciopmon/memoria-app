@@ -348,7 +348,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                 <p className="text-2xl text-muted-foreground">You scored {score} out of {questions.length}</p>
             </div>
 
-            {/* 2. AI REPORT - HEIGHT INCREASED HERE */}
+            {/* 2. AI REPORT */}
             {wrongAnswers.length > 0 && (
                 <div ref={reportRef} className="scroll-mt-24">
                     <Card className="border-blue-200 dark:border-blue-900 shadow-xl overflow-hidden">
@@ -358,23 +358,32 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                     <Sparkles className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-xl text-blue-900 dark:text-blue-100">Deep Knowledge Report</CardTitle>
-                                    <CardDescription className="text-blue-700/80 dark:text-blue-300/80">Professor-level detailed analysis of your mistakes.</CardDescription>
+                                    <CardTitle className="text-xl text-blue-900 dark:text-blue-100">Errors Analysis</CardTitle>
+                                    <CardDescription className="text-blue-700/80 dark:text-blue-300/80">Understand your mistakes to improve next time.</CardDescription>
                                 </div>
                             </div>
                             {!analysisReport && (
                                 <Button onClick={handleAnalyze} disabled={isAnalyzing} size="lg" className="bg-blue-600 hover:bg-blue-700 text-white shadow-md w-full md:w-auto">
-                                    {isAnalyzing ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : "Generate Full Analysis"}
+                                    {isAnalyzing ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : "Generate Analysis"}
                                 </Button>
                             )}
                         </div>
                         
                         {analysisReport && (
                             <CardContent className="p-0 bg-card/50">
-                                {/* Increased height to 600px for comfortable reading */}
                                 <ScrollArea className="h-[600px] w-full p-8 md:p-10">
-                                    <article className="prose prose-lg dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground">
-                                        <ReactMarkdown>{analysisReport}</ReactMarkdown>
+                                    <article className="prose prose-lg dark:prose-invert max-w-none">
+                                        <ReactMarkdown
+                                            components={{
+                                                h3: ({node, ...props}) => <h3 className="text-xl font-bold mt-8 mb-4 text-primary border-b pb-2" {...props} />,
+                                                p: ({node, ...props}) => <p className="mb-6 text-muted-foreground leading-8" {...props} />,
+                                                strong: ({node, ...props}) => <span className="font-bold text-foreground" {...props} />,
+                                                hr: ({node, ...props}) => <hr className="my-8 border-muted" {...props} />,
+                                                li: ({node, ...props}) => <li className="mb-2" {...props} />,
+                                            }}
+                                        >
+                                            {analysisReport}
+                                        </ReactMarkdown>
                                     </article>
                                 </ScrollArea>
                             </CardContent>
@@ -393,7 +402,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                             <CardTitle className="flex items-center gap-2 text-green-800 dark:text-green-300">
                                 <Save className="h-5 w-5" /> Save to Deck
                             </CardTitle>
-                            <CardDescription>Don't lose this knowledge. Turn mistakes into flashcards.</CardDescription>
+                            <CardDescription>Turn mistakes into flashcards.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 pt-6">
                             <Select value={saveMode} onValueChange={(v: any) => setSaveMode(v)}>
