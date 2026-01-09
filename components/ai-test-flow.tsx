@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, CheckCircle, XCircle, FileText, AlertTriangle, Save, Sparkles, Trophy, ArrowRight, RefreshCcw, History, Plus, RotateCcw } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, FileText, AlertTriangle, Save, Sparkles, Trophy, ArrowRight, RefreshCcw, Plus, RotateCcw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
@@ -109,12 +109,11 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
   };
 
   const loadHistoricalTest = (test: TestRecord) => {
-      // Reconstruct state from history
       setQuestions(test.questions);
       setUserAnswers(test.user_answers);
       setScore(test.score);
-      setTopic(test.topic || "Unknown Topic"); // Restore topic for "Generate More"
-      // Re-calculate wrong answers
+      setTopic(test.topic || "Unknown Topic");
+      
       const wrongs: WrongAnswer[] = [];
       test.questions.forEach((q, idx) => {
           if (test.user_answers[idx] !== q.correctAnswer) {
@@ -125,7 +124,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
       setAnalysisReport(test.ai_report);
       
       setStep("results");
-      setActiveTab("new"); // Switch back to main view
+      setActiveTab("new");
   };
 
   // --- ACTIONS ---
@@ -146,7 +145,6 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
     if (sourceType === "topic") formData.append("topic", topic);
     if (sourceType === "pdf" && pdfFile) formData.append("pdfFile", pdfFile);
     
-    // Pass existing questions to avoid duplicates
     const existingQuestions = questions.map(q => q.question);
     formData.append("avoidQuestions", JSON.stringify(existingQuestions));
 
@@ -158,7 +156,6 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
       let newQuestions = data;
 
       if (isExtension) {
-          // If extension, potentially mix in mistakes
           if (includeMistakes && wrongAnswers.length > 0) {
               const mistakesToRetry = wrongAnswers.map(w => ({
                   question: w.question,
@@ -166,13 +163,12 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                   correctAnswer: w.correctAnswer
               }));
               newQuestions = [...mistakesToRetry, ...newQuestions];
-              // Shuffle array
               newQuestions.sort(() => Math.random() - 0.5);
           }
           
           setQuestions(newQuestions);
           setCurrentQIndex(0);
-          setUserAnswers([]); // Reset answers for the new run
+          setUserAnswers([]);
           setStep("testing");
           setIsGeneratingMore(false);
           toast({ title: "New Session Started", description: `Loaded ${newQuestions.length} questions.` });
@@ -218,7 +214,6 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
     setWrongAnswers(wrongs);
     setStep("results");
 
-    // Auto-save to History
     try {
         await fetch("/api/save-test-result", {
             method: "POST",
@@ -234,7 +229,6 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
             }),
             headers: { "Content-Type": "application/json" }
         });
-        // We don't block UI for this, just save in background
     } catch (e) {
         console.error("Failed to auto-save test");
     }
@@ -250,8 +244,6 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
       });
       const data = await res.json();
       setAnalysisReport(data.report);
-      
-      // Update the saved record with the report if possible (optional enhancement)
     } catch (e) {
       toast({ title: "Analysis Failed", variant: "destructive" });
     } finally {
@@ -278,7 +270,6 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
       if (!res.ok) throw new Error("Failed to save");
       
       toast({ title: "Success", description: "Cards added successfully! You can find them in your dashboard." });
-      // Removed router.push to keep user in the flow
     } catch (e) {
       toast({ title: "Error saving cards", variant: "destructive" });
     } finally {
@@ -690,6 +681,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                     </div>
                 </div>
             )}
+        </TabsContent> {/* 👈 AQUÍ ESTABA EL ERROR: FALTABA CERRAR TABSCONTENT */}
     </Tabs>
   );
 }
