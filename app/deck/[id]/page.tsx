@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, Plus, LayoutGrid, FileText } from "lucide-react"
+import { Brain, Plus, LayoutGrid, Clock, AlertCircle } from "lucide-react" // Iconos nuevos
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { CardItem } from "@/components/card-item"
@@ -17,6 +17,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Badge } from "@/components/ui/badge"
 
 export default async function DeckPage({ params }: { params: { id: string } }) {
   const { id } = params
@@ -38,7 +39,12 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  // --- LÓGICA DE ESTADO ---
+  const now = new Date();
+  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+  
+  // Calcular cuántas están pendientes de repaso HOY
+  const dueCardsCount = cards?.filter(c => new Date(c.next_review_date) <= now).length || 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -54,7 +60,7 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8 max-w-5xl">
           
-          {/* NAVEGACIÓN MEJORADA (BREADCRUMBS) */}
+          {/* NAVEGACIÓN */}
           <div className="mb-6">
             <Breadcrumb>
               <BreadcrumbList>
@@ -70,15 +76,32 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
           </div>
 
           {/* CABECERA DEL MAZO */}
-          <div className="mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b pb-6">
-              <div>
+          <div className="mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border-b pb-6">
+              <div className="space-y-2">
                 <h1 className="text-3xl font-bold tracking-tight">{deck.name}</h1>
-                {deck.description && <p className="text-muted-foreground mt-1">{deck.description}</p>}
-                <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                    <LayoutGrid className="h-4 w-4" />
-                    <span>{cards?.length || 0} cards</span>
+                {deck.description && <p className="text-muted-foreground">{deck.description}</p>}
+                
+                <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-1.5 text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
+                        <LayoutGrid className="h-4 w-4" />
+                        <span>{cards?.length || 0} total</span>
+                    </div>
+                    
+                    {/* INDICADOR DE PENDIENTES */}
+                    {dueCardsCount > 0 ? (
+                        <Badge variant="default" className="gap-1.5 bg-amber-500 hover:bg-amber-600 text-white border-none">
+                            <Clock className="h-3.5 w-3.5" />
+                            {dueCardsCount} due for review
+                        </Badge>
+                    ) : (
+                        <Badge variant="outline" className="gap-1.5 text-green-600 border-green-200 bg-green-50">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            All caught up
+                        </Badge>
+                    )}
                 </div>
               </div>
+
               <div className="flex flex-wrap gap-2 w-full md:w-auto">
                 <ImportMenu deckId={id} />
                 <AddAiCardsDialog deckId={deck.id} deckName={deck.name} />
@@ -108,6 +131,8 @@ export default async function DeckPage({ params }: { params: { id: string } }) {
               {cards.map((card) => {
                 const createdAt = new Date(card.created_at);
                 const isNew = createdAt > tenMinutesAgo;
+                // Pasamos una prop extra si quieres marcar visualmente las pendientes en la lista en el futuro
+                // const isDue = new Date(card.next_review_date) <= now;
                 return <CardItem key={card.id} card={card} isNew={isNew} />;
               })}
             </div>

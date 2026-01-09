@@ -1,3 +1,4 @@
+// components/dashboard-client.tsx
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -33,6 +34,7 @@ import {
   Loader2,
   BookOpen,
   Info,
+  GraduationCap // Icono nuevo para el test
 } from "lucide-react";
 import { RenameDialog } from "./rename-dialog";
 import { ColorPopover } from "./color-popover";
@@ -58,7 +60,6 @@ type Item = {
   color: string | null;
   position: number | null;
   created_at?: string;
-  // Campos "is_folder" eliminados para limpieza
 };
 
 function DraggableDeckItem({
@@ -148,7 +149,6 @@ function DraggableDeckItem({
 }
 
 export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
-    // Estado solo con mazos, eliminada la lógica compleja de carpetas
     const [items, setItems] = useState<Item[]>(initialItems);
     const [activeDragItem, setActiveDragItem] = useState<Item | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -246,6 +246,15 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
          <div> <h1 className="text-3xl font-bold">My Decks</h1> <p className="text-muted-foreground"> Manage your study flashcard decks </p> </div>
         <div className="flex items-center gap-2">
             <Button variant={isEditMode ? "default" : "outline"} onClick={() => setIsEditMode((prev) => !prev)} > <Edit className="mr-2 h-4 w-4" /> {isEditMode ? "Done" : "Edit"} </Button>
+            
+            {/* BOTÓN NUEVO PARA EXAMEN */}
+            <Button asChild variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary">
+                <Link href="/ai-test">
+                    <GraduationCap className="mr-2 h-4 w-4" />
+                    Practice Test
+                </Link>
+            </Button>
+
             <CreateAIDeckDialog />
             <CreateDeckDialog onDeckCreated={() => router.refresh()} />
          </div>

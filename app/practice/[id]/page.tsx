@@ -20,13 +20,16 @@ export default async function PracticePage({ params }: { params: { id: string } 
     notFound()
   }
 
-  // Obtenemos TODAS las tarjetas del mazo, sin importar la fecha de revisión
+  // Obtenemos TODAS las tarjetas
   const { data: cards } = await supabase
     .from("cards")
     .select("*")
     .eq("deck_id", id)
     .is("deleted_at", null)
-    .order("created_at", { ascending: true })
 
-  return <PracticeSession deck={deck} initialCards={cards || []} />
+  // --- MEJORA: BARAJADO ALEATORIO ---
+  // Para practicar, es mejor que el orden no sea predecible
+  const shuffledCards = cards ? [...cards].sort(() => Math.random() - 0.5) : [];
+
+  return <PracticeSession deck={deck} initialCards={shuffledCards} />
 }
