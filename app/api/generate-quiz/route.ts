@@ -5,7 +5,6 @@ const pdfParse = require('@cyber2024/pdf-parse-fixed');
 
 export const dynamic = "force-dynamic";
 
-// Helper para limpiar JSON
 function cleanAndParseJSON(text: string) {
     let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
     const firstOpen = cleanText.indexOf('[');
@@ -29,16 +28,26 @@ export async function POST(request: Request) {
     const difficulty = formData.get('difficulty') as string;
     const language = formData.get('language') as string;
     const pdfFile = formData.get('pdfFile') as File | null;
-
+    // NUEVO: Recibimos preguntas a evitar (JSON string)
+    const avoidQuestionsJson = formData.get('avoidQuestions') as string | null;
+    
     let sourceMaterial = "";
     
     if (pdfFile) {
         const arrayBuffer = await pdfFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const data = await pdfParse(buffer);
-        sourceMaterial = `Content from PDF: ${data.text.slice(0, 30000)}`; // Limitamos caracteres para no saturar
+        sourceMaterial = `Content from PDF: ${data.text.slice(0, 30000)}`;
     } else {
         sourceMaterial = `Topic: ${topic}`;
+    }
+
+    let avoidInstruction = "";
+    if (avoidQuestionsJson) {
+        const avoidList = JSON.parse(avoidQuestionsJson);
+        if (avoidList.length > 0) {
+            avoidInstruction = `**IMPORTANT:** Do NOT generate questions similar to these (the user already answered them): ${JSON.stringify(avoidList.slice(0, 20))}. Generate FRESH content.`;
+        }
     }
 
     const prompt = `
@@ -47,6 +56,7 @@ export async function POST(request: Request) {
       **Task:** Generate exactly ${questionCount} multiple-choice questions.
       **Difficulty:** ${difficulty}
       **Language:** ${language} (Strictly output questions/answers in this language).
+      ${avoidInstruction}
 
       **Output Format:** Raw JSON Array. No markdown.
       Structure:
