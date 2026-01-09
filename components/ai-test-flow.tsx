@@ -57,7 +57,6 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
   const { toast } = useToast();
   const router = useRouter();
 
-  // Scroll to report when generated
   useEffect(() => {
     if (analysisReport && reportRef.current) {
         reportRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -122,12 +121,11 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
     setStep("results");
   };
 
-const handleAnalyze = async () => {
+  const handleAnalyze = async () => {
     setIsAnalyzing(true);
     try {
       const res = await fetch("/api/analyze-quiz", {
         method: "POST",
-        // AHORA ENVIAMOS TAMBIÉN LA DIFICULTAD ('difficulty')
         body: JSON.stringify({ wrongQuestions: wrongAnswers, language, difficulty }),
         headers: { "Content-Type": "application/json" }
       });
@@ -181,8 +179,6 @@ const handleAnalyze = async () => {
           <CardDescription className="text-lg">Configure your AI-generated exam.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-8 pt-6">
-          
-          {/* Source Selection */}
           <div className="space-y-4">
             <Label className="text-base font-semibold">What do you want to practice?</Label>
             <div className="grid grid-cols-2 gap-4">
@@ -343,7 +339,7 @@ const handleAnalyze = async () => {
     return (
         <div className="max-w-4xl mx-auto py-8 px-4 space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
             
-            {/* 1. SCORE CARD (HERO) */}
+            {/* 1. SCORE CARD */}
             <div className="text-center space-y-4">
                 <div className="inline-flex items-center justify-center p-6 rounded-full bg-background shadow-lg border mb-4">
                     <Trophy className={`h-16 w-16 ${colorClass}`} />
@@ -352,7 +348,7 @@ const handleAnalyze = async () => {
                 <p className="text-2xl text-muted-foreground">You scored {score} out of {questions.length}</p>
             </div>
 
-            {/* 2. AI REPORT (FULL WIDTH - FEATURED) */}
+            {/* 2. AI REPORT - HEIGHT INCREASED HERE */}
             {wrongAnswers.length > 0 && (
                 <div ref={reportRef} className="scroll-mt-24">
                     <Card className="border-blue-200 dark:border-blue-900 shadow-xl overflow-hidden">
@@ -362,29 +358,32 @@ const handleAnalyze = async () => {
                                     <Sparkles className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-xl text-blue-900 dark:text-blue-100">AI Knowledge Report</CardTitle>
-                                    <CardDescription className="text-blue-700/80 dark:text-blue-300/80">Personalized analysis of your knowledge gaps.</CardDescription>
+                                    <CardTitle className="text-xl text-blue-900 dark:text-blue-100">Deep Knowledge Report</CardTitle>
+                                    <CardDescription className="text-blue-700/80 dark:text-blue-300/80">Professor-level detailed analysis of your mistakes.</CardDescription>
                                 </div>
                             </div>
                             {!analysisReport && (
                                 <Button onClick={handleAnalyze} disabled={isAnalyzing} size="lg" className="bg-blue-600 hover:bg-blue-700 text-white shadow-md w-full md:w-auto">
-                                    {isAnalyzing ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : "Generate Analysis"}
+                                    {isAnalyzing ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : "Generate Full Analysis"}
                                 </Button>
                             )}
                         </div>
                         
                         {analysisReport && (
-                            <CardContent className="p-8 md:p-10 bg-card/50">
-                                <article className="prose prose-lg dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground">
-                                    <ReactMarkdown>{analysisReport}</ReactMarkdown>
-                                </article>
+                            <CardContent className="p-0 bg-card/50">
+                                {/* Increased height to 600px for comfortable reading */}
+                                <ScrollArea className="h-[600px] w-full p-8 md:p-10">
+                                    <article className="prose prose-lg dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground">
+                                        <ReactMarkdown>{analysisReport}</ReactMarkdown>
+                                    </article>
+                                </ScrollArea>
                             </CardContent>
                         )}
                     </Card>
                 </div>
             )}
 
-            {/* 3. DETAILS GRID (MISTAKES & SAVE) */}
+            {/* 3. DETAILS GRID */}
             {wrongAnswers.length > 0 && (
                 <div className="grid gap-8 md:grid-cols-2 items-start">
                     
@@ -436,7 +435,7 @@ const handleAnalyze = async () => {
                         <CardHeader className="pb-3 border-b">
                             <div className="flex items-center justify-between">
                                 <CardTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-500">
-                                    <AlertTriangle className="h-5 w-5" /> Mistakes Review
+                                    <AlertTriangle className="h-5 w-5" /> Quick Review
                                 </CardTitle>
                                 <span className="text-sm font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-md">
                                     {wrongAnswers.length} items

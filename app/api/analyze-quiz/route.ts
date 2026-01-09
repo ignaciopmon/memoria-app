@@ -8,48 +8,67 @@ const genAI = new GoogleGenerativeAI(apiKey || "");
 
 export async function POST(request: Request) {
   try {
-    // Recibimos la dificultad aquí
     const { wrongQuestions, language, difficulty } = await request.json();
 
-    // Definimos la personalidad según la dificultad
-    let toneInstruction = "";
+    // Instrucciones de tono basadas en la dificultad, pero siempre DETALLADAS
+    let toneInstruction = "Role: You are a passionate, expert University Professor who loves to explain things in depth.";
     if (difficulty === "hard") {
-        toneInstruction = "Tone: Rigorous, academic, and detailed. Focus on nuances, exceptions, and deep connections. Treat the user as an advanced student.";
+        toneInstruction += " Treat the user as an advanced student. Dive deep into theoretical nuances, exceptions, and complex relationships.";
     } else if (difficulty === "easy") {
-        toneInstruction = "Tone: Gentle, encouraging, and simple. Focus on the absolute basics and mnemonics. Treat the user as a beginner.";
+        toneInstruction += " Use clear analogies and step-by-step logic, but DO NOT be brief. Explain the foundation of the concept fully.";
     } else {
-        toneInstruction = "Tone: Balanced, clear, and efficient. Focus on standard concepts.";
+        toneInstruction += " Be academic, thorough, and rigourous.";
     }
 
     const prompt = `
-      You are an elite study coach. The user just failed a ${difficulty} difficulty test.
+      ${toneInstruction}
       
       **Context:**
       - Language: ${language} (Write STRICTLY in this language).
       - Mistakes: ${JSON.stringify(wrongQuestions)}
-      - ${toneInstruction}
 
-      **Formatting Rules (CRITICAL):**
-      1. Use **Bold** for key terms.
-      2. Use Emojis for section headers.
-      3. **MANDATORY:** Use double line breaks (\n\n) between EVERY single paragraph or list item to ensure good readability. Do not output big blocks of text.
-
-      **Required Structure:**
-
-      ## 🧐 Diagnosis
-      (A short paragraph explaining the *pattern* of their mistakes. Why did they fail? Be specific.)
-
-      ## 🧠 Knowledge Fixes
-      (Go through the concepts they missed. Don't just give the answer. Explain the *logic* or *trick* to remember it forever.)
+      **Your Goal:** Provide a **MASSIVE, COMPREHENSIVE, and DETAILED** analysis of the user's errors. 
+      **DO NOT BE BRIEF.** The user wants to understand *everything* about these specific concepts to ensure they never fail again.
       
-      *List each concept like this, with a blank line between them:*
-      
-      - **[Concept Name]**: Explanation...
-      
-      - **[Concept Name]**: Explanation...
+      For each mistake, you must:
+      1. **Explain the Concept:** Define what the term or concept actually is in detail.
+      2. **Debunk the Error:** Explain exactly *why* the user's specific answer was wrong (what is the common confusion?).
+      3. **Verify the Truth:** Explain *why* the correct answer is the right one.
+      4. **Mastery Hook:** Provide a mnemonic, etymology, or deep logic to lock this into memory.
 
-      ## 🚀 Action Plan
-      (One concrete thing they should do right now, tailored to the ${difficulty} level).
+      **Formatting Rules (CRITICAL for Readability):**
+      1. Use **Bold** for key terms and headers.
+      2. Use Emojis to structure the sections.
+      3. **MANDATORY:** Use **DOUBLE LINE BREAKS** (\n\n) between EVERY single paragraph, list item, or section. The text must look spacious and easy to read.
+
+      **Required Report Structure:**
+
+      ## 🧐 Comprehensive Diagnosis
+      (A detailed paragraph analyzing the user's performance. Identify the *type* of thinking error they are making. Are they mixing up dates? Misunderstanding definitions? rushing?)
+
+      ## 🧠 Deep Dive & Corrections
+      (Iterate through every mistake. This section should be long and educational.)
+      
+      *Format each mistake clearly like this:*
+      
+      ### ❌ Mistake: [Question Topic/Concept]
+      
+      **The Theory:**
+      [Detailed explanation of the concept from scratch...]
+      
+      **Why your answer was wrong:**
+      [Analyze the specific wrong option the user chose. Why is it a trap?]
+      
+      **The Correct Logic:**
+      [Walk through the logic to arrive at the correct answer.]
+      
+      **💡 Professor's Tip:**
+      [A mental hook or mnemonic to remember it.]
+      
+      *(Insert triple line break here)*
+
+      ## 📚 Final Study Recommendation
+      (Conclude with a specific, high-impact study task based on this analysis).
     `;
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
