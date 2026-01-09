@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,12 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, CheckCircle, XCircle, FileText, AlertTriangle, Save, Sparkles, Trophy } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, FileText, AlertTriangle, Save, Sparkles, Trophy, ArrowRight, RefreshCcw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { ScrollArea } from "@/components/ui/scroll-area"; // Asegúrate de tener este componente instalado
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type Step = "setup" | "generating" | "testing" | "results";
 
@@ -46,6 +46,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
   // Analysis States
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisReport, setAnalysisReport] = useState<string | null>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   // Saving States
   const [saveMode, setSaveMode] = useState<"none" | "existing" | "new">("none");
@@ -55,6 +56,13 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
 
   const { toast } = useToast();
   const router = useRouter();
+
+  // Scroll to report when generated
+  useEffect(() => {
+    if (analysisReport && reportRef.current) {
+        reportRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [analysisReport]);
 
   // --- ACTIONS ---
 
@@ -163,68 +171,67 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
 
   if (step === "setup") {
     return (
-      <Card className="shadow-lg border-muted">
+      <Card className="shadow-lg border-muted max-w-2xl mx-auto mt-8">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-4">
+          <div className="mx-auto bg-primary/10 p-4 rounded-full w-fit mb-4">
              <Sparkles className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Generate Practice Test</CardTitle>
-          <CardDescription>Create a custom AI exam from any topic or PDF file.</CardDescription>
+          <CardTitle className="text-3xl font-bold">New Practice Test</CardTitle>
+          <CardDescription className="text-lg">Configure your AI-generated exam.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6 pt-4">
-          <div className="space-y-3">
-            <Label className="text-base">Source Material</Label>
-            <div className="flex gap-4">
-                <Button 
-                    variant={sourceType === "topic" ? "default" : "outline"} 
-                    onClick={() => setSourceType("topic")} 
-                    className="flex-1 h-12 text-base"
+        <CardContent className="space-y-8 pt-6">
+          
+          {/* Source Selection */}
+          <div className="space-y-4">
+            <Label className="text-base font-semibold">What do you want to practice?</Label>
+            <div className="grid grid-cols-2 gap-4">
+                <div 
+                    className={`cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center gap-2 transition-all ${sourceType === "topic" ? "border-primary bg-primary/5" : "border-muted hover:border-muted-foreground/50"}`}
+                    onClick={() => setSourceType("topic")}
                 >
-                    Topic
-                </Button>
-                <Button 
-                    variant={sourceType === "pdf" ? "default" : "outline"} 
-                    onClick={() => setSourceType("pdf")} 
-                    className="flex-1 h-12 text-base"
+                    <Sparkles className="h-6 w-6" />
+                    <span className="font-medium">Specific Topic</span>
+                </div>
+                <div 
+                    className={`cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center gap-2 transition-all ${sourceType === "pdf" ? "border-primary bg-primary/5" : "border-muted hover:border-muted-foreground/50"}`}
+                    onClick={() => setSourceType("pdf")}
                 >
-                    PDF Upload
-                </Button>
+                    <FileText className="h-6 w-6" />
+                    <span className="font-medium">From PDF</span>
+                </div>
             </div>
-          </div>
 
-          {sourceType === "topic" ? (
-             <div className="space-y-2">
-                <Label>Topic Description</Label>
+            {sourceType === "topic" ? (
                 <Textarea 
-                    placeholder="e.g., Biology of the Cell, Roman History, Quantum Physics basics..." 
+                    placeholder="E.g., The French Revolution, Python Basics, Introduction to Marketing..." 
                     value={topic} 
                     onChange={e => setTopic(e.target.value)} 
-                    className="resize-none min-h-[100px] text-base"
+                    className="resize-none min-h-[120px] text-base p-4"
                 />
-             </div>
-          ) : (
-            <div className="space-y-2">
-                <Label>Upload PDF</Label>
-                <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center bg-muted/20 hover:bg-muted/40 transition-colors cursor-pointer relative">
+            ) : (
+                <div className="border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center bg-muted/20 hover:bg-muted/40 transition-colors cursor-pointer relative">
                     <Input 
                         type="file" 
                         accept=".pdf" 
                         onChange={e => setPdfFile(e.target.files?.[0] || null)} 
                         className="absolute inset-0 opacity-0 cursor-pointer"
                     />
-                    <FileText className="h-8 w-8 text-muted-foreground mb-2" />
-                    <span className="text-sm text-muted-foreground text-center">
-                        {pdfFile ? pdfFile.name : "Click to select a PDF file"}
+                    <div className="bg-background p-3 rounded-full shadow-sm mb-3">
+                        <FileText className="h-6 w-6 text-primary" />
+                    </div>
+                    <span className="font-medium text-foreground">
+                        {pdfFile ? pdfFile.name : "Click to upload PDF"}
                     </span>
+                    <span className="text-xs text-muted-foreground mt-1">Up to 10MB</span>
                 </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <div className="space-y-2">
                 <Label>Questions</Label>
                 <Select value={count} onValueChange={setCount}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="5">5 Questions</SelectItem>
                         <SelectItem value="10">10 Questions</SelectItem>
@@ -235,7 +242,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
              <div className="space-y-2">
                 <Label>Difficulty</Label>
                 <Select value={difficulty} onValueChange={setDifficulty}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="easy">Easy</SelectItem>
                         <SelectItem value="medium">Medium</SelectItem>
@@ -246,7 +253,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
              <div className="space-y-2">
                 <Label>Language</Label>
                 <Select value={language} onValueChange={setLanguage}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="English">English</SelectItem>
                         <SelectItem value="Spanish">Spanish</SelectItem>
@@ -256,9 +263,9 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
              </div>
           </div>
         </CardContent>
-        <CardFooter className="pt-2">
-            <Button className="w-full text-lg h-12 shadow-md" onClick={handleGenerate}>
-                Start Test
+        <CardFooter className="pb-8 pt-2">
+            <Button className="w-full text-lg h-14 shadow-lg rounded-xl" onClick={handleGenerate}>
+                Start Test <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
         </CardFooter>
       </Card>
@@ -267,14 +274,16 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
 
   if (step === "generating") {
     return (
-        <div className="flex flex-col items-center justify-center h-[60vh] gap-6 animate-in fade-in zoom-in duration-500">
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-8 animate-in fade-in zoom-in duration-500">
             <div className="relative">
-                <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse" />
-                <Loader2 className="h-16 w-16 animate-spin text-primary relative z-10" />
+                <div className="absolute inset-0 bg-primary/30 blur-2xl rounded-full animate-pulse" />
+                <Loader2 className="h-20 w-20 animate-spin text-primary relative z-10" />
             </div>
-            <div className="text-center space-y-2">
-                <h2 className="text-2xl font-bold">Generating your test...</h2>
-                <p className="text-muted-foreground text-lg">Our AI is reading the material and crafting questions.</p>
+            <div className="text-center space-y-3 max-w-md">
+                <h2 className="text-3xl font-bold">Generating Test...</h2>
+                <p className="text-muted-foreground text-lg leading-relaxed">
+                    Our AI is analyzing the material to create challenging questions for you.
+                </p>
             </div>
         </div>
     );
@@ -285,33 +294,37 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
     const progress = ((currentQIndex) / questions.length) * 100;
 
     return (
-        <div className="space-y-8 max-w-2xl mx-auto py-8">
-            <div className="space-y-2">
+        <div className="max-w-3xl mx-auto py-8 px-4">
+            <div className="mb-8 space-y-3">
                 <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                    <span>Question {currentQIndex + 1} of {questions.length}</span>
-                    <span>{Math.round(progress)}% Complete</span>
+                    <span className="bg-muted px-2 py-1 rounded">Question {currentQIndex + 1} of {questions.length}</span>
+                    <span>{Math.round(progress)}%</span>
                 </div>
-                <Progress value={progress} className="h-2" />
+                <Progress value={progress} className="h-3 rounded-full" />
             </div>
             
-            <Card className="border-t-4 border-t-primary shadow-md">
-                <CardHeader>
+            <Card className="border-none shadow-xl ring-1 ring-muted">
+                <CardHeader className="pb-2">
                     <CardTitle className="text-xl md:text-2xl leading-relaxed font-semibold">
                         {q.question}
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <RadioGroup onValueChange={handleAnswer} value={userAnswers[currentQIndex]} className="gap-3">
+                <CardContent className="pt-6">
+                    <RadioGroup onValueChange={handleAnswer} value={userAnswers[currentQIndex]} className="gap-4">
                         {q.options.map((opt, i) => (
-                            <div key={i} className={`flex items-center space-x-3 border p-4 rounded-xl transition-all ${userAnswers[currentQIndex] === opt ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted/50 hover:border-muted-foreground/30'}`}>
+                            <div 
+                                key={i} 
+                                className={`flex items-center space-x-3 border-2 p-5 rounded-2xl transition-all cursor-pointer ${userAnswers[currentQIndex] === opt ? 'border-primary bg-primary/5 shadow-sm' : 'border-transparent bg-muted/40 hover:bg-muted/70'}`}
+                                onClick={() => handleAnswer(opt)}
+                            >
                                 <RadioGroupItem value={opt} id={`opt-${i}`} className="data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
                                 <Label htmlFor={`opt-${i}`} className="flex-1 cursor-pointer font-normal text-base md:text-lg leading-snug">{opt}</Label>
                             </div>
                         ))}
                     </RadioGroup>
                 </CardContent>
-                <CardFooter className="justify-end pt-4 border-t bg-muted/10">
-                    <Button onClick={handleNext} disabled={!userAnswers[currentQIndex]} size="lg" className="min-w-[140px]">
+                <CardFooter className="justify-end pt-6 pb-6 pr-6">
+                    <Button onClick={handleNext} disabled={!userAnswers[currentQIndex]} size="lg" className="min-w-[160px] h-12 text-base rounded-xl">
                         {currentQIndex === questions.length - 1 ? "Finish Test" : "Next Question"}
                     </Button>
                 </CardFooter>
@@ -327,154 +340,143 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
     else if (percentage < 80) colorClass = "text-yellow-500";
     
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto py-6">
-            {/* SCORE CARD */}
-            <Card className="text-center overflow-hidden border-none shadow-xl bg-gradient-to-b from-background to-muted/20">
-                <div className={`h-2 w-full ${percentage >= 80 ? 'bg-green-500' : percentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} />
-                <CardContent className="pt-10 pb-10">
-                    <div className="mb-6 inline-flex p-4 rounded-full bg-muted/30">
-                        <Trophy className={`h-12 w-12 ${colorClass}`} />
-                    </div>
-                    <h2 className="text-4xl font-extrabold mb-2 tracking-tight">Test Complete!</h2>
-                    <div className={`text-6xl font-black ${colorClass} mb-4 tracking-tighter`}>
-                        {percentage}%
-                    </div>
-                    <p className="text-xl text-muted-foreground">You got <span className="font-bold text-foreground">{score}</span> out of {questions.length} correct.</p>
-                </CardContent>
-            </Card>
+        <div className="max-w-4xl mx-auto py-8 px-4 space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            
+            {/* 1. SCORE CARD (HERO) */}
+            <div className="text-center space-y-4">
+                <div className="inline-flex items-center justify-center p-6 rounded-full bg-background shadow-lg border mb-4">
+                    <Trophy className={`h-16 w-16 ${colorClass}`} />
+                </div>
+                <h1 className="text-5xl font-black tracking-tight">{percentage}%</h1>
+                <p className="text-2xl text-muted-foreground">You scored {score} out of {questions.length}</p>
+            </div>
 
-            {/* WRONG ANSWERS ACTION SECTION */}
+            {/* 2. AI REPORT (FULL WIDTH - FEATURED) */}
             {wrongAnswers.length > 0 && (
-                <div className="grid gap-8 lg:grid-cols-2">
-                    
-                    {/* COLUMNA IZQUIERDA: REPORT & ACTIONS */}
-                    <div className="space-y-6">
-                        
-                        {/* ANALYSIS CARD */}
-                        <Card className="flex flex-col h-full border-blue-200/50 dark:border-blue-900/50 shadow-md">
-                            <CardHeader className="bg-blue-50/50 dark:bg-blue-950/20 pb-4 border-b border-blue-100 dark:border-blue-900/50">
-                                <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                                    <Sparkles className="h-5 w-5" /> AI Knowledge Report
-                                </CardTitle>
-                                <CardDescription>Personalized analysis of your mistakes.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-1 p-0">
-                                {!analysisReport ? (
-                                    <div className="p-8 flex flex-col items-center justify-center text-center h-full min-h-[200px]">
-                                        <p className="text-muted-foreground mb-6">Unlock insights to understand why you missed these questions.</p>
-                                        <Button onClick={handleAnalyze} disabled={isAnalyzing} className="w-full max-w-xs bg-blue-600 hover:bg-blue-700 text-white">
-                                            {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Generate AI Report"}
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <ScrollArea className="h-[400px] w-full">
-                                        <div className="p-6 text-sm text-foreground leading-relaxed">
-                                            {/* RENDERIZADO PERSONALIZADO DE MARKDOWN PARA MEJOR DISEÑO */}
-                                            <ReactMarkdown
-                                                components={{
-                                                    h1: ({node, ...props}) => <h3 className="text-lg font-bold mt-6 mb-3 text-blue-600 dark:text-blue-400 border-b pb-1" {...props} />,
-                                                    h2: ({node, ...props}) => <h4 className="text-base font-bold mt-5 mb-2 text-foreground" {...props} />,
-                                                    h3: ({node, ...props}) => <h5 className="text-sm font-bold mt-4 mb-2" {...props} />,
-                                                    p: ({node, ...props}) => <p className="mb-4 text-muted-foreground leading-7" {...props} />,
-                                                    ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-2 bg-muted/30 p-3 rounded-lg" {...props} />,
-                                                    li: ({node, ...props}) => <li className="text-muted-foreground pl-1" {...props} />,
-                                                    strong: ({node, ...props}) => <span className="font-bold text-foreground" {...props} />,
-                                                }}
-                                            >
-                                                {analysisReport}
-                                            </ReactMarkdown>
-                                        </div>
-                                    </ScrollArea>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        {/* SAVE CARD */}
-                        <Card className="border-green-200/50 dark:border-green-900/50 shadow-md">
-                            <CardHeader className="bg-green-50/50 dark:bg-green-950/20 pb-4 border-b border-green-100 dark:border-green-900/50">
-                                <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                                    <Save className="h-5 w-5" /> Save Mistakes
-                                </CardTitle>
-                                <CardDescription>Convert {wrongAnswers.length} mistakes into flashcards.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4 pt-6">
-                                <Select value={saveMode} onValueChange={(v: any) => setSaveMode(v)}>
-                                    <SelectTrigger><SelectValue placeholder="Choose action..." /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Select an option...</SelectItem>
-                                        <SelectItem value="existing">Add to existing deck</SelectItem>
-                                        <SelectItem value="new">Create new deck</SelectItem>
-                                    </SelectContent>
-                                </Select>
-
-                                {saveMode === "existing" && (
-                                    <Select value={selectedDeckId} onValueChange={setSelectedDeckId}>
-                                        <SelectTrigger><SelectValue placeholder="Select Deck" /></SelectTrigger>
-                                        <SelectContent>
-                                            {userDecks.map(deck => (
-                                                <SelectItem key={deck.id} value={deck.id}>{deck.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-
-                                {saveMode === "new" && (
-                                    <Input placeholder="New Deck Name" value={newDeckName} onChange={e => setNewDeckName(e.target.value)} />
-                                )}
-
-                                <Button 
-                                    onClick={handleSaveToDeck} 
-                                    disabled={isSaving || saveMode === "none"} 
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Save Cards to Deck"}
+                <div ref={reportRef} className="scroll-mt-24">
+                    <Card className="border-blue-200 dark:border-blue-900 shadow-xl overflow-hidden">
+                        <div className="bg-gradient-to-r from-blue-50 to-white dark:from-blue-950/30 dark:to-background border-b border-blue-100 dark:border-blue-900 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-100 dark:bg-blue-900 p-2 rounded-lg">
+                                    <Sparkles className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-xl text-blue-900 dark:text-blue-100">AI Knowledge Report</CardTitle>
+                                    <CardDescription className="text-blue-700/80 dark:text-blue-300/80">Personalized analysis of your knowledge gaps.</CardDescription>
+                                </div>
+                            </div>
+                            {!analysisReport && (
+                                <Button onClick={handleAnalyze} disabled={isAnalyzing} size="lg" className="bg-blue-600 hover:bg-blue-700 text-white shadow-md w-full md:w-auto">
+                                    {isAnalyzing ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : "Generate Analysis"}
                                 </Button>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* COLUMNA DERECHA: LIST OF ERRORS */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-xl font-bold flex items-center gap-2">
-                                <AlertTriangle className="h-5 w-5 text-amber-500" /> Mistakes Review
-                            </h3>
-                            <span className="text-sm text-muted-foreground">{wrongAnswers.length} Incorrect</span>
+                            )}
                         </div>
                         
-                        <ScrollArea className="h-[600px] pr-4">
-                            <div className="space-y-4">
-                                {wrongAnswers.map((w, i) => (
-                                    <Card key={i} className="border-l-4 border-l-destructive shadow-sm hover:shadow-md transition-shadow">
-                                        <CardContent className="pt-5 pb-5">
-                                            <p className="font-semibold text-lg mb-4 leading-snug">{w.question}</p>
-                                            <div className="space-y-3">
-                                                <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/20 text-sm">
-                                                    <XCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                                                    <div>
-                                                        <span className="font-bold text-red-700 dark:text-red-400 block mb-1">Your Answer</span>
-                                                        <span className="text-red-900 dark:text-red-200">{w.userAnswer}</span>
-                                                    </div>
+                        {analysisReport && (
+                            <CardContent className="p-8 md:p-10 bg-card/50">
+                                <article className="prose prose-lg dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground">
+                                    <ReactMarkdown>{analysisReport}</ReactMarkdown>
+                                </article>
+                            </CardContent>
+                        )}
+                    </Card>
+                </div>
+            )}
+
+            {/* 3. DETAILS GRID (MISTAKES & SAVE) */}
+            {wrongAnswers.length > 0 && (
+                <div className="grid gap-8 md:grid-cols-2 items-start">
+                    
+                    {/* LEFT: SAVE CARD */}
+                    <Card className="border-green-200 dark:border-green-900 shadow-md h-full">
+                        <CardHeader className="bg-green-50/50 dark:bg-green-950/20 pb-4 border-b border-green-100 dark:border-green-900">
+                            <CardTitle className="flex items-center gap-2 text-green-800 dark:text-green-300">
+                                <Save className="h-5 w-5" /> Save to Deck
+                            </CardTitle>
+                            <CardDescription>Don't lose this knowledge. Turn mistakes into flashcards.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4 pt-6">
+                            <Select value={saveMode} onValueChange={(v: any) => setSaveMode(v)}>
+                                <SelectTrigger className="h-11"><SelectValue placeholder="Choose action..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Select an option...</SelectItem>
+                                    <SelectItem value="existing">Add to existing deck</SelectItem>
+                                    <SelectItem value="new">Create new deck</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {saveMode === "existing" && (
+                                <Select value={selectedDeckId} onValueChange={setSelectedDeckId}>
+                                    <SelectTrigger className="h-11"><SelectValue placeholder="Select Deck" /></SelectTrigger>
+                                    <SelectContent>
+                                        {userDecks.map(deck => (
+                                            <SelectItem key={deck.id} value={deck.id}>{deck.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+
+                            {saveMode === "new" && (
+                                <Input className="h-11" placeholder="New Deck Name" value={newDeckName} onChange={e => setNewDeckName(e.target.value)} />
+                            )}
+
+                            <Button 
+                                onClick={handleSaveToDeck} 
+                                disabled={isSaving || saveMode === "none"} 
+                                className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-semibold"
+                            >
+                                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Save Cards"}
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    {/* RIGHT: MISTAKES LIST */}
+                    <Card className="shadow-md h-full flex flex-col">
+                        <CardHeader className="pb-3 border-b">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-500">
+                                    <AlertTriangle className="h-5 w-5" /> Mistakes Review
+                                </CardTitle>
+                                <span className="text-sm font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-md">
+                                    {wrongAnswers.length} items
+                                </span>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0 flex-1">
+                            <ScrollArea className="h-[350px]">
+                                <div className="p-4 space-y-4">
+                                    {wrongAnswers.map((w, i) => (
+                                        <div key={i} className="p-4 rounded-xl border bg-muted/10 space-y-3">
+                                            <p className="font-semibold text-base leading-snug">{w.question}</p>
+                                            <div className="grid gap-2 text-sm">
+                                                <div className="flex gap-2 text-red-600 dark:text-red-400">
+                                                    <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                                    <span className="font-medium">{w.userAnswer}</span>
                                                 </div>
-                                                <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 text-sm">
-                                                    <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                                                    <div>
-                                                        <span className="font-bold text-green-700 dark:text-green-400 block mb-1">Correct Answer</span>
-                                                        <span className="text-green-900 dark:text-green-200">{w.correctAnswer}</span>
-                                                    </div>
+                                                <div className="flex gap-2 text-green-600 dark:text-green-400">
+                                                    <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                                    <span className="font-medium">{w.correctAnswer}</span>
                                                 </div>
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        </ScrollArea>
-                    </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
             
-            <div className="flex justify-center pt-8 border-t">
-                 <Button variant="outline" size="lg" onClick={() => window.location.reload()}>Take Another Test</Button>
+            {/* 4. FOOTER ACTION */}
+            <div className="flex justify-center pt-12 pb-20">
+                 <Button 
+                    variant="outline" 
+                    size="lg" 
+                    className="h-14 px-8 text-lg rounded-full border-2 hover:bg-muted hover:border-foreground/20 transition-all"
+                    onClick={() => window.location.reload()}
+                >
+                    <RefreshCcw className="mr-2 h-5 w-5" /> Take Another Test
+                </Button>
             </div>
         </div>
     );
