@@ -10,7 +10,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'btadajavtmwrvzeuuenb.supabase.co', // <-- REEMPLAZA ESTO
+        hostname: 'btadajavtmwrvzeuuenb.supabase.co', // Tu Supabase
         port: '',
         pathname: '/storage/v1/object/public/card-images/**',
       },
@@ -18,12 +18,22 @@ const nextConfig = {
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
-      // Don't resolve 'fs' module on the client to prevent this error on build
+      // Aquí le decimos a Webpack que ignore todos estos módulos de Node.js
+      // cuando esté preparando la versión para el navegador.
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         path: false,
         crypto: false,
+        net: false,
+        tls: false,
+        child_process: false,
+        dgram: false,
+        os: false,
+        https: false,
+        http: false,
+        vm: false,
+        stream: false,
       }
     }
     return config
