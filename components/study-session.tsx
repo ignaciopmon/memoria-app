@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles } from "lucide-react"
+import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles, Volume2 } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import type { Shortcuts } from "@/components/shortcuts-form"
 import { ImageViewerDialog } from "./image-viewer-dialog"
-import { calculateNextReview, type UserSettings, type Rating } from "@/lib/srs" // Importamos la lógica compartida
+import { calculateNextReview, type UserSettings, type Rating } from "@/lib/srs"
+// Importamos el SDK de Microsoft
+import * as speechsdk from "microsoft-cognitiveservices-speech-sdk"
 
 interface StudySessionProps {
   deck: { id: string; name: string }
@@ -33,6 +35,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false) // Estado para evitar spam de clicks
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null)
   const [shortcuts, setShortcuts] = useState<Shortcuts | null>(null)
   const router = useRouter()
@@ -56,12 +59,58 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const progress = (currentIndex / (cards.length || 1)) * 100
   const isComplete = currentIndex >= cards.length
 
+  // --- FUNCIÓN DE AUDIO AZURE ---
+  const playAudio = useCallback((text: string) => {
+    if (isPlayingAudio || !text) return;
+
+    const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY;
+    const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION;
+
+    if (!key || !region) {
+      console.warn("Faltan las claves de Azure Speech en las variables de entorno.");
+      return;
+    }
+
+    setIsPlayingAudio(true);
+
+    try {
+      const speechConfig = speechsdk.SpeechConfig.fromSubscription(key, region);
+      // 'en-US-AriaNeural' es una de las mejores voces para inglés general.
+      // Puedes probar también 'en-US-GuyNeural' para voz masculina.
+      speechConfig.speechSynthesisVoiceName = "en-US-AriaNeural"; 
+
+      const audioConfig = speechsdk.AudioConfig.fromDefaultSpeakerOutput();
+      const synthesizer = new speechsdk.SpeechSynthesizer(speechConfig, audioConfig);
+
+      synthesizer.speakTextAsync(
+        text,
+        (result) => {
+          if (result.reason === speechsdk.ResultReason.SynthesizingAudioCompleted) {
+            // Audio terminado correctamente
+          } else {
+            console.error("Error en síntesis de voz: " + result.errorDetails);
+          }
+          setIsPlayingAudio(false);
+          synthesizer.close();
+        },
+        (err) => {
+          console.error("Error fatal en audio: " + err);
+          setIsPlayingAudio(false);
+          synthesizer.close();
+        }
+      );
+    } catch (e) {
+      console.error("Error al inicializar Azure SDK", e);
+      setIsPlayingAudio(false);
+    }
+  }, [isPlayingAudio]);
+  // ------------------------------
+
   const handleRating = useCallback(async (rating: Rating) => {
     if (!currentCard || isSubmitting) return
     setIsSubmitting(true)
     const supabase = createClient()
     
-    // Usar valores por defecto seguros si aún no han cargado los settings
     const currentSettings = userSettings || {
         again_interval_minutes: 1,
         hard_interval_days: 1,
@@ -70,7 +119,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     };
 
     try {
-      // USAMOS LA LÓGICA CENTRALIZADA
       const updates = calculateNextReview(currentCard, rating, currentSettings)
       
       await supabase
@@ -92,7 +140,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       setShowAnswer(false)
     } catch (error) {
       console.error("Error submitting rating:", error)
-      // Feedback visual simple podría ir aquí (toast)
     } finally {
       setIsSubmitting(false)
     }
@@ -102,14 +149,13 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
 
     const key = event.key === ' ' ? ' ' : event.key.toLowerCase()
-    const s = shortcuts || { flip_card: ' ', rate_again: '1', rate_hard: '2', rate_good: '3', rate_easy: '4', to_dashboard: 'd' }
+    const s = shortcuts || { flip_card: ' ', rate_again: '1', rate_hard: '2', rate_good: '3', rate_easy: '4', to_dashboard: 'd', play_audio: 'p' } // Añadido shortcut opcional 'p'
 
     if (!isComplete) {
         if (!showAnswer && key === s.flip_card.toLowerCase()) {
           event.preventDefault()
           setShowAnswer(true)
         } else if (showAnswer) {
-            // No prevenimos default para teclas numéricas si no hay conflicto, pero aquí es seguro
             if ([s.rate_again, s.rate_hard, s.rate_good, s.rate_easy].some(k => k.toLowerCase() === key)) {
                 event.preventDefault()
             }
@@ -120,13 +166,20 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                 case s.rate_easy.toLowerCase(): handleRating(4); break;
             }
         }
+        
+        // Tecla rápida para audio (opcional, si quieres usar 'p')
+        if (key === 'p') { 
+            event.preventDefault();
+            // Lee lo que esté visible (respuesta si está visible, o pregunta si no)
+            playAudio(showAnswer ? currentCard.back : currentCard.front);
+        }
     }
 
     if (key === s.to_dashboard.toLowerCase()) {
         event.preventDefault()
         router.push('/dashboard')
     }
-  }, [showAnswer, shortcuts, handleRating, router, isComplete])
+  }, [showAnswer, shortcuts, handleRating, router, isComplete, currentCard, playAudio])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
@@ -211,7 +264,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
               
               {/* FRONT (QUESTION) */}
               <div className="flex-1 flex flex-col justify-center items-center space-y-4">
-                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary/10 text-primary uppercase tracking-wider">
+                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-primary/10 text-primary uppercase tracking-wider">
                     Question
                 </span>
                 
@@ -221,9 +274,21 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                   </div>
                 )}
                 
-                <h2 className="text-2xl sm:text-3xl font-bold text-balance leading-tight">
-                    {currentCard.front}
-                </h2>
+                <div className="flex items-center justify-center gap-3 w-full">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-balance leading-tight">
+                        {currentCard.front}
+                    </h2>
+                    <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); playAudio(currentCard.front); }}
+                        title="Listen in English"
+                    >
+                        <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
+                        <span className="sr-only">Listen</span>
+                    </Button>
+                </div>
               </div>
 
               {/* DIVIDER */}
@@ -244,9 +309,21 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                     </div>
                   )}
                   
-                  <p className="text-xl sm:text-2xl text-muted-foreground text-balance">
-                    {currentCard.back}
-                  </p>
+                  <div className="flex items-center justify-center gap-3 w-full">
+                      <p className="text-xl sm:text-2xl text-muted-foreground text-balance">
+                        {currentCard.back}
+                      </p>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); playAudio(currentCard.back); }}
+                        title="Listen in English"
+                    >
+                        <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
+                        <span className="sr-only">Listen</span>
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -309,7 +386,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   )
 }
 
-// Subcomponente para botones limpios
 function RatingButton({ rating, label, icon, interval, colorClass, onClick, disabled, shortcut }: any) {
     return (
         <Button 
