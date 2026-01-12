@@ -18,15 +18,15 @@ const nextConfig = {
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
-      // Aquí le decimos a Webpack que ignore todos estos módulos de Node.js
-      // cuando esté preparando la versión para el navegador.
+      // Le decimos a Webpack que ignore estos módulos de Node.js
+      // cuando esté construyendo la versión para el navegador (cliente).
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         path: false,
         crypto: false,
-        net: false,
-        tls: false,
+        net: false,      // Necesario para Azure Speech
+        tls: false,      // Necesario para Azure Speech
         child_process: false,
         dgram: false,
         os: false,
@@ -34,6 +34,7 @@ const nextConfig = {
         http: false,
         vm: false,
         stream: false,
+        constants: false,
       }
     }
     return config
