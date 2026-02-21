@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/breadcrumb"
 import { Badge } from "@/components/ui/badge"
 
-export default async function DeckPage({ params }: { params: { id: string } }) {
-  const { id } = params
+export default async function DeckPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
