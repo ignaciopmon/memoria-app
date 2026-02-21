@@ -12,18 +12,16 @@ const nextConfig = {
       },
     ],
   },
-  // Añadimos pdfjs-dist por si acaso
-  serverExternalPackages: ['@cyber2024/pdf-parse-fixed', 'pdfjs-dist'],
-  
-  // SOLUCIÓN: Le decimos a Webpack que ignore el módulo "canvas"
+  serverExternalPackages: ['@cyber2024/pdf-parse-fixed'],
   webpack: (config) => {
-    config.resolve.alias.canvas = false;
-    // Opcional: ignorar otros módulos nativos que a veces dan problemas con PDFs
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
+      net: false,
+      tls: false,
       canvas: false,
-      encoding: false
+      child_process: false,
+      perf_hooks: false,
     };
     return config;
   },

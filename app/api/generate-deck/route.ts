@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import pdfParse from "@cyber2024/pdf-parse-fixed";
+// ELIMINADO EL IMPORT GLOBAL DE PDF-PARSE
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +100,9 @@ export async function POST(request: Request) {
 
     if (generationSource === 'pdf' && pdfFile) {
         try {
+            // IMPORTACIÓN DINÁMICA
+            const pdfParse = (await import("@cyber2024/pdf-parse-fixed")).default;
+
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const data = await pdfParse(buffer);
