@@ -1,15 +1,9 @@
-// app/api/add-ai-cards/route.ts
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-// Use the fixed fork
-const pdfParse = require('@cyber2024/pdf-parse-fixed');
 
 export const dynamic = "force-dynamic";
 
-// Helper para limpiar JSON rebelde
 function cleanAndParseJSON(text: string) {
     let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
     const firstOpen = cleanText.indexOf('[');
@@ -55,8 +49,7 @@ export async function POST(request: Request) {
   const genAI = new GoogleGenerativeAI(apiKey);
 
   try {
-    const cookieStore = await cookies();
-    const supabase = await createClient(cookieStore);
+    const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -85,6 +78,8 @@ export async function POST(request: Request) {
 
     if (generationSource === 'pdf' && pdfFile) {
         try {
+            // EL REQUIRE AHORA ESTÁ AQUÍ ADENTRO PARA QUE NO ROMPA EL BUILD
+            const pdfParse = require('@cyber2024/pdf-parse-fixed');
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const data = await pdfParse(buffer);
@@ -98,7 +93,7 @@ export async function POST(request: Request) {
 
             if (targetPages) {
                 const allPagesText = data.text.split(/\f/);
-                pdfTextContent = targetPages.map(pageNum => allPagesText[pageNum - 1]).filter(text => text).join('\n\n---\n\n');
+                pdfTextContent = targetPages.map((pageNum: number) => allPagesText[pageNum - 1]).filter((text: string) => text).join('\n\n---\n\n');
                 sourceDescription = `Content from PDF '${pdfFile.name}' (Pages: ${pageRangeStr})`;
             } else {
                 pdfTextContent = data.text;
@@ -110,7 +105,6 @@ export async function POST(request: Request) {
         }
     }
 
-    // Fetch existing cards for context
     const { data: existingCards } = await supabase
         .from('cards')
         .select('front, back')
@@ -140,7 +134,6 @@ export async function POST(request: Request) {
     let generatedCards;
 
     try {
-        // MODELO ELEGIDO POR TI
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
         const result = await model.generateContent(prompt);
         const response = await result.response;

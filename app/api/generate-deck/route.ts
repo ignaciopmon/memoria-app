@@ -1,32 +1,20 @@
-// app/api/generate-deck/route.ts
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-// Use the fixed fork
-const pdfParse = require('@cyber2024/pdf-parse-fixed');
 
 export const dynamic = "force-dynamic";
 
-// Helper para limpiar JSON rebelde
 function cleanAndParseJSON(text: string) {
-    // 1. Quitar bloques de código markdown si existen
     let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    
-    // 2. Buscar estrictamente el primer '[' y el último ']'
     const firstOpen = cleanText.indexOf('[');
     const lastClose = cleanText.lastIndexOf(']');
     
     if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
         cleanText = cleanText.substring(firstOpen, lastClose + 1);
     }
-    
-    // 3. Intentar parsear
     return JSON.parse(cleanText);
 }
 
-// Helper function to parse page ranges
 function parsePageRange(rangeString: string | null | undefined, maxPages: number): number[] | null {
     if (!rangeString || rangeString.trim() === '') return null;
 
@@ -76,8 +64,7 @@ export async function POST(request: Request) {
   const genAI = new GoogleGenerativeAI(apiKey);
 
   try {
-    const cookieStore = await cookies();
-    const supabase = await createClient(cookieStore);
+    const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -97,7 +84,6 @@ export async function POST(request: Request) {
 
     const cardCount = cardCountStr ? parseInt(cardCountStr, 10) : 0;
 
-    // --- VALIDATIONS ---
     if (!deckName || !cardType || !cardCount || !language || !difficulty || !generationSource) {
       return NextResponse.json({ error: "Missing required fields in form data." }, { status: 400 });
     }
@@ -108,12 +94,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "PDF file is required for PDF-based generation." }, { status: 400 });
     }
 
-    // --- PDF Processing Logic ---
     let pdfTextContent = "";
     let contextDescription = `Topic: ${topic}`;
 
     if (generationSource === 'pdf' && pdfFile) {
         try {
+            // EL REQUIRE ESTÁ AQUÍ ADENTRO, OCULTO A VERCEL EN TIEMPO DE BUILD
+            const pdfParse = require('@cyber2024/pdf-parse-fixed');
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const data = await pdfParse(buffer);
@@ -131,8 +118,8 @@ export async function POST(request: Request) {
             if (targetPages) {
                 const allPagesText = data.text.split(/\f/);
                 pdfTextContent = targetPages
-                                .map(pageNum => allPagesText[pageNum - 1])
-                                .filter(text => text)
+                                .map((pageNum: number) => allPagesText[pageNum - 1])
+                                .filter((text: string) => text)
                                 .join('\n\n---\n\n');
                 contextDescription = `Content extracted from PDF '${pdfFile.name}' (Pages: ${pageRangeStr})`;
             } else {
@@ -180,13 +167,11 @@ export async function POST(request: Request) {
     let generatedCards;
 
     try {
-        // MODELO ELEGIDO POR TI
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const text = response.text();
 
-        // Limpieza robusta
         generatedCards = cleanAndParseJSON(text);
 
         if (!Array.isArray(generatedCards)) {
@@ -198,7 +183,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Failed to generate content with AI. " + aiError.message }, { status: 500 });
     }
 
-    // --- DATABASE INSERTION ---
     const { data: newDeck, error: deckError } = await supabase
         .from('decks')
         .insert({

@@ -1,11 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
   images: {
     remotePatterns: [
       {
@@ -16,14 +12,30 @@ const nextConfig = {
       },
     ],
   },
-  // Le decimos a Next.js 15 que estas librerías de servidor son externas
-  serverExternalPackages: ['@cyber2024/pdf-parse-fixed', 'pdfjs-dist'],
-  
-  webpack: (config) => {
-    // Evita que el parseador de PDF busque el módulo canvas y rompa Vercel
+  serverExternalPackages: ['@cyber2024/pdf-parse-fixed'],
+  webpack: (config, { isServer }) => {
     config.resolve.alias.canvas = false;
     config.resolve.alias.encoding = false;
     
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+        net: false,
+        tls: false,
+        child_process: false,
+        dgram: false,
+        os: false,
+        https: false,
+        http: false,
+        vm: false,
+        stream: false,
+        constants: false,
+        zlib: false,
+      };
+    }
     return config;
   },
 }

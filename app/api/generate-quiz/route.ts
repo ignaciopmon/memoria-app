@@ -1,7 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-// Use the fixed fork
-const pdfParse = require('@cyber2024/pdf-parse-fixed');
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +26,13 @@ export async function POST(request: Request) {
     const difficulty = formData.get('difficulty') as string;
     const language = formData.get('language') as string;
     const pdfFile = formData.get('pdfFile') as File | null;
-    // NUEVO: Recibimos preguntas a evitar (JSON string)
     const avoidQuestionsJson = formData.get('avoidQuestions') as string | null;
     
     let sourceMaterial = "";
     
     if (pdfFile) {
+        // EL REQUIRE AQUÍ ADENTRO, FUERA DEL ALCANCE DE VERCEL BUILD
+        const pdfParse = require('@cyber2024/pdf-parse-fixed');
         const arrayBuffer = await pdfFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const data = await pdfParse(buffer);
