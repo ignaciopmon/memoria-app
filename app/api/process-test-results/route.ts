@@ -3,7 +3,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { calculateNextReview, type UserSettings, type Rating, type CardSRS } from "@/lib/srs"; // IMPORTADO
 
 export const dynamic = "force-dynamic";
@@ -33,8 +32,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const cookieStore = await cookies();
-    const supabase = await createClient(cookieStore);
+    const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {

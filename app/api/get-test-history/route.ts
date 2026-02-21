@@ -1,13 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+// Elimina la importación de cookies
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const supabase = await createClient(cookieStore);
+    // Llama a createClient() sin argumentos
+    const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
