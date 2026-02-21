@@ -35,13 +35,19 @@ export default async function UpcomingPage() {
     console.error("Error fetching upcoming cards:", error)
   }
 
-return (
+  // Aseguramos que 'deck' sea tratado como un objeto único para calmar a TypeScript
+  const formattedCards = (cards as any[])?.map(card => ({
+    ...card,
+    deck: Array.isArray(card.deck) ? card.deck[0] : card.deck
+  })) || [];
+
+  return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
          <Link href="/" className="flex items-center gap-2">
             <Brain className="h-6 w-6" />
-           <span className="text-xl font-bold select-none">Memoria</span> {/* Texto no seleccionable */}
+           <span className="text-xl font-bold select-none">Memoria</span>
          </Link>
         </div>
       </header>
@@ -57,7 +63,7 @@ return (
             <h1 className="text-3xl font-bold">Upcoming Reviews</h1>
             <p className="text-muted-foreground">Cards scheduled for review in the near future.</p>
           </div>
-          <UpcomingList initialCards={cards || []} />
+          <UpcomingList initialCards={formattedCards} />
         </div>
       </main>
     </div>
