@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles, Volume2 } from "lucide-react"
+import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles, Volume2, Maximize, Minimize } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import type { Shortcuts } from "@/components/shortcuts-form"
@@ -34,6 +34,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [showAnswer, setShowAnswer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [isZenMode, setIsZenMode] = useState(false)
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null)
   const [shortcuts, setShortcuts] = useState<Shortcuts | null>(null)
   const router = useRouter()
@@ -57,7 +58,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const progress = (currentIndex / (cards.length || 1)) * 100
   const isComplete = currentIndex >= cards.length
 
-  // --- FUNCIÓN DE AUDIO NATIVA DE GOOGLE/NAVEGADOR ---
+  // --- REPRODUCCIÓN DE AUDIO ---
   const playAudio = useCallback((text: string) => {
     if (!text || isPlayingAudio) return;
 
@@ -87,11 +88,40 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     window.speechSynthesis.speak(utterance);
   }, [isPlayingAudio]);
 
+  // --- RESPUESTA TÁCTIL Y SONORA (HAPTIC/AUDIO FEEDBACK) ---
+  const playFeedback = useCallback(() => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(40); // Sutil vibración
+    }
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.1);
+      
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch (e) {
+      // Si el navegador bloquea el audio, ignoramos el error
+    }
+  }, []);
+
   const handleRating = useCallback(async (rating: Rating) => {
     if (!currentCard || isSubmitting) return
     setIsSubmitting(true)
-    const supabase = createClient()
+    playFeedback() // Disparar feedback sonoro/táctil
     
+    const supabase = createClient()
     const currentSettings = userSettings || {
         again_interval_minutes: 1,
         hard_interval_days: 1,
@@ -124,7 +154,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     } finally {
       setIsSubmitting(false)
     }
-  }, [currentCard, isSubmitting, userSettings])
+  }, [currentCard, isSubmitting, userSettings, playFeedback])
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
@@ -214,8 +244,8 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
+    <div className="flex min-h-screen flex-col bg-background relative">
+      <header className={`border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 ${isZenMode ? 'hidden' : 'block'}`}>
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" asChild className="-ml-2">
@@ -227,66 +257,89 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                 {deck.name}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-sm font-medium tabular-nums">
-             <span className="text-primary">{currentIndex + 1}</span>
-             <span className="text-muted-foreground">/</span>
-             <span className="text-muted-foreground">{cards.length}</span>
+          <div className="flex items-center gap-4">
+             <div className="text-sm font-medium tabular-nums flex items-center gap-1">
+                 <span className="text-primary">{currentIndex + 1}</span>
+                 <span className="text-muted-foreground">/</span>
+                 <span className="text-muted-foreground">{cards.length}</span>
+             </div>
+             <Button variant="ghost" size="icon" onClick={() => setIsZenMode(true)} title="Focus Mode" className="text-muted-foreground hover:text-foreground">
+                <Maximize className="h-4 w-4" />
+             </Button>
           </div>
         </div>
         <Progress value={progress} className="h-1 w-full rounded-none bg-muted" />
       </header>
       
-      <main className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8">
-        <div className="w-full max-w-2xl perspective-1000">
-          <Card className="overflow-hidden shadow-lg border-muted/60 min-h-[400px] flex flex-col">
-            <CardContent className="flex-1 flex flex-col justify-center p-6 sm:p-10 text-center">
-              
-              <div className="flex-1 flex flex-col justify-center items-center space-y-4">
-                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-primary/10 text-primary uppercase tracking-wider">
-                    Question
-                </span>
-                
-                {currentCard.front_image_url && (
-                  <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-64 w-full flex justify-center">
-                     <ImageViewerDialog src={currentCard.front_image_url} alt="Front image" triggerClassName="w-auto h-auto max-h-64 object-contain" />
-                  </div>
-                )}
-                
-                <div className="flex items-center justify-center gap-3 w-full">
-                    <h2 className="text-2xl sm:text-3xl font-bold text-balance leading-tight">
-                        {currentCard.front}
-                    </h2>
-                    <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); playAudio(currentCard.front); }}
-                        title="Listen"
-                    >
-                        <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
-                        <span className="sr-only">Listen</span>
-                    </Button>
-                </div>
-              </div>
+      <main className={`flex flex-1 flex-col items-center justify-center p-4 sm:p-8 transition-all ${isZenMode ? 'fixed inset-0 z-50 bg-background/95 backdrop-blur-sm' : ''}`}>
+        
+        {isZenMode && (
+          <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-50 text-muted-foreground hover:text-foreground" onClick={() => setIsZenMode(false)} title="Exit Focus Mode">
+            <Minimize className="h-5 w-5" />
+          </Button>
+        )}
 
-              {showAnswer && (
-                  <div className="my-8 border-t border-dashed" />
-              )}
-
-              {showAnswer && (
-                <div className="flex-1 flex flex-col justify-center items-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-muted text-muted-foreground uppercase tracking-wider">
-                    Answer
+        {/* CONTENEDOR DE LA TARJETA 3D */}
+        <div className="w-full max-w-2xl flex-1 flex flex-col perspective-1000">
+          <div className={`relative w-full h-full min-h-[40vh] sm:min-h-[50vh] transition-transform duration-500 ease-out preserve-3d ${showAnswer ? 'rotate-y-180' : ''}`}>
+            
+            {/* CARA FRONTAL (PREGUNTA) */}
+            <Card className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 backface-hidden bg-card">
+              <CardContent className="flex-1 overflow-y-auto flex flex-col justify-center p-6 sm:p-10 text-center">
+                <div className="flex-1 flex flex-col justify-center items-center space-y-4">
+                  <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-primary/10 text-primary uppercase tracking-wider mb-2">
+                      Question
                   </span>
                   
-                   {currentCard.back_image_url && (
-                    <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-64 w-full flex justify-center">
-                        <ImageViewerDialog src={currentCard.back_image_url} alt="Back image" triggerClassName="w-auto h-auto max-h-64 object-contain" />
+                  {currentCard.front_image_url && (
+                    <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-56 w-full flex justify-center mb-4">
+                       <ImageViewerDialog src={currentCard.front_image_url} alt="Front image" triggerClassName="w-auto h-auto max-h-56 object-contain" />
                     </div>
                   )}
                   
                   <div className="flex items-center justify-center gap-3 w-full">
-                      <p className="text-xl sm:text-2xl text-muted-foreground text-balance">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-balance leading-tight">
+                          {currentCard.front}
+                      </h2>
+                      <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); playAudio(currentCard.front); }}
+                          title="Listen"
+                      >
+                          <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
+                          <span className="sr-only">Listen</span>
+                      </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* CARA TRASERA (RESPUESTA) */}
+            <Card className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 backface-hidden rotate-y-180 bg-card">
+              <CardContent className="flex-1 overflow-y-auto flex flex-col justify-center p-6 sm:p-10 text-center">
+                
+                {/* Recordatorio sutil de la pregunta en la parte superior */}
+                <div className="opacity-50 text-sm mb-4 font-medium text-balance">
+                   {currentCard.front}
+                </div>
+                
+                <div className="my-2 border-t border-dashed w-full max-w-xs mx-auto mb-6" />
+
+                <div className="flex-1 flex flex-col justify-center items-center space-y-4">
+                  <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-muted text-muted-foreground uppercase tracking-wider mb-2">
+                    Answer
+                  </span>
+                  
+                   {currentCard.back_image_url && (
+                    <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-56 w-full flex justify-center mb-4">
+                        <ImageViewerDialog src={currentCard.back_image_url} alt="Back image" triggerClassName="w-auto h-auto max-h-56 object-contain" />
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-center gap-3 w-full">
+                      <p className="text-xl sm:text-2xl text-foreground text-balance font-medium">
                         {currentCard.back}
                       </p>
                       <Button 
@@ -301,18 +354,20 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                     </Button>
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+          </div>
         </div>
 
-        <div className="w-full max-w-2xl mt-8 h-24 flex items-end justify-center">
+        {/* CONTROLES INFERIORES */}
+        <div className="w-full max-w-2xl mt-8 h-24 flex items-end justify-center z-10">
           {!showAnswer ? (
-            <Button size="lg" onClick={() => setShowAnswer(true)} className="w-full sm:w-auto min-w-[200px] text-lg h-12 shadow-md hover:shadow-lg transition-all">
+            <Button size="lg" onClick={() => setShowAnswer(true)} className="w-full sm:w-auto min-w-[200px] text-lg h-12 shadow-md hover:shadow-lg transition-all animate-in fade-in zoom-in duration-300">
               Show Answer <span className="ml-2 text-xs opacity-50 bg-primary-foreground/20 px-1.5 py-0.5 rounded">SPACE</span>
             </Button>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-300">
               <RatingButton 
                 rating={1} 
                 label="Again" 
