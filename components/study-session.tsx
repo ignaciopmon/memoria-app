@@ -57,7 +57,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const progress = (currentIndex / (cards.length || 1)) * 100
   const isComplete = currentIndex >= cards.length
 
-  // --- FUNCIÓN DE AUDIO NATIVA (GRATIS Y SIN CLAVES) ---
+  // --- FUNCIÓN DE AUDIO NATIVA DE GOOGLE/NAVEGADOR ---
   const playAudio = useCallback((text: string) => {
     if (!text || isPlayingAudio) return;
 
@@ -66,12 +66,9 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       return;
     }
 
-    // Cancelar cualquier audio anterior
     window.speechSynthesis.cancel();
-
     const utterance = new SpeechSynthesisUtterance(text);
     
-    // Intentar buscar una voz en inglés (opcional, si no usará la por defecto)
     const voices = window.speechSynthesis.getVoices();
     const enVoice = voices.find(voice => voice.lang.startsWith('en-') && voice.name.includes('Google')) 
                  || voices.find(voice => voice.lang.startsWith('en-'));
@@ -89,7 +86,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
     window.speechSynthesis.speak(utterance);
   }, [isPlayingAudio]);
-  // ----------------------------------------------------
 
   const handleRating = useCallback(async (rating: Rating) => {
     if (!currentCard || isSubmitting) return
@@ -245,7 +241,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           <Card className="overflow-hidden shadow-lg border-muted/60 min-h-[400px] flex flex-col">
             <CardContent className="flex-1 flex flex-col justify-center p-6 sm:p-10 text-center">
               
-              {/* FRONT (QUESTION) */}
               <div className="flex-1 flex flex-col justify-center items-center space-y-4">
                 <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-primary/10 text-primary uppercase tracking-wider">
                     Question
@@ -274,12 +269,10 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                 </div>
               </div>
 
-              {/* DIVIDER */}
               {showAnswer && (
                   <div className="my-8 border-t border-dashed" />
               )}
 
-              {/* BACK (ANSWER) */}
               {showAnswer && (
                 <div className="flex-1 flex flex-col justify-center items-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                   <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-muted text-muted-foreground uppercase tracking-wider">
@@ -313,7 +306,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           </Card>
         </div>
 
-        {/* CONTROLS */}
         <div className="w-full max-w-2xl mt-8 h-24 flex items-end justify-center">
           {!showAnswer ? (
             <Button size="lg" onClick={() => setShowAnswer(true)} className="w-full sm:w-auto min-w-[200px] text-lg h-12 shadow-md hover:shadow-lg transition-all">
