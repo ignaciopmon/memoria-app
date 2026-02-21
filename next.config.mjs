@@ -12,32 +12,8 @@ const nextConfig = {
       },
     ],
   },
-  serverExternalPackages: ['@cyber2024/pdf-parse-fixed', 'pdfjs-dist'],
-  webpack: (config, { isServer }) => {
-    config.resolve.alias.canvas = false;
-    config.resolve.alias.encoding = false;
-    
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        path: false,
-        crypto: false,
-        net: false,
-        tls: false,
-        child_process: false,
-        dgram: false,
-        os: false,
-        https: false,
-        http: false,
-        vm: false,
-        stream: false,
-        constants: false,
-        zlib: false,
-      };
-    }
-    return config;
-  },
+  // Solo necesitamos esto, nada de configuraciones de Webpack personalizadas:
+  serverExternalPackages: ['@cyber2024/pdf-parse-fixed'],
 }
 
 export default nextConfig;

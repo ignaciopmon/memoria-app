@@ -1,9 +1,9 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import pdfParse from "@cyber2024/pdf-parse-fixed";
 
 export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
 
 function cleanAndParseJSON(text: string) {
     let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
@@ -79,9 +79,6 @@ export async function POST(request: Request) {
 
     if (generationSource === 'pdf' && pdfFile) {
         try {
-            // HACK: Ocultamos el require a Webpack usando eval
-            const pdfParse = eval('require')('@cyber2024/pdf-parse-fixed');
-
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const data = await pdfParse(buffer);
