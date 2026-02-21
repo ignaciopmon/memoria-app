@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-// ELIMINADO EL IMPORT GLOBAL DE PDF-PARSE
 
 export const dynamic = "force-dynamic";
 
@@ -16,61 +15,19 @@ function cleanAndParseJSON(text: string) {
     return JSON.parse(cleanText);
 }
 
-function parsePageRange(rangeString: string | null | undefined, maxPages: number): number[] | null {
-    if (!rangeString || rangeString.trim() === '') return null;
-
-    const pages: number[] = [];
-    const ranges = rangeString.split(',');
-
-    try {
-        for (const range of ranges) {
-            const trimmedRange = range.trim();
-            if (trimmedRange.includes('-')) {
-                const [startStr, endStr] = trimmedRange.split('-');
-                const start = parseInt(startStr, 10);
-                const end = endStr.trim() === '' ? maxPages : parseInt(endStr, 10);
-
-                if (isNaN(start) || isNaN(end) || start < 1 || start > end || end > maxPages) {
-                    throw new Error(`Invalid range: ${trimmedRange}`);
-                }
-                for (let i = start; i <= end; i++) {
-                    pages.push(i);
-                }
-            } else {
-                const page = parseInt(trimmedRange, 10);
-                if (isNaN(page) || page < 1 || page > maxPages) {
-                    throw new Error(`Invalid page number: ${trimmedRange}`);
-                }
-                pages.push(page);
-            }
-        }
-        return [...new Set(pages)].sort((a, b) => a - b);
-    } catch (error) {
-        console.error("Error parsing page range:", error);
-        return null;
-    }
-}
-
 const apiKey = process.env.GOOGLE_API_KEY;
 
 export async function POST(request: Request) {
   if (!apiKey) {
-    console.error("API key missing in generate-deck.");
-    return NextResponse.json(
-      { error: "Server configuration error: The API Key is missing." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "API Key missing." }, { status: 500 });
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
   try {
     const supabase = await createClient();
-
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
 
     const formData = await request.formData();
     const deckName = formData.get('deckName') as string | null;
@@ -86,57 +43,7 @@ export async function POST(request: Request) {
     const cardCount = cardCountStr ? parseInt(cardCountStr, 10) : 0;
 
     if (!deckName || !cardType || !cardCount || !language || !difficulty || !generationSource) {
-      return NextResponse.json({ error: "Missing required fields in form data." }, { status: 400 });
-    }
-    if (generationSource === 'topic' && (!topic || !topic.trim())) {
-        return NextResponse.json({ error: "Topic description is required for topic-based generation." }, { status: 400 });
-    }
-    if (generationSource === 'pdf' && !pdfFile) {
-        return NextResponse.json({ error: "PDF file is required for PDF-based generation." }, { status: 400 });
-    }
-
-    let pdfTextContent = "";
-    let contextDescription = `Topic: ${topic}`;
-
-    if (generationSource === 'pdf' && pdfFile) {
-        try {
-            // IMPORTACIÓN DINÁMICA
-            const pdfParse = (await import("@cyber2024/pdf-parse-fixed")).default;
-
-            const arrayBuffer = await pdfFile.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            const data = await pdfParse(buffer);
-
-            const totalPages = data.numpages;
-            let targetPages: number[] | null = null;
-
-            if (pageRangeStr && pageRangeStr.trim() !== '') {
-                targetPages = parsePageRange(pageRangeStr, totalPages);
-                if (targetPages === null) {
-                    return NextResponse.json({ error: "Invalid page range format provided." }, { status: 400 });
-                }
-            }
-
-            if (targetPages) {
-                const allPagesText = data.text.split(/\f/);
-                pdfTextContent = targetPages
-                                .map((pageNum: number) => allPagesText[pageNum - 1])
-                                .filter((text: string) => text)
-                                .join('\n\n---\n\n');
-                contextDescription = `Content extracted from PDF '${pdfFile.name}' (Pages: ${pageRangeStr})`;
-            } else {
-                pdfTextContent = data.text;
-                contextDescription = `Content extracted from PDF '${pdfFile.name}' (All Pages)`;
-            }
-
-            if (!pdfTextContent.trim()) {
-                return NextResponse.json({ error: "Could not extract text from the PDF." }, { status: 400 });
-            }
-
-        } catch (pdfError: any) {
-            console.error("Error during PDF processing:", pdfError);
-            return NextResponse.json({ error: "Failed to process the PDF file." }, { status: 500 });
-        }
+      return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
     const cardTypeInstructions = {
@@ -144,16 +51,39 @@ export async function POST(request: Request) {
         vocabulary: 'Each card must contain a term or word in the "front" and its definition or translation in the "back".',
         facts: 'Each card must present a key piece of information, with a prompt in the "front" (like a fill-in-the-blank or a name) and the corresponding fact in the "back".'
     };
+    
     const difficultyInstructions = {
-        easy: "The cards should cover the most basic and fundamental concepts. Ideal for a beginner.",
-        medium: "The cards should cover a balance of core concepts and some detailed information.",
-        hard: "The cards should focus on complex, nuanced, or advanced details of the topic. Ideal for an expert."
+        easy: "Cover basic and fundamental concepts. Ideal for a beginner.",
+        medium: "Cover a balance of core concepts and some detailed information.",
+        hard: "Focus on complex, nuanced, or advanced details. Ideal for an expert."
     };
 
-    const sourceMaterial = generationSource === 'pdf' ? `\n${contextDescription}\n\n"""\n${pdfTextContent}\n"""` : topic;
-    const prompt = `
+    let promptParts: any[] = [];
+    let sourceInstruction = "";
+
+    if (generationSource === 'pdf' && pdfFile) {
+        const arrayBuffer = await pdfFile.arrayBuffer();
+        const base64Data = Buffer.from(arrayBuffer).toString("base64");
+        
+        // Pasamos el PDF directamente a Gemini como dato adjunto
+        promptParts.push({
+            inlineData: {
+                data: base64Data,
+                mimeType: "application/pdf"
+            }
+        });
+
+        sourceInstruction = `Use the attached PDF document as the ONLY source material.`;
+        if (pageRangeStr && pageRangeStr.trim() !== '') {
+            sourceInstruction += `\n**CRITICAL REQUIREMENT:** ONLY extract information from pages ${pageRangeStr} of the PDF. Completely ignore the rest.`;
+        }
+    } else {
+        sourceInstruction = `Use the following topic as the source material:\n"""\n${topic}\n"""`;
+    }
+
+    const promptText = `
       You are an expert in creating educational content.
-      **Source Material:** ${sourceMaterial}
+      **Source Material:** ${sourceInstruction}
       **Language:** ${language}
       **Number of Cards:** ${cardCount}
       **Type:** ${cardTypeInstructions[cardType!]}
@@ -166,23 +96,18 @@ export async function POST(request: Request) {
       4. Structure: [{"front": "...", "back": "..."}]
     `;
 
+    promptParts.unshift(promptText);
+
     let generatedCards;
-
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+        // Usamos gemini-2.5-flash que es excelente procesando documentos multimodal
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent(promptParts);
+        generatedCards = cleanAndParseJSON(result.response.text());
 
-        generatedCards = cleanAndParseJSON(text);
-
-        if (!Array.isArray(generatedCards)) {
-            throw new Error("Invalid JSON structure.");
-        }
-
+        if (!Array.isArray(generatedCards)) throw new Error("Invalid JSON structure.");
     } catch (aiError: any) {
-        console.error("AI Error:", aiError);
-        return NextResponse.json({ error: "Failed to generate content with AI. " + aiError.message }, { status: 500 });
+        return NextResponse.json({ error: "Failed to generate content with AI." }, { status: 500 });
     }
 
     const { data: newDeck, error: deckError } = await supabase
@@ -190,14 +115,10 @@ export async function POST(request: Request) {
         .insert({
             user_id: user.id,
             name: deckName,
-            description: `AI-generated from ${generationSource === 'pdf' ? `PDF: ${pdfFile?.name}` : `Topic`}`
-        })
-        .select('id')
-        .single();
+            description: `AI-generated from ${generationSource === 'pdf' ? `PDF` : `Topic`}`
+        }).select('id').single();
 
-    if (deckError || !newDeck) {
-        return NextResponse.json({ error: "Could not create the new deck in database." }, { status: 500 });
-    }
+    if (deckError || !newDeck) return NextResponse.json({ error: "DB Error." }, { status: 500 });
 
     const cardsToInsert = generatedCards.map((card: {front: string, back: string}) => ({
         deck_id: newDeck.id,
@@ -209,19 +130,16 @@ export async function POST(request: Request) {
         next_review_date: new Date().toISOString()
     }));
 
-    const { error: cardsError } = await supabase
-        .from('cards')
-        .insert(cardsToInsert.slice(0, cardCount));
+    const { error: cardsError } = await supabase.from('cards').insert(cardsToInsert.slice(0, cardCount));
 
     if (cardsError) {
         await supabase.from('decks').delete().eq('id', newDeck.id);
-        return NextResponse.json({ error: "Could not save cards to database." }, { status: 500 });
+        return NextResponse.json({ error: "Could not save cards." }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, deckId: newDeck.id });
 
   } catch (error: any) {
-    console.error("Critical Error:", error);
-    return NextResponse.json({ error: error.message || "Unknown server error." }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Unknown error." }, { status: 500 });
   }
 }

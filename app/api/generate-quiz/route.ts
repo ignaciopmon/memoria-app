@@ -1,6 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-// ELIMINADO EL IMPORT GLOBAL DE PDF-PARSE
 
 export const dynamic = "force-dynamic";
 
@@ -29,20 +28,6 @@ export async function POST(request: Request) {
     const pdfFile = formData.get('pdfFile') as File | null;
     const avoidQuestionsJson = formData.get('avoidQuestions') as string | null;
     
-    let sourceMaterial = "";
-    
-    if (pdfFile) {
-        // IMPORTACIÓN DINÁMICA
-        const pdfParse = (await import("@cyber2024/pdf-parse-fixed")).default;
-
-        const arrayBuffer = await pdfFile.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const data = await pdfParse(buffer);
-        sourceMaterial = `Content from PDF: ${data.text.slice(0, 30000)}`;
-    } else {
-        sourceMaterial = `Topic: ${topic}`;
-    }
-
     let avoidInstruction = "";
     if (avoidQuestionsJson) {
         const avoidList = JSON.parse(avoidQuestionsJson);
@@ -51,9 +36,23 @@ export async function POST(request: Request) {
         }
     }
 
-    const prompt = `
+    let promptParts: any[] = [];
+    let sourceInstruction = "";
+
+    if (pdfFile) {
+        const arrayBuffer = await pdfFile.arrayBuffer();
+        const base64Data = Buffer.from(arrayBuffer).toString("base64");
+        promptParts.push({
+            inlineData: { data: base64Data, mimeType: "application/pdf" }
+        });
+        sourceInstruction = `Use the attached PDF document as the ONLY source material.`;
+    } else {
+        sourceInstruction = `Topic: ${topic}`;
+    }
+
+    const promptText = `
       You are a strict exam generator.
-      **Source:** ${sourceMaterial}
+      **Source:** ${sourceInstruction}
       **Task:** Generate exactly ${questionCount} multiple-choice questions.
       **Difficulty:** ${difficulty}
       **Language:** ${language} (Strictly output questions/answers in this language).
@@ -70,10 +69,11 @@ export async function POST(request: Request) {
       ]
     `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const quizData = cleanAndParseJSON(text);
+    promptParts.unshift(promptText);
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const result = await model.generateContent(promptParts);
+    const quizData = cleanAndParseJSON(result.response.text());
 
     return NextResponse.json(quizData);
 

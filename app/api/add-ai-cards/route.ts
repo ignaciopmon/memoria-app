@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-// ELIMINADO EL IMPORT GLOBAL DE PDF-PARSE
 
 export const dynamic = "force-dynamic";
 
@@ -15,96 +14,32 @@ function cleanAndParseJSON(text: string) {
     return JSON.parse(cleanText);
 }
 
-function parsePageRange(rangeString: string | null | undefined, maxPages: number): number[] | null {
-    if (!rangeString || rangeString.trim() === '') return null;
-    const pages: number[] = [];
-    const ranges = rangeString.split(',');
-    try {
-        for (const range of ranges) {
-            const trimmedRange = range.trim();
-            if (trimmedRange.includes('-')) {
-                const [startStr, endStr] = trimmedRange.split('-');
-                const start = parseInt(startStr, 10);
-                const end = endStr.trim() === '' ? maxPages : parseInt(endStr, 10);
-                if (isNaN(start) || isNaN(end) || start < 1 || start > end || end > maxPages) throw new Error(`Invalid range`);
-                for (let i = start; i <= end; i++) pages.push(i);
-            } else {
-                const page = parseInt(trimmedRange, 10);
-                if (isNaN(page) || page < 1 || page > maxPages) throw new Error(`Invalid page`);
-                pages.push(page);
-            }
-        }
-        return [...new Set(pages)].sort((a, b) => a - b);
-    } catch (error) {
-        return null;
-    }
-}
-
 const apiKey = process.env.GOOGLE_API_KEY;
 
 export async function POST(request: Request) {
-  if (!apiKey) {
-    return NextResponse.json({ error: "API Key missing." }, { status: 500 });
-  }
-
+  if (!apiKey) return NextResponse.json({ error: "API Key missing." }, { status: 500 });
   const genAI = new GoogleGenerativeAI(apiKey);
 
   try {
     const supabase = await createClient();
-
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: "User not authenticated." }, { status: 401 });
 
     const formData = await request.formData();
     const deckId = formData.get('deckId') as string | null;
-    const cardType = formData.get('cardType') as 'qa' | 'vocabulary' | 'facts' | null;
+    const cardType = formData.get('cardType') as string | null;
     const cardCountStr = formData.get('cardCount') as string | null;
     const language = formData.get('language') as string | null;
-    const difficulty = formData.get('difficulty') as 'easy' | 'medium' | 'hard' | null;
-    const generationSource = formData.get('generationSource') as 'topic' | 'pdf' | null;
+    const difficulty = formData.get('difficulty') as string | null;
+    const generationSource = formData.get('generationSource') as string | null;
     const topic = formData.get('topic') as string | null;
     const pdfFile = formData.get('pdfFile') as File | null;
     const pageRangeStr = formData.get('pageRange') as string | null;
 
     const cardCount = cardCountStr ? parseInt(cardCountStr, 10) : 0;
 
-    if (!deckId || !cardType || !cardCount || !language || !difficulty || !generationSource) {
+    if (!deckId || !cardCount || !generationSource) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
-    }
-
-    let pdfTextContent = "";
-    let sourceDescription = `Topic: ${topic}`;
-
-    if (generationSource === 'pdf' && pdfFile) {
-        try {
-            // IMPORTACIÓN DINÁMICA: Salva a Vercel de crashear
-            const pdfParse = (await import("@cyber2024/pdf-parse-fixed")).default;
-
-            const arrayBuffer = await pdfFile.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            const data = await pdfParse(buffer);
-            const totalPages = data.numpages;
-            let targetPages: number[] | null = null;
-
-            if (pageRangeStr && pageRangeStr.trim() !== '') {
-                targetPages = parsePageRange(pageRangeStr, totalPages);
-                 if (targetPages === null) return NextResponse.json({ error: "Invalid page range." }, { status: 400 });
-            }
-
-            if (targetPages) {
-                const allPagesText = data.text.split(/\f/);
-                pdfTextContent = targetPages.map((pageNum: number) => allPagesText[pageNum - 1]).filter((text: string) => text).join('\n\n---\n\n');
-                sourceDescription = `Content from PDF '${pdfFile.name}' (Pages: ${pageRangeStr})`;
-            } else {
-                pdfTextContent = data.text;
-                sourceDescription = `Content from PDF '${pdfFile.name}' (All Pages)`;
-            }
-             if (!pdfTextContent.trim()) return NextResponse.json({ error: "Empty PDF content." }, { status: 400 });
-        } catch (pdfError: any) {
-            return NextResponse.json({ error: "Failed to process PDF." }, { status: 500 });
-        }
     }
 
     const { data: existingCards } = await supabase
@@ -114,13 +49,30 @@ export async function POST(request: Request) {
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(15);
-
     const existingCardsJson = JSON.stringify(existingCards?.map(c => ({ front: c.front, back: c.back })) || []);
 
-    const sourceMaterial = generationSource === 'pdf' ? `\n${sourceDescription}\n\n"""\n${pdfTextContent}\n"""` : topic;
-    const prompt = `
+    let promptParts: any[] = [];
+    let sourceInstruction = "";
+
+    if (generationSource === 'pdf' && pdfFile) {
+        const arrayBuffer = await pdfFile.arrayBuffer();
+        const base64Data = Buffer.from(arrayBuffer).toString("base64");
+        
+        promptParts.push({
+            inlineData: { data: base64Data, mimeType: "application/pdf" }
+        });
+
+        sourceInstruction = `Use the attached PDF document as the ONLY source material.`;
+        if (pageRangeStr && pageRangeStr.trim() !== '') {
+            sourceInstruction += `\n**CRITICAL REQUIREMENT:** ONLY extract information from pages ${pageRangeStr} of the PDF.`;
+        }
+    } else {
+        sourceInstruction = `Use the following topic as the source material:\n"""\n${topic}\n"""`;
+    }
+
+    const promptText = `
       You are an expert in creating educational content.
-      **Source Material:** ${sourceMaterial}
+      **Source Material:** ${sourceInstruction}
       **Language:** ${language}
       **New Cards Needed:** ${cardCount}
       **Type:** ${cardType}
@@ -133,17 +85,14 @@ export async function POST(request: Request) {
       3. Return ONLY a raw JSON array: [{"front": "...", "back": "..."}]
     `;
 
+    promptParts.unshift(promptText);
+
     let generatedCards;
-
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
-
-        generatedCards = cleanAndParseJSON(text);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent(promptParts);
+        generatedCards = cleanAndParseJSON(result.response.text());
     } catch (aiError: any) {
-        console.error("AI Error:", aiError);
         return NextResponse.json({ error: "AI generation failed." }, { status: 500 });
     }
 
@@ -157,19 +106,13 @@ export async function POST(request: Request) {
         next_review_date: new Date().toISOString()
     }));
 
-    if (cardsToInsert.length === 0) {
-        return NextResponse.json({ success: true, addedCount: 0, message: "No new cards generated." });
-    }
+    if (cardsToInsert.length === 0) return NextResponse.json({ success: true, addedCount: 0 });
 
     const { error: cardsError } = await supabase.from('cards').insert(cardsToInsert);
-
-    if (cardsError) {
-        return NextResponse.json({ error: "Database error saving cards." }, { status: 500 });
-    }
+    if (cardsError) return NextResponse.json({ error: "Database error." }, { status: 500 });
 
     return NextResponse.json({ success: true, addedCount: cardsToInsert.length });
-
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Server error." }, { status: 500 });
+    return NextResponse.json({ error: "Server error." }, { status: 500 });
   }
 }
