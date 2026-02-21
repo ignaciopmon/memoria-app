@@ -16,30 +16,16 @@ const nextConfig = {
       },
     ],
   },
-  // Next.js 15: Evita que Webpack intente procesar la librería de PDF
-  serverExternalPackages: ['@cyber2024/pdf-parse-fixed'],
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      // Fallbacks necesarios para que las librerías de servidor no rompan el cliente
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        path: false,
-        crypto: false,
-        net: false,
-        tls: false,
-        child_process: false,
-        dgram: false,
-        os: false,
-        https: false,
-        http: false,
-        vm: false,
-        stream: false,
-        constants: false,
-        zlib: false,
-      }
-    }
-    return config
+  // Le decimos a Next.js que estas librerías de servidor no deben empaquetarse
+  serverExternalPackages: ['@cyber2024/pdf-parse-fixed', 'pdfjs-dist'],
+  
+  webpack: (config) => {
+    // Esto es CLAVE para Vercel: Evita que el parseador de PDF intente
+    // buscar el módulo 'canvas' (que no existe en Vercel) y rompa el build.
+    config.resolve.alias.canvas = false;
+    config.resolve.alias.encoding = false;
+    
+    return config;
   },
 }
 
