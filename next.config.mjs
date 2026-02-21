@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+  // Se han eliminado los "ignore" de eslint y typescript para garantizar 
+  // que a producción solo suba código seguro y sin errores.
   images: {
     remotePatterns: [
       {
