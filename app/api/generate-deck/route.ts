@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import pdfParse from "@cyber2024/pdf-parse-fixed";
 
 export const dynamic = "force-dynamic";
 
@@ -99,8 +100,6 @@ export async function POST(request: Request) {
 
     if (generationSource === 'pdf' && pdfFile) {
         try {
-            // EL REQUIRE ESTÁ AQUÍ ADENTRO, OCULTO A VERCEL EN TIEMPO DE BUILD
-            const pdfParse = require('@cyber2024/pdf-parse-fixed');
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const data = await pdfParse(buffer);

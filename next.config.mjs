@@ -12,7 +12,7 @@ const nextConfig = {
       },
     ],
   },
-  serverExternalPackages: ['@cyber2024/pdf-parse-fixed'],
+  serverExternalPackages: ['@cyber2024/pdf-parse-fixed', 'pdfjs-dist'],
   webpack: (config, { isServer }) => {
     config.resolve.alias.canvas = false;
     config.resolve.alias.encoding = false;
