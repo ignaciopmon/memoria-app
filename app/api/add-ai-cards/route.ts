@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import pdfParse from "@cyber2024/pdf-parse-fixed";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +78,10 @@ export async function POST(request: Request) {
 
     if (generationSource === 'pdf' && pdfFile) {
         try {
+            // Importación dinámica en tiempo de ejecución (Bypasses Webpack build errors)
+            const pdfParseModule = await import('@cyber2024/pdf-parse-fixed');
+            const pdfParse = pdfParseModule.default || pdfParseModule;
+
             const arrayBuffer = await pdfFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const data = await pdfParse(buffer);
