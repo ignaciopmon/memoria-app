@@ -4,17 +4,6 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-function cleanAndParseJSON(text: string) {
-    let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    const firstOpen = cleanText.indexOf('[');
-    const lastClose = cleanText.lastIndexOf(']');
-    
-    if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
-        cleanText = cleanText.substring(firstOpen, lastClose + 1);
-    }
-    return JSON.parse(cleanText);
-}
-
 const apiKey = process.env.GOOGLE_API_KEY;
 
 export async function POST(request: Request) {
@@ -65,7 +54,6 @@ export async function POST(request: Request) {
         const arrayBuffer = await pdfFile.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString("base64");
         
-        // Pasamos el PDF directamente a Gemini como dato adjunto
         promptParts.push({
             inlineData: {
                 data: base64Data,
@@ -92,7 +80,7 @@ export async function POST(request: Request) {
       **Instructions:**
       1. Generate exactly ${cardCount} flashcards based strictly on the Source Material.
       2. Output (front/back) must be in ${language}.
-      3. Return ONLY a raw JSON array. No markdown, no 'json' tags.
+      3. Return ONLY a raw JSON array.
       4. Structure: [{"front": "...", "back": "..."}]
     `;
 
@@ -100,10 +88,13 @@ export async function POST(request: Request) {
 
     let generatedCards;
     try {
-        // Usamos gemini-2.5-flash que es excelente procesando documentos multimodal
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        // Configuramos la IA para que devuelva un JSON nativo garantizado
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.5-flash",
+            generationConfig: { responseMimeType: "application/json" }
+        });
         const result = await model.generateContent(promptParts);
-        generatedCards = cleanAndParseJSON(result.response.text());
+        generatedCards = JSON.parse(result.response.text());
 
         if (!Array.isArray(generatedCards)) throw new Error("Invalid JSON structure.");
     } catch (aiError: any) {

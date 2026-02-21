@@ -1,4 +1,5 @@
 // lib/srs.ts
+import { addDays, addMinutes } from 'date-fns';
 
 export interface CardSRS {
   id?: string;
@@ -33,14 +34,14 @@ export const calculateNextReview = (card: CardSRS, rating: Rating, settings: Use
   };
 
   const now = new Date();
-  let nextReviewDate = new Date();
+  let nextReviewDate = now;
 
   if (rating < 3) {
     // Incorrect answer (Again or Hard)
     repetitions = 0;
     if (rating === 1) {
       interval = 0;
-      nextReviewDate.setMinutes(now.getMinutes() + safeSettings.again);
+      nextReviewDate = addMinutes(now, safeSettings.again);
     } else {
       if (card.last_rating === 2) {
         interval = Math.max(1, Math.ceil(interval * 0.5));
@@ -66,7 +67,7 @@ export const calculateNextReview = (card: CardSRS, rating: Rating, settings: Use
 
   // Apply interval for valid ratings > 1 (Again handled by minutes above)
   if (rating > 1) {
-    nextReviewDate.setDate(now.getDate() + interval);
+    nextReviewDate = addDays(now, interval);
   }
 
   return {
