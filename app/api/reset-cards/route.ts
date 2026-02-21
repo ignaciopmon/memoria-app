@@ -8,11 +8,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase = await createClient(cookieStore);
 
-    // --- CORRECCIÓN AQUÍ ---
-    // Se eliminaron las llaves '}' adicionales
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "User not authenticated." }, { status: 401 });

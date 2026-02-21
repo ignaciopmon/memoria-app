@@ -11,8 +11,6 @@ import { Progress } from "@/components/ui/progress"
 import type { Shortcuts } from "@/components/shortcuts-form"
 import { ImageViewerDialog } from "./image-viewer-dialog"
 import { calculateNextReview, type UserSettings, type Rating } from "@/lib/srs"
-// Importamos el SDK de Microsoft
-import * as speechsdk from "microsoft-cognitiveservices-speech-sdk"
 
 interface StudySessionProps {
   deck: { id: string; name: string }
@@ -35,7 +33,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false) // Estado para evitar spam de clicks
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null)
   const [shortcuts, setShortcuts] = useState<Shortcuts | null>(null)
   const router = useRouter()
@@ -59,52 +57,39 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const progress = (currentIndex / (cards.length || 1)) * 100
   const isComplete = currentIndex >= cards.length
 
-  // --- FUNCIÓN DE AUDIO AZURE ---
+  // --- FUNCIÓN DE AUDIO NATIVA (GRATIS Y SIN CLAVES) ---
   const playAudio = useCallback((text: string) => {
-    if (isPlayingAudio || !text) return;
+    if (!text || isPlayingAudio) return;
 
-    const key = process.env.NEXT_PUBLIC_AZURE_SPEECH_KEY;
-    const region = process.env.NEXT_PUBLIC_AZURE_SPEECH_REGION;
-
-    if (!key || !region) {
-      console.warn("Faltan las claves de Azure Speech en las variables de entorno.");
+    if (!('speechSynthesis' in window)) {
+      console.warn("Tu navegador no soporta síntesis de voz.");
       return;
     }
 
-    setIsPlayingAudio(true);
+    // Cancelar cualquier audio anterior
+    window.speechSynthesis.cancel();
 
-    try {
-      const speechConfig = speechsdk.SpeechConfig.fromSubscription(key, region);
-      // 'en-US-AriaNeural' es una de las mejores voces para inglés general.
-      // Puedes probar también 'en-US-GuyNeural' para voz masculina.
-      speechConfig.speechSynthesisVoiceName = "en-US-AriaNeural"; 
-
-      const audioConfig = speechsdk.AudioConfig.fromDefaultSpeakerOutput();
-      const synthesizer = new speechsdk.SpeechSynthesizer(speechConfig, audioConfig);
-
-      synthesizer.speakTextAsync(
-        text,
-        (result) => {
-          if (result.reason === speechsdk.ResultReason.SynthesizingAudioCompleted) {
-            // Audio terminado correctamente
-          } else {
-            console.error("Error en síntesis de voz: " + result.errorDetails);
-          }
-          setIsPlayingAudio(false);
-          synthesizer.close();
-        },
-        (err) => {
-          console.error("Error fatal en audio: " + err);
-          setIsPlayingAudio(false);
-          synthesizer.close();
-        }
-      );
-    } catch (e) {
-      console.error("Error al inicializar Azure SDK", e);
-      setIsPlayingAudio(false);
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Intentar buscar una voz en inglés (opcional, si no usará la por defecto)
+    const voices = window.speechSynthesis.getVoices();
+    const enVoice = voices.find(voice => voice.lang.startsWith('en-') && voice.name.includes('Google')) 
+                 || voices.find(voice => voice.lang.startsWith('en-'));
+    
+    if (enVoice) {
+      utterance.voice = enVoice;
     }
+
+    utterance.onstart = () => setIsPlayingAudio(true);
+    utterance.onend = () => setIsPlayingAudio(false);
+    utterance.onerror = (e) => {
+      console.error("Error al reproducir audio:", e);
+      setIsPlayingAudio(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
   }, [isPlayingAudio]);
-  // ------------------------------
+  // ----------------------------------------------------
 
   const handleRating = useCallback(async (rating: Rating) => {
     if (!currentCard || isSubmitting) return
@@ -149,7 +134,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
 
     const key = event.key === ' ' ? ' ' : event.key.toLowerCase()
-    const s = shortcuts || { flip_card: ' ', rate_again: '1', rate_hard: '2', rate_good: '3', rate_easy: '4', to_dashboard: 'd', play_audio: 'p' } // Añadido shortcut opcional 'p'
+    const s = shortcuts || { flip_card: ' ', rate_again: '1', rate_hard: '2', rate_good: '3', rate_easy: '4', to_dashboard: 'd', play_audio: 'p' }
 
     if (!isComplete) {
         if (!showAnswer && key === s.flip_card.toLowerCase()) {
@@ -167,10 +152,8 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
             }
         }
         
-        // Tecla rápida para audio (opcional, si quieres usar 'p')
         if (key === 'p') { 
             event.preventDefault();
-            // Lee lo que esté visible (respuesta si está visible, o pregunta si no)
             playAudio(showAnswer ? currentCard.back : currentCard.front);
         }
     }
@@ -283,7 +266,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                         variant="ghost" 
                         className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                         onClick={(e) => { e.stopPropagation(); playAudio(currentCard.front); }}
-                        title="Listen in English"
+                        title="Listen"
                     >
                         <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
                         <span className="sr-only">Listen</span>
@@ -318,7 +301,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                         variant="ghost" 
                         className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                         onClick={(e) => { e.stopPropagation(); playAudio(currentCard.back); }}
-                        title="Listen in English"
+                        title="Listen"
                     >
                         <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
                         <span className="sr-only">Listen</span>
