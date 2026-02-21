@@ -14,6 +14,8 @@ export interface UserSettings {
   hard_interval_days: number;
   good_interval_days: number;
   easy_interval_days: number;
+  zen_mode?: boolean;
+  sound_enabled?: boolean;
 }
 
 export type Rating = 1 | 2 | 3 | 4;

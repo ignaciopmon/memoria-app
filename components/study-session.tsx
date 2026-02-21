@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles, Volume2, Maximize, Minimize } from "lucide-react"
+import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles, Volume2, VolumeX, Maximize, Minimize } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import type { Shortcuts } from "@/components/shortcuts-form"
@@ -34,7 +34,11 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [showAnswer, setShowAnswer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  
+  // Estados para configuración
   const [isZenMode, setIsZenMode] = useState(false)
+  const [soundEnabled, setSoundEnabled] = useState(true)
+  
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null)
   const [shortcuts, setShortcuts] = useState<Shortcuts | null>(null)
   const router = useRouter()
@@ -45,7 +49,11 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: settingsData } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single()
-        setUserSettings(settingsData)
+        if (settingsData) {
+            setUserSettings(settingsData)
+            setIsZenMode(settingsData.zen_mode ?? false)
+            setSoundEnabled(settingsData.sound_enabled ?? true)
+        }
         
         const { data: shortcutsData } = await supabase.from('user_shortcuts').select('*').eq('user_id', user.id).single()
         setShortcuts(shortcutsData)
@@ -54,13 +62,30 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     fetchUserSettings()
   }, [])
 
+  // Funciones para guardar preferencias al cambiarlas
+  const toggleZenMode = async () => {
+    const newVal = !isZenMode
+    setIsZenMode(newVal)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) await supabase.from('user_settings').update({ zen_mode: newVal }).eq('user_id', user.id)
+  }
+
+  const toggleSound = async () => {
+    const newVal = !soundEnabled
+    setSoundEnabled(newVal)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) await supabase.from('user_settings').update({ sound_enabled: newVal }).eq('user_id', user.id)
+  }
+
   const currentCard = cards[currentIndex]
   const progress = (currentIndex / (cards.length || 1)) * 100
   const isComplete = currentIndex >= cards.length
 
   // --- REPRODUCCIÓN DE AUDIO ---
   const playAudio = useCallback((text: string) => {
-    if (!text || isPlayingAudio) return;
+    if (!text || isPlayingAudio || !soundEnabled) return;
     if (!('speechSynthesis' in window)) return;
 
     window.speechSynthesis.cancel();
@@ -76,12 +101,14 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     utterance.onerror = () => setIsPlayingAudio(false);
 
     window.speechSynthesis.speak(utterance);
-  }, [isPlayingAudio]);
+  }, [isPlayingAudio, soundEnabled]);
 
-  // --- RESPUESTA TÁCTIL Y SONORA (HAPTIC/AUDIO FEEDBACK) ---
+  // --- RESPUESTA TÁCTIL Y SONORA ---
   const playFeedback = useCallback(() => {
+    if (!soundEnabled) return;
+
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate(40); // Sutil vibración en móviles
+      navigator.vibrate(40);
     }
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -104,12 +131,12 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     } catch (e) {
       // Ignorar si el navegador bloquea el audio
     }
-  }, []);
+  }, [soundEnabled]);
 
   const handleRating = useCallback(async (rating: Rating) => {
     if (!currentCard || isSubmitting) return
     setIsSubmitting(true)
-    playFeedback() // Disparar feedback sonoro/táctil
+    playFeedback() 
     
     const supabase = createClient()
     const currentSettings = userSettings || {
@@ -237,8 +264,10 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                  <span className="text-muted-foreground">/</span>
                  <span className="text-muted-foreground">{cards.length}</span>
              </div>
-             {/* BOTÓN ZEN MODE AQUÍ */}
-             <Button variant="ghost" size="icon" onClick={() => setIsZenMode(true)} title="Focus Mode" className="text-muted-foreground hover:text-foreground">
+             <Button variant="ghost" size="icon" onClick={toggleSound} title={soundEnabled ? "Mute Sounds" : "Enable Sounds"} className="text-muted-foreground hover:text-foreground">
+                {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+             </Button>
+             <Button variant="ghost" size="icon" onClick={toggleZenMode} title="Focus Mode" className="text-muted-foreground hover:text-foreground">
                 <Maximize className="h-4 w-4" />
              </Button>
           </div>
@@ -249,17 +278,26 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       <main className={`flex flex-1 flex-col items-center justify-center p-4 sm:p-8 transition-all ${isZenMode ? 'fixed inset-0 z-50 bg-background/95 backdrop-blur-sm' : ''}`}>
         
         {isZenMode && (
-          <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-50 text-muted-foreground hover:text-foreground" onClick={() => setIsZenMode(false)} title="Exit Focus Mode">
+          <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-50 text-muted-foreground hover:text-foreground" onClick={toggleZenMode} title="Exit Focus Mode">
             <Minimize className="h-5 w-5" />
           </Button>
         )}
 
-        {/* CONTENEDOR DE LA TARJETA 3D (Usando clases arbitrarias nativas de Tailwind) */}
-        <div className="w-full max-w-2xl flex-1 flex flex-col perspective-[1000px]">
-          <div className={`relative w-full h-full min-h-[40vh] sm:min-h-[50vh] transition-transform duration-500 ease-out [transform-style:preserve-3d] ${showAnswer ? '[transform:rotateY(180deg)]' : ''}`}>
+        {/* CONTENEDOR DE LA TARJETA 3D CON ESTILOS EN LÍNEA GARANTIZADOS */}
+        <div className="w-full max-w-2xl flex-1 flex flex-col" style={{ perspective: '1000px' }}>
+          <div 
+             className="relative w-full h-full min-h-[40vh] sm:min-h-[50vh] transition-transform duration-500 ease-out"
+             style={{ 
+                 transformStyle: 'preserve-3d', 
+                 transform: showAnswer ? 'rotateY(180deg)' : 'rotateY(0deg)' 
+             }}
+          >
             
             {/* CARA FRONTAL (PREGUNTA) */}
-            <Card className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 [backface-visibility:hidden] bg-card">
+            <Card 
+               className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 bg-card z-10"
+               style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+            >
               <CardContent className="flex-1 overflow-y-auto flex flex-col justify-center p-6 sm:p-10 text-center">
                 <div className="flex-1 flex flex-col justify-center items-center space-y-4">
                   <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-primary/10 text-primary uppercase tracking-wider mb-2">
@@ -291,7 +329,10 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
             </Card>
 
             {/* CARA TRASERA (RESPUESTA) */}
-            <Card className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card">
+            <Card 
+                className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 bg-card"
+                style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+            >
               <CardContent className="flex-1 overflow-y-auto flex flex-col justify-center p-6 sm:p-10 text-center">
                 <div className="opacity-50 text-sm mb-4 font-medium text-balance">
                    {currentCard.front}

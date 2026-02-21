@@ -1,0 +1,3 @@
+ALTER TABLE public.user_settings
+ADD COLUMN IF NOT EXISTS zen_mode BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS sound_enabled BOOLEAN DEFAULT true;
