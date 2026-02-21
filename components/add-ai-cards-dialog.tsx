@@ -271,10 +271,9 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                {/* Updated disable logic */}
                 <Button type="submit" disabled={isSubmitDisabled}>
-                    {view === 'loading' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Sparkles className="mr-2 h-4 w-4"/>}
-                    {view === 'loading' ? 'Generating...' : 'Generate Cards'}
+                    <Sparkles className="mr-2 h-4 w-4"/>
+                    Generate Cards
                 </Button>
               </DialogFooter>
             </>
@@ -317,5 +316,5 @@ export function AddAiCardsDialog({ deckId, deckName }: AddAiCardsDialogProps) {
         </form>
       </DialogContent>
     </Dialog>
-  ); // Added closing parenthesis and semicolon for the return statement
-} // Added closing brace for the component function
+  );
+}
