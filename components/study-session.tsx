@@ -61,11 +61,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   // --- REPRODUCCIÓN DE AUDIO ---
   const playAudio = useCallback((text: string) => {
     if (!text || isPlayingAudio) return;
-
-    if (!('speechSynthesis' in window)) {
-      console.warn("Tu navegador no soporta síntesis de voz.");
-      return;
-    }
+    if (!('speechSynthesis' in window)) return;
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
@@ -73,17 +69,11 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     const voices = window.speechSynthesis.getVoices();
     const enVoice = voices.find(voice => voice.lang.startsWith('en-') && voice.name.includes('Google')) 
                  || voices.find(voice => voice.lang.startsWith('en-'));
-    
-    if (enVoice) {
-      utterance.voice = enVoice;
-    }
+    if (enVoice) utterance.voice = enVoice;
 
     utterance.onstart = () => setIsPlayingAudio(true);
     utterance.onend = () => setIsPlayingAudio(false);
-    utterance.onerror = (e) => {
-      console.error("Error al reproducir audio:", e);
-      setIsPlayingAudio(false);
-    };
+    utterance.onerror = () => setIsPlayingAudio(false);
 
     window.speechSynthesis.speak(utterance);
   }, [isPlayingAudio]);
@@ -91,7 +81,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   // --- RESPUESTA TÁCTIL Y SONORA (HAPTIC/AUDIO FEEDBACK) ---
   const playFeedback = useCallback(() => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate(40); // Sutil vibración
+      navigator.vibrate(40); // Sutil vibración en móviles
     }
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -112,7 +102,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       osc.start();
       osc.stop(ctx.currentTime + 0.1);
     } catch (e) {
-      // Si el navegador bloquea el audio, ignoramos el error
+      // Ignorar si el navegador bloquea el audio
     }
   }, []);
 
@@ -134,11 +124,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       
       await supabase
         .from("cards")
-        .update({ 
-          ...updates, 
-          ai_suggestion: null,
-          updated_at: new Date().toISOString() 
-        })
+        .update({ ...updates, ai_suggestion: null, updated_at: new Date().toISOString() })
         .eq("id", currentCard.id)
         
       await supabase.from("card_reviews").insert({ card_id: currentCard.id, rating })
@@ -192,9 +178,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
   
   const getIntervalText = (rating: Rating): string => {
@@ -213,10 +197,8 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
             <CheckCircle className="h-12 w-12 text-primary" />
         </div>
         <h1 className="mb-2 text-3xl font-bold tracking-tight">All caught up!</h1>
-        <p className="mb-8 text-muted-foreground max-w-md">There are no cards due for review in this deck right now. Great job keeping up with your studies.</p>
-        <Button asChild size="lg">
-          <Link href="/dashboard">Back to Dashboard</Link>
-        </Button>
+        <p className="mb-8 text-muted-foreground max-w-md">There are no cards due for review in this deck right now.</p>
+        <Button asChild size="lg"><Link href="/dashboard">Back to Dashboard</Link></Button>
       </div>
     )
   }
@@ -232,12 +214,8 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           You have reviewed <span className="font-semibold text-foreground">{cards.length}</span> card{cards.length !== 1 ? "s" : ""}.
         </p>
         <div className="flex flex-col sm:flex-row gap-4">
-          <Button asChild variant="outline" size="lg">
-            <Link href={`/deck/${deck.id}`}>View Deck</Link>
-          </Button>
-          <Button asChild size="lg">
-            <Link href="/dashboard">Go to Dashboard</Link>
-          </Button>
+          <Button asChild variant="outline" size="lg"><Link href={`/deck/${deck.id}`}>View Deck</Link></Button>
+          <Button asChild size="lg"><Link href="/dashboard">Go to Dashboard</Link></Button>
         </div>
       </div>
     )
@@ -249,13 +227,9 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" asChild className="-ml-2">
-              <Link href="/dashboard">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
+              <Link href="/dashboard"><ArrowLeft className="h-4 w-4" /></Link>
             </Button>
-            <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">
-                {deck.name}
-            </span>
+            <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">{deck.name}</span>
           </div>
           <div className="flex items-center gap-4">
              <div className="text-sm font-medium tabular-nums flex items-center gap-1">
@@ -263,6 +237,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                  <span className="text-muted-foreground">/</span>
                  <span className="text-muted-foreground">{cards.length}</span>
              </div>
+             {/* BOTÓN ZEN MODE AQUÍ */}
              <Button variant="ghost" size="icon" onClick={() => setIsZenMode(true)} title="Focus Mode" className="text-muted-foreground hover:text-foreground">
                 <Maximize className="h-4 w-4" />
              </Button>
@@ -279,12 +254,12 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           </Button>
         )}
 
-        {/* CONTENEDOR DE LA TARJETA 3D */}
-        <div className="w-full max-w-2xl flex-1 flex flex-col perspective-1000">
-          <div className={`relative w-full h-full min-h-[40vh] sm:min-h-[50vh] transition-transform duration-500 ease-out preserve-3d ${showAnswer ? 'rotate-y-180' : ''}`}>
+        {/* CONTENEDOR DE LA TARJETA 3D (Usando clases arbitrarias nativas de Tailwind) */}
+        <div className="w-full max-w-2xl flex-1 flex flex-col perspective-[1000px]">
+          <div className={`relative w-full h-full min-h-[40vh] sm:min-h-[50vh] transition-transform duration-500 ease-out [transform-style:preserve-3d] ${showAnswer ? '[transform:rotateY(180deg)]' : ''}`}>
             
             {/* CARA FRONTAL (PREGUNTA) */}
-            <Card className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 backface-hidden bg-card">
+            <Card className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 [backface-visibility:hidden] bg-card">
               <CardContent className="flex-1 overflow-y-auto flex flex-col justify-center p-6 sm:p-10 text-center">
                 <div className="flex-1 flex flex-col justify-center items-center space-y-4">
                   <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-primary/10 text-primary uppercase tracking-wider mb-2">
@@ -309,7 +284,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                           title="Listen"
                       >
                           <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
-                          <span className="sr-only">Listen</span>
                       </Button>
                   </div>
                 </div>
@@ -317,14 +291,11 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
             </Card>
 
             {/* CARA TRASERA (RESPUESTA) */}
-            <Card className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 backface-hidden rotate-y-180 bg-card">
+            <Card className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card">
               <CardContent className="flex-1 overflow-y-auto flex flex-col justify-center p-6 sm:p-10 text-center">
-                
-                {/* Recordatorio sutil de la pregunta en la parte superior */}
                 <div className="opacity-50 text-sm mb-4 font-medium text-balance">
                    {currentCard.front}
                 </div>
-                
                 <div className="my-2 border-t border-dashed w-full max-w-xs mx-auto mb-6" />
 
                 <div className="flex-1 flex flex-col justify-center items-center space-y-4">
@@ -350,7 +321,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                         title="Listen"
                     >
                         <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
-                        <span className="sr-only">Listen</span>
                     </Button>
                   </div>
                 </div>
@@ -368,46 +338,10 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
             </Button>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-300">
-              <RatingButton 
-                rating={1} 
-                label="Again" 
-                icon={<RotateCcw className="h-4 w-4" />} 
-                interval={getIntervalText(1)} 
-                colorClass="hover:border-destructive hover:bg-destructive/5 hover:text-destructive"
-                onClick={() => handleRating(1)} 
-                disabled={isSubmitting} 
-                shortcut={shortcuts?.rate_again || '1'}
-              />
-              <RatingButton 
-                rating={2} 
-                label="Hard" 
-                icon={<Clock className="h-4 w-4" />} 
-                interval={getIntervalText(2)} 
-                colorClass="hover:border-orange-500 hover:bg-orange-500/5 hover:text-orange-600 dark:hover:text-orange-400"
-                onClick={() => handleRating(2)} 
-                disabled={isSubmitting} 
-                shortcut={shortcuts?.rate_hard || '2'}
-              />
-              <RatingButton 
-                rating={3} 
-                label="Good" 
-                icon={<ThumbsUp className="h-4 w-4" />} 
-                interval={getIntervalText(3)} 
-                colorClass="hover:border-blue-500 hover:bg-blue-500/5 hover:text-blue-600 dark:hover:text-blue-400"
-                onClick={() => handleRating(3)} 
-                disabled={isSubmitting} 
-                shortcut={shortcuts?.rate_good || '3'}
-              />
-              <RatingButton 
-                rating={4} 
-                label="Easy" 
-                icon={<Sparkles className="h-4 w-4" />} 
-                interval={getIntervalText(4)} 
-                colorClass="hover:border-green-500 hover:bg-green-500/5 hover:text-green-600 dark:hover:text-green-400"
-                onClick={() => handleRating(4)} 
-                disabled={isSubmitting} 
-                shortcut={shortcuts?.rate_easy || '4'}
-              />
+              <RatingButton rating={1} label="Again" icon={<RotateCcw className="h-4 w-4" />} interval={getIntervalText(1)} colorClass="hover:border-destructive hover:bg-destructive/5 hover:text-destructive" onClick={() => handleRating(1)} disabled={isSubmitting} shortcut={shortcuts?.rate_again || '1'} />
+              <RatingButton rating={2} label="Hard" icon={<Clock className="h-4 w-4" />} interval={getIntervalText(2)} colorClass="hover:border-orange-500 hover:bg-orange-500/5 hover:text-orange-600 dark:hover:text-orange-400" onClick={() => handleRating(2)} disabled={isSubmitting} shortcut={shortcuts?.rate_hard || '2'} />
+              <RatingButton rating={3} label="Good" icon={<ThumbsUp className="h-4 w-4" />} interval={getIntervalText(3)} colorClass="hover:border-blue-500 hover:bg-blue-500/5 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => handleRating(3)} disabled={isSubmitting} shortcut={shortcuts?.rate_good || '3'} />
+              <RatingButton rating={4} label="Easy" icon={<Sparkles className="h-4 w-4" />} interval={getIntervalText(4)} colorClass="hover:border-green-500 hover:bg-green-500/5 hover:text-green-600 dark:hover:text-green-400" onClick={() => handleRating(4)} disabled={isSubmitting} shortcut={shortcuts?.rate_easy || '4'} />
             </div>
           )}
         </div>
@@ -418,20 +352,9 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
 function RatingButton({ rating, label, icon, interval, colorClass, onClick, disabled, shortcut }: any) {
     return (
-        <Button 
-            variant="outline" 
-            className={`h-auto flex-col gap-1.5 py-3 transition-all duration-200 border-muted-foreground/20 ${colorClass}`} 
-            onClick={onClick} 
-            disabled={disabled}
-        >
-            <div className="flex items-center gap-2">
-                {icon}
-                <span className="font-semibold">{label}</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span>{interval}</span>
-                <span className="border rounded px-1 min-w-[1.2rem] text-center opacity-70 hidden sm:inline-block">{shortcut}</span>
-            </div>
+        <Button variant="outline" className={`h-auto flex-col gap-1.5 py-3 transition-all duration-200 border-muted-foreground/20 ${colorClass}`} onClick={onClick} disabled={disabled}>
+            <div className="flex items-center gap-2">{icon}<span className="font-semibold">{label}</span></div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><span>{interval}</span><span className="border rounded px-1 min-w-[1.2rem] text-center opacity-70 hidden sm:inline-block">{shortcut}</span></div>
         </Button>
     )
 }
