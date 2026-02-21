@@ -28,13 +28,20 @@ export default async function TrashPage() {
     .not("deleted_at", "is", null)
     .order("deleted_at", { ascending: false })
 
-return (
+  // Formateamos las tarjetas para asegurar que "deck" sea un objeto único 
+  // y coincida con la interfaz que espera <TrashList />
+  const formattedCards = (deletedCards as any[])?.map(card => ({
+    ...card,
+    deck: Array.isArray(card.deck) ? card.deck[0] : card.deck
+  })) || [];
+
+  return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
          <Link href="/" className="flex items-center gap-2">
             <Brain className="h-6 w-6" />
-           <span className="text-xl font-bold select-none">Memoria</span> {/* Texto no seleccionable */}
+           <span className="text-xl font-bold select-none">Memoria</span>
          </Link>
         </div>
       </header>
@@ -51,8 +58,8 @@ return (
             <p className="text-muted-foreground">Restore or permanently delete items.</p>
           </div>
           <TrashList 
-            initialDecks={deletedDecks || []} 
-            initialCards={deletedCards || []} 
+            initialDecks={(deletedDecks as any) || []} 
+            initialCards={formattedCards} 
           />
         </div>
       </main>
