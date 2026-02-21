@@ -131,8 +131,6 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
               {cards.map((card) => {
                 const createdAt = new Date(card.created_at);
                 const isNew = createdAt > tenMinutesAgo;
-                // Pasamos una prop extra si quieres marcar visualmente las pendientes en la lista en el futuro
-                // const isDue = new Date(card.next_review_date) <= now;
                 return <CardItem key={card.id} card={card} isNew={isNew} />;
               })}
             </div>

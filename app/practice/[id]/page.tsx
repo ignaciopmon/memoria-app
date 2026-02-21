@@ -3,8 +3,8 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
 import { PracticeSession } from "@/components/practice-session"
 
-export default async function PracticePage({ params }: { params: { id: string } }) {
-  const { id } = params
+export default async function PracticePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createClient()
 
   const {
