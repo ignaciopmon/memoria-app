@@ -9,6 +9,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles, Volume2, VolumeX, Maximize, Minimize } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import type { Shortcuts } from "@/components/shortcuts-form"
 import { ImageViewerDialog } from "./image-viewer-dialog"
 import { calculateNextReview, type UserSettings, type Rating } from "@/lib/srs"
@@ -21,6 +23,7 @@ interface StudySessionProps {
     back: string
     front_image_url: string | null
     back_image_url: string | null
+    is_typing_enabled?: boolean // <-- Añadido
     ease_factor: number
     interval: number
     repetitions: number
@@ -34,7 +37,6 @@ const guessLanguage = (text: string): string => {
   if (!text) return 'en-US';
   const str = text.toLowerCase();
 
-  // Patrones de caracteres exclusivos
   const japaneseRegex = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/;
   const chineseRegex = /[\u4e00-\u9fff]/;
   const koreanRegex = /[\uac00-\ud7af]/;
@@ -48,7 +50,6 @@ const guessLanguage = (text: string): string => {
   if (chineseRegex.test(str)) return 'zh-CN';
   if (russianRegex.test(str)) return 'ru-RU';
 
-  // Analizar palabras clave comunes (stopwords) para lenguajes latinos
   const words = str.split(/\s+/);
   const isSpanish = words.some(w => ['el', 'la', 'los', 'las', 'un', 'una', 'y', 'de', 'en', 'por', 'para', 'con', 'que', 'es'].includes(w)) || spanishRegex.test(str);
   const isEnglish = words.some(w => ['the', 'a', 'an', 'and', 'of', 'in', 'on', 'for', 'with', 'that', 'is', 'it'].includes(w));
@@ -56,14 +57,12 @@ const guessLanguage = (text: string): string => {
   const isGerman = words.some(w => ['der', 'die', 'das', 'ein', 'eine', 'und', 'in', 'zu', 'mit', 'ist', 'für'].includes(w)) || germanRegex.test(str);
   const isItalian = words.some(w => ['il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', 'e', 'di', 'in', 'per', 'con', 'che'].includes(w));
 
-  // Lógica de desempate
   if (isSpanish && !isFrench && !isItalian) return 'es-ES';
   if (isFrench && !isSpanish) return 'fr-FR';
   if (isGerman) return 'de-DE';
   if (isItalian && !isSpanish && !isFrench) return 'it-IT';
-  if (isSpanish) return 'es-ES'; // Si hay mezcla, priorizamos español si dio positivo
+  if (isSpanish) return 'es-ES'; 
   
-  // Por defecto, asumimos inglés u otro idioma global
   if (isEnglish) return 'en-US';
 
   return 'en-US';
@@ -75,6 +74,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [showAnswer, setShowAnswer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [userAnswer, setUserAnswer] = useState("") // <-- Nuevo estado para la respuesta escrita
   
   const [isZenMode, setIsZenMode] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
@@ -135,7 +135,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     const voices = window.speechSynthesis.getVoices();
     const baseLang = langCode.split('-')[0];
 
-    // Buscamos la mejor voz disponible según el idioma detectado
     let voice = voices.find(v => v.lang.startsWith(baseLang) && v.name.includes('Google'));
     if (!voice) voice = voices.find(v => v.lang.startsWith(baseLang));
     if (!voice) voice = voices.find(v => v.lang.startsWith('en-') && v.name.includes('Google'));
@@ -207,6 +206,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
       setCurrentIndex((prev) => prev + 1)
       setShowAnswer(false)
+      setUserAnswer("") // <-- Limpiamos la caja de texto al pasar a la siguiente tarjeta
     } catch (error) {
       console.error("Error submitting rating:", error)
     } finally {
@@ -369,8 +369,25 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                           <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
                       </Button>
                   </div>
-                  {!showAnswer && (
+                  
+                  {/* CAJA DE TEXTO PARA ESCRIBIR LA RESPUESTA */}
+                  {!showAnswer && currentCard.is_typing_enabled && (
+                    <div className="mt-6 w-full max-w-sm pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+                        <Textarea
+                            placeholder="Type your answer here..."
+                            value={userAnswer}
+                            onChange={(e) => setUserAnswer(e.target.value)}
+                            className="resize-none bg-background text-foreground"
+                            rows={3}
+                        />
+                    </div>
+                  )}
+
+                  {!showAnswer && !currentCard.is_typing_enabled && (
                     <p className="text-xs text-muted-foreground mt-8 animate-pulse">Tap anywhere to reveal</p>
+                  )}
+                  {!showAnswer && currentCard.is_typing_enabled && (
+                    <p className="text-xs text-muted-foreground mt-4">Tap outside the box or press "Show Answer" to reveal</p>
                   )}
                 </div>
               </CardContent>
@@ -392,6 +409,14 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                     Answer
                   </span>
                   
+                  {/* AQUÍ MOSTRAMOS LA RESPUESTA DEL USUARIO PARA COMPARAR */}
+                  {currentCard.is_typing_enabled && userAnswer.trim() !== "" && (
+                    <div className="mb-2 w-full max-w-sm rounded-lg border bg-muted/50 p-4 text-left shadow-sm">
+                      <p className="mb-1 text-xs font-bold text-muted-foreground">YOUR ANSWER:</p>
+                      <p className="text-sm font-medium">{userAnswer}</p>
+                    </div>
+                  )}
+
                    {currentCard.back_image_url && (
                     <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-56 w-full flex justify-center mb-4">
                         <ImageViewerDialog src={currentCard.back_image_url} alt="Back image" triggerClassName="w-auto h-auto max-h-56 object-contain" />
