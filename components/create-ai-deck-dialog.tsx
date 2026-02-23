@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sparkles, Loader2, CheckCircle, AlertTriangle, FileText, Upload, BrainCircuit } from "lucide-react"
+import { Sparkles, Loader2, CheckCircle, AlertTriangle, Upload, BrainCircuit } from "lucide-react"
 import Link from "next/link"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { experimental_useObject as useObject } from '@ai-sdk/react'
@@ -52,8 +52,7 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
   const [newDeckId, setNewDeckId] = useState<string | null>(null)
   const router = useRouter()
 
-  // --- VERCEL AI SDK HOOK PARA STREAMING ---
-  const { object, submit, isLoading, stop, error: streamError } = useObject({
+  const { object, submit, isLoading, stop } = useObject({
       api: '/api/generate-deck-stream',
       schema: cardSchema,
       onFinish: async (event) => {
@@ -64,7 +63,6 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
           }
 
           try {
-              // Guardar el mazo en la base de datos una vez que el stream ha terminado
               const response = await fetch('/api/save-generated-deck', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -106,22 +104,40 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
     setView('loading');
     setErrorMessage("");
 
-    const formData = new FormData();
-    formData.append('cardType', cardType);
-    formData.append('cardCount', cardCount);
-    formData.append('language', language);
-    formData.append('difficulty', difficulty);
-    formData.append('generationSource', generationSource);
-
-    if (generationSource === 'topic') {
-      formData.append('topic', topic);
-    } else if (generationSource === 'pdf' && pdfFile) {
-      formData.append('pdfFile', pdfFile);
-      formData.append('pageRange', pageRange);
+    let pdfFileBase64 = null;
+    
+    if (generationSource === 'pdf' && pdfFile) {
+      try {
+        pdfFileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(pdfFile);
+          reader.onload = () => {
+             if (typeof reader.result === 'string') {
+                 resolve(reader.result.split(',')[1]);
+             } else {
+                 reject(new Error("File read error"));
+             }
+          };
+          reader.onerror = error => reject(error);
+        });
+      } catch (err) {
+        setErrorMessage("Failed to process the PDF file.");
+        setView('error');
+        return;
+      }
     }
 
-    // Iniciamos el Stream enviando el formData
-    submit(formData);
+    // Iniciamos el Stream enviando un objeto JSON plano
+    submit({
+        cardType,
+        cardCount,
+        language,
+        difficulty,
+        generationSource,
+        topic: generationSource === 'topic' ? topic : null,
+        pageRange: generationSource === 'pdf' ? pageRange : null,
+        pdfFileBase64
+    });
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,7 +276,6 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
           </form>
         )}
 
-        {/* --- VISTA DE STREAMING (Cargando y Mostrando Tarjetas en Tiempo Real) --- */}
         {view === 'loading' && (
           <div className="flex-1 flex flex-col items-center pt-8 pb-4 h-full min-h-[400px]">
             <div className="text-center mb-8 space-y-2">
@@ -279,14 +294,12 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
                     {object?.cards?.map((card, idx) => (
                         <Card key={idx} className="p-4 shadow-sm border-primary/20 bg-background animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-2">
                             <div className="text-xs font-semibold text-primary/70 uppercase tracking-wider mb-1">Card {idx + 1}</div>
-                            {/* --- SOLUCIÓN: card?.front y card?.back --- */}
                             <div className="font-medium">{card?.front || <span className="text-muted-foreground/30 animate-pulse">Thinking...</span>}</div>
                             <div className="h-px bg-border w-full my-1" />
                             <div className="text-muted-foreground text-sm">{card?.back || <span className="text-muted-foreground/30 animate-pulse">Writing...</span>}</div>
                         </Card>
                     ))}
                     
-                    {/* Tarjeta fantasma parpadeando si aún no se ha completado el total */}
                     {(!object?.cards || object.cards.length < parseInt(cardCount)) && (
                         <Card className="p-4 shadow-none border-dashed border-muted-foreground/30 bg-transparent flex flex-col gap-3 opacity-50">
                             <div className="h-4 w-16 bg-muted rounded animate-pulse" />

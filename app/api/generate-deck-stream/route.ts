@@ -5,23 +5,24 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 60;
 
-// Inicializamos el proveedor explícitamente apuntando a tu variable de entorno actual
+// Inicializamos el proveedor apuntando a tu variable de entorno
 const googleProvider = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
+    // 1. AHORA LEEMOS LA PETICIÓN COMO JSON (Esto evita el error que mencionas)
+    const body = await req.json();
     
-    const cardType = formData.get('cardType') as string;
-    const cardCount = parseInt(formData.get('cardCount') as string, 10);
-    const language = formData.get('language') as string;
-    const difficulty = formData.get('difficulty') as string;
-    const generationSource = formData.get('generationSource') as string;
-    const topic = formData.get('topic') as string | null;
-    const pdfFile = formData.get('pdfFile') as File | null;
-    const pageRangeStr = formData.get('pageRange') as string | null;
+    const cardType = body.cardType as string;
+    const cardCount = parseInt(body.cardCount as string, 10);
+    const language = body.language as string;
+    const difficulty = body.difficulty as string;
+    const generationSource = body.generationSource as string;
+    const topic = body.topic as string | null;
+    const pdfFileBase64 = body.pdfFileBase64 as string | null;
+    const pageRangeStr = body.pageRange as string | null;
 
     const cardTypeInstructions = {
         qa: 'Clear question in the "front" and concise answer in the "back".',
@@ -32,14 +33,11 @@ export async function POST(req: Request) {
     let sourceInstruction = "";
     let filePart = null;
 
-    if (generationSource === 'pdf' && pdfFile) {
-        const arrayBuffer = await pdfFile.arrayBuffer();
-        const base64Data = Buffer.from(arrayBuffer).toString("base64");
-        
+    if (generationSource === 'pdf' && pdfFileBase64) {
         filePart = {
             type: 'file' as const,
-            data: base64Data,
-            mimeType: pdfFile.type,
+            data: pdfFileBase64,
+            mimeType: "application/pdf",
         };
 
         sourceInstruction = `Use the attached document as the ONLY source material.`;
@@ -69,7 +67,7 @@ export async function POST(req: Request) {
         messages[0].content.push(filePart);
     }
 
-    // Comprobación de seguridad por si no hay API Key
+    // Comprobación de seguridad
     if (!process.env.GOOGLE_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
         throw new Error("API Key is missing in environment variables.");
     }
@@ -90,7 +88,7 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("Stream Error:", error);
-    // Ahora devolvemos el error real para que el componente frontend (create-ai-deck-dialog.tsx) lo muestre
+    // Devolvemos el error real para mostrarlo en el front
     return NextResponse.json(
         { error: error.message || "Failed to generate stream" }, 
         { status: 500 }
