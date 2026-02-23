@@ -143,7 +143,7 @@ function DraggableDeckItem({
             </AlertDialog>
         </div>
       )}
-      <DeckCard deck={{...item, is_folder: false, parent_id: null}} isEditMode={isEditMode} />
+      <DeckCard deck={item} isEditMode={isEditMode} />
     </div>
   );
 }
@@ -296,7 +296,7 @@ export function DashboardClient({ initialItems }: { initialItems: Item[] }) {
           <DragOverlay dropAnimation={null}>
               {activeDragItem ? (
                     <div className="shadow-2xl rounded-xl scale-105 cursor-grabbing">
-                      <DeckCard deck={{...activeDragItem, is_folder: false, parent_id: null}} isEditMode={isEditMode} />
+                      <DeckCard deck={activeDragItem} isEditMode={isEditMode} />
                     </div>
               ) : null}
           </DragOverlay>
