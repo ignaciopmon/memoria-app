@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sparkles, Loader2, CheckCircle, AlertTriangle, FileText, Upload, BrainCircuit } from "lucide-react"
 import Link from "next/link"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { experimental_useObject as useObject } from '@ai-sdk/react' // <-- LÍNEA CORREGIDA AQUÍ
+import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { z } from "zod"
 import { Card } from "./ui/card"
 import { ScrollArea } from "./ui/scroll-area"
@@ -279,9 +279,10 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
                     {object?.cards?.map((card, idx) => (
                         <Card key={idx} className="p-4 shadow-sm border-primary/20 bg-background animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-2">
                             <div className="text-xs font-semibold text-primary/70 uppercase tracking-wider mb-1">Card {idx + 1}</div>
-                            <div className="font-medium">{card.front || <span className="text-muted-foreground/30 animate-pulse">Thinking...</span>}</div>
+                            {/* --- SOLUCIÓN: card?.front y card?.back --- */}
+                            <div className="font-medium">{card?.front || <span className="text-muted-foreground/30 animate-pulse">Thinking...</span>}</div>
                             <div className="h-px bg-border w-full my-1" />
-                            <div className="text-muted-foreground text-sm">{card.back || <span className="text-muted-foreground/30 animate-pulse">Writing...</span>}</div>
+                            <div className="text-muted-foreground text-sm">{card?.back || <span className="text-muted-foreground/30 animate-pulse">Writing...</span>}</div>
                         </Card>
                     ))}
                     
