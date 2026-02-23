@@ -83,6 +83,9 @@ export function ImportCSVDialog({ deckId, open, onOpenChange }: ImportCSVDialogP
     }
   }
 
+  // ESTA ES LA LÍNEA QUE FALTABA:
+  const columns = csvData && csvData.length > 0 ? csvData[0] : []
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { onOpenChange(isOpen); if (!isOpen) resetState(); }}>
       <DialogContent className="max-w-2xl">
@@ -108,7 +111,7 @@ export function ImportCSVDialog({ deckId, open, onOpenChange }: ImportCSVDialogP
                   {file ? file.name : "Select .csv file"}
                 </Button>
               </div>
-              {csvData.length > 0 && (
+              {csvData.length > 0 && columns.length > 0 && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
