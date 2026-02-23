@@ -1,9 +1,14 @@
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamObject } from 'ai';
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
 
 export const maxDuration = 60;
+
+// Inicializamos el proveedor explícitamente apuntando a tu variable de entorno actual
+const googleProvider = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+});
 
 export async function POST(req: Request) {
   try {
@@ -64,9 +69,14 @@ export async function POST(req: Request) {
         messages[0].content.push(filePart);
     }
 
-    // Usamos streamObject de Vercel AI para asegurar que el modelo devuelve un JSON progresivo
+    // Comprobación de seguridad por si no hay API Key
+    if (!process.env.GOOGLE_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+        throw new Error("API Key is missing in environment variables.");
+    }
+
+    // Usamos el googleProvider instanciado arriba
     const result = await streamObject({
-        model: google('gemini-2.5-flash'),
+        model: googleProvider('gemini-2.5-flash'),
         messages: messages,
         schema: z.object({
             cards: z.array(z.object({
@@ -80,6 +90,10 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("Stream Error:", error);
-    return NextResponse.json({ error: "Failed to generate stream" }, { status: 500 });
+    // Ahora devolvemos el error real para que el componente frontend (create-ai-deck-dialog.tsx) lo muestre
+    return NextResponse.json(
+        { error: error.message || "Failed to generate stream" }, 
+        { status: 500 }
+    );
   }
 }
