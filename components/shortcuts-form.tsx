@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { Keyboard, Save, Loader2, Monitor } from "lucide-react"
+import { Keyboard, Save, Loader2, Monitor, Brain } from "lucide-react" // <-- Aquí estaba el error, faltaba añadir Brain
 
 export type Shortcuts = {
   id?: string
