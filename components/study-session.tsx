@@ -173,10 +173,12 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
 
     const key = event.key === ' ' ? ' ' : event.key.toLowerCase()
-    const s = shortcuts || { flip_card: ' ', rate_again: '1', rate_hard: '2', rate_good: '3', rate_easy: '4', to_dashboard: 'd', play_audio: 'p' }
+    
+    // Solo cargamos los atajos que vienen del tipo Shortcuts
+    const s = shortcuts || { rate_again: '1', rate_hard: '2', rate_good: '3', rate_easy: '4' }
 
     if (!isComplete) {
-        if (!showAnswer && key === s.flip_card.toLowerCase()) {
+        if (!showAnswer && key === ' ') {
           event.preventDefault()
           setShowAnswer(true)
         } else if (showAnswer) {
@@ -197,7 +199,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
         }
     }
 
-    if (key === s.to_dashboard.toLowerCase()) {
+    if (key === 'd') {
         event.preventDefault()
         router.push('/dashboard')
     }
