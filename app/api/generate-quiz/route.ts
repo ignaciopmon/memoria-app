@@ -1,7 +1,9 @@
+// app/api/generate-quiz/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Prevenir timeout
 
 function cleanAndParseJSON(text: string) {
     let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
@@ -15,6 +17,13 @@ function cleanAndParseJSON(text: string) {
 
 const apiKey = process.env.GOOGLE_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
+
+// Orden de modelos
+const MODELS = [
+  "gemini-2.5-flash",
+  "gemma-3-27b",
+  "gemma-3-12b"
+];
 
 export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "API Key missing" }, { status: 500 });
@@ -71,12 +80,40 @@ export async function POST(request: Request) {
 
     promptParts.unshift(promptText);
 
-    const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-  generationConfig: { responseMimeType: "application/json" } // Obliga a devolver JSON válido siempre
-});
-    const result = await model.generateContent(promptParts);
-    const quizData = cleanAndParseJSON(result.response.text());
+    let quizData;
+    let success = false;
+    let lastError: any;
+
+    // SISTEMA DE FALLBACK
+    for (const modelName of MODELS) {
+        try {
+            console.log(`Generando quiz con: ${modelName}`);
+            
+            const generationConfig = modelName.includes("gemini") 
+                ? { responseMimeType: "application/json" } 
+                : undefined;
+
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig
+            });
+            
+            const result = await model.generateContent(promptParts);
+            quizData = cleanAndParseJSON(result.response.text());
+            
+            if (!Array.isArray(quizData)) throw new Error("Invalid JSON structure");
+
+            success = true;
+            break;
+        } catch (aiError: any) {
+            console.warn(`Error en quiz con ${modelName}:`, aiError.message);
+            lastError = aiError;
+        }
+    }
+
+    if (!success || !quizData) {
+        return NextResponse.json({ error: `Falló la creación del test. Todos los modelos devolvieron error.` }, { status: 500 });
+    }
 
     return NextResponse.json(quizData);
 

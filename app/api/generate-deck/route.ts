@@ -4,9 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // <--- AÑADIDO: Evita el timeout 504 de Vercel (permite hasta 60s)
+export const maxDuration = 60; // Prevenir timeout de Vercel (60s)
 
 const apiKey = process.env.GOOGLE_API_KEY;
+
+// Definimos el orden de prioridad de los modelos
+const MODELS = [
+  "gemini-2.5-flash",
+  "gemma-3-27b",
+  "gemma-3-12b"
+];
 
 export async function POST(request: Request) {
   if (!apiKey) {
@@ -89,17 +96,50 @@ export async function POST(request: Request) {
     promptParts.unshift(promptText);
 
     let generatedCards;
-    try {
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            generationConfig: { responseMimeType: "application/json" }
-        });
-        const result = await model.generateContent(promptParts);
-        generatedCards = JSON.parse(result.response.text());
+    let success = false;
+    let lastError: any;
 
-        if (!Array.isArray(generatedCards)) throw new Error("Invalid JSON structure.");
-    } catch (aiError: any) {
-        return NextResponse.json({ error: "Failed to generate content with AI." }, { status: 500 });
+    // SISTEMA DE FALLBACK: Bucle que prueba modelos hasta que uno funcione
+    for (const modelName of MODELS) {
+        try {
+            console.log(`Intentando generar mazo con: ${modelName}`);
+            
+            // Si es un modelo Gemma, evitamos el mimeType estricto de la SDK para evitar errores 400
+            const generationConfig = modelName.includes("gemini") 
+                ? { responseMimeType: "application/json" } 
+                : undefined;
+
+            const model = genAI.getGenerativeModel({ 
+                model: modelName,
+                generationConfig
+            });
+            
+            const result = await model.generateContent(promptParts);
+            const text = result.response.text();
+            
+            // Limpieza manual por si el modelo envuelve el JSON en markdown
+            let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+            const firstOpen = cleanText.indexOf('[');
+            const lastClose = cleanText.lastIndexOf(']');
+            if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+                cleanText = cleanText.substring(firstOpen, lastClose + 1);
+            }
+
+            generatedCards = JSON.parse(cleanText);
+
+            if (!Array.isArray(generatedCards)) throw new Error("Invalid JSON structure.");
+            
+            success = true;
+            break; // Si tuvo éxito, salimos del bucle
+        } catch (aiError: any) {
+            console.warn(`Fallo con el modelo ${modelName}. Intentando el siguiente... Error:`, aiError.message);
+            lastError = aiError;
+        }
+    }
+
+    // Si terminó el bucle y success es false, todos los modelos fallaron
+    if (!success || !generatedCards) {
+        return NextResponse.json({ error: `Generación fallida tras probar todos los modelos. Último error: ${lastError?.message}` }, { status: 500 });
     }
 
     const { data: newDeck, error: deckError } = await supabase

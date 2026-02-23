@@ -1,8 +1,10 @@
+// app/api/add-ai-cards/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Prevenir timeout
 
 function cleanAndParseJSON(text: string) {
     let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
@@ -15,6 +17,13 @@ function cleanAndParseJSON(text: string) {
 }
 
 const apiKey = process.env.GOOGLE_API_KEY;
+
+// Definimos el orden de prioridad de los modelos
+const MODELS = [
+  "gemini-2.5-flash",
+  "gemma-3-27b",
+  "gemma-3-12b"
+];
 
 export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "API Key missing." }, { status: 500 });
@@ -88,15 +97,38 @@ export async function POST(request: Request) {
     promptParts.unshift(promptText);
 
     let generatedCards;
-    try {
-        const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-  generationConfig: { responseMimeType: "application/json" } // Obliga a devolver JSON válido siempre
-});
-        const result = await model.generateContent(promptParts);
-        generatedCards = cleanAndParseJSON(result.response.text());
-    } catch (aiError: any) {
-        return NextResponse.json({ error: "AI generation failed." }, { status: 500 });
+    let success = false;
+    let lastError: any;
+
+    // SISTEMA DE FALLBACK
+    for (const modelName of MODELS) {
+        try {
+            console.log(`Añadiendo cartas. Intentando con: ${modelName}`);
+            
+            const generationConfig = modelName.includes("gemini") 
+                ? { responseMimeType: "application/json" } 
+                : undefined;
+
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig
+            });
+            
+            const result = await model.generateContent(promptParts);
+            generatedCards = cleanAndParseJSON(result.response.text());
+            
+            if (!Array.isArray(generatedCards)) throw new Error("Invalid JSON");
+            
+            success = true;
+            break; // Éxito, salimos del bucle
+        } catch (aiError: any) {
+            console.warn(`Fallo con ${modelName}. Probando otro...`, aiError.message);
+            lastError = aiError;
+        }
+    }
+
+    if (!success || !generatedCards) {
+        return NextResponse.json({ error: `Generación fallida tras probar todos los modelos.` }, { status: 500 });
     }
 
     const cardsToInsert = generatedCards.slice(0, cardCount).map((card: {front: string, back: string}) => ({

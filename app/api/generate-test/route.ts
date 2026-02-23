@@ -1,11 +1,10 @@
 // app/api/generate-test/route.ts
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Prevenir timeout
 
-// Helper para limpiar JSON rebelde
 function cleanAndParseJSON(text: string) {
     let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
     const firstOpen = cleanText.indexOf('[');
@@ -31,6 +30,12 @@ interface GenerateTestBody {
 
 const apiKey = process.env.GOOGLE_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
+
+const MODELS = [
+  "gemini-2.5-flash",
+  "gemma-3-27b",
+  "gemma-3-12b"
+];
 
 export async function POST(request: Request) {
   if (!apiKey) {
@@ -65,22 +70,39 @@ export async function POST(request: Request) {
       ${JSON.stringify(selectedCards)}
     `;
 
-    // MODELO ELEGIDO POR TI
-    const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-  generationConfig: { responseMimeType: "application/json" } // Obliga a devolver JSON válido siempre
-});
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    
     let testData;
-    try {
-      testData = cleanAndParseJSON(text);
-    } catch (parseError) {
-      console.error("Parse Error:", parseError, "Raw Text:", text);
-      throw new Error("AI response format invalid.");
+    let success = false;
+    let lastError: any;
+
+    // SISTEMA DE FALLBACK
+    for (const modelName of MODELS) {
+        try {
+            console.log(`Generando Test en base a mazo con: ${modelName}`);
+            
+            const generationConfig = modelName.includes("gemini") 
+                ? { responseMimeType: "application/json" } 
+                : undefined;
+
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig
+            });
+            
+            const result = await model.generateContent(prompt);
+            testData = cleanAndParseJSON(result.response.text());
+            
+            if (!Array.isArray(testData)) throw new Error("Invalid JSON structure");
+
+            success = true;
+            break;
+        } catch (aiError: any) {
+            console.warn(`Error generando Test con ${modelName}:`, aiError.message);
+            lastError = aiError;
+        }
+    }
+
+    if (!success || !testData) {
+        return NextResponse.json({ error: `Fallo tras intentar todos los modelos AI.` }, { status: 500 });
     }
     
     return NextResponse.json(testData);
