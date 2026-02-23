@@ -3,12 +3,13 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, Plus, LayoutGrid, Clock, AlertCircle } from "lucide-react" // Iconos nuevos
+import { Brain, Plus, LayoutGrid, Clock, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { CardItem } from "@/components/card-item"
 import { ImportMenu } from "@/components/import-menu"
-import { AddAiCardsDialog } from "@/components/add-ai-cards-dialog" 
+import { AddAiCardsDialog } from "@/components/add-ai-cards-dialog"
+import { ExportButton } from "@/components/export-button" // <-- NUEVO IMPORT
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -103,6 +104,8 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
               </div>
 
               <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                {/* BOTÓN NUEVO AQUÍ */}
+                <ExportButton deckName={deck.name} cards={cards || []} />
                 <ImportMenu deckId={id} />
                 <AddAiCardsDialog deckId={deck.id} deckName={deck.name} />
                 <CreateCardDialog deckId={id} />
