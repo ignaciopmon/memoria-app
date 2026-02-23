@@ -1,63 +1,55 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
+import { Keyboard, Save, Loader2, Monitor } from "lucide-react"
 
-interface Settings {
+export type Shortcuts = {
   id?: string
-  again_interval_minutes: number
-  hard_interval_days: number
-  good_interval_days: number
-  easy_interval_days: number
-  enable_ai_suggestions: boolean
+  rate_again: string
+  rate_hard: string
+  rate_good: string
+  rate_easy: string
 }
 
-interface SettingsFormProps {
-  settings: Settings | null
+interface ShortcutsFormProps {
+  shortcuts: Omit<Shortcuts, 'id'> | null
 }
 
-export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
-  // El estado inicial se basa en las props, con valores por defecto
-  const [settings, setSettings] = useState({
-    again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
-    hard_interval_days: initialSettings?.hard_interval_days ?? 1,
-    good_interval_days: initialSettings?.good_interval_days ?? 3,
-    easy_interval_days: initialSettings?.easy_interval_days ?? 7,
-    enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
-  })
+const ShortcutDisplay = ({ label, value }: { label: string, value: string }) => (
+  <div className="flex items-center justify-between rounded-xl border bg-background p-4 shadow-sm">
+      <p className="font-medium text-foreground">{label}</p>
+      <kbd className="pointer-events-none inline-flex h-8 min-w-[2rem] select-none items-center justify-center rounded-md border border-b-4 bg-muted px-2 font-mono text-sm font-bold text-muted-foreground shadow-sm">
+        {value.toUpperCase()}
+      </kbd>
+  </div>
+);
+
+export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProps) {
+  const defaultShortcuts: Omit<Shortcuts, 'id'> = {
+    rate_again: '1',
+    rate_hard: '2',
+    rate_good: '3',
+    rate_easy: '4',
+  }
+  
+  const [shortcuts, setShortcuts] = useState(initialShortcuts || defaultShortcuts)
   const [isLoading, setIsLoading] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
   const router = useRouter()
-
-  // ***** INICIO DE LA CORRECCIÓN *****
-  // Sincroniza el estado si las props (initialSettings) cambian
-  // (por ejemplo, después de un router.refresh())
-  // APLICA LA MISMA LÓGICA DE VALOR POR DEFECTO que el useState
-  useEffect(() => {
-    setSettings({
-      again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
-      hard_interval_days: initialSettings?.hard_interval_days ?? 1,
-      good_interval_days: initialSettings?.good_interval_days ?? 3,
-      easy_interval_days: initialSettings?.easy_interval_days ?? 7,
-      enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
-    });
-  }, [initialSettings]);
-  // ***** FIN DE LA CORRECCIÓN *****
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    // Asegura que el valor no sea negativo
-    const numValue = Math.max(1, Number(value));
-    setSettings((prev) => ({ ...prev, [name]: numValue }))
+    // Guardamos solo el último carácter introducido
+    const key = value.slice(-1).toLowerCase() 
+    setShortcuts((prev) => ({ ...prev, [name]: key }))
   }
-
+  
   const handleSave = async () => {
     setIsLoading(true)
     setMessage(null)
@@ -65,24 +57,24 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      setMessage("You must be logged in to save settings.")
+      setMessage({ text: "You must be logged in to save settings.", type: "error" })
       setIsLoading(false)
       return
     }
 
     try {
-      const { error } = await supabase.from("user_settings").upsert({
+      const { error } = await supabase.from("user_shortcuts").upsert({
         user_id: user.id,
-        ...settings,
+        ...shortcuts,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' })
 
       if (error) throw error
 
-      setMessage("Settings saved successfully!")
+      setMessage({ text: "Shortcuts saved successfully!", type: "success" })
       router.refresh()
     } catch (error) {
-      setMessage("Error saving settings.")
+      setMessage({ text: "Error saving shortcuts.", type: "error" })
       console.error(error)
     } finally {
       setIsLoading(false)
@@ -91,90 +83,90 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Study Settings</CardTitle>
+    <Card className="shadow-md border-muted">
+      <CardHeader className="border-b bg-muted/10 pb-6">
+        <div className="flex items-center gap-2">
+            <Keyboard className="h-5 w-5 text-primary" />
+            <CardTitle>Keyboard Shortcuts</CardTitle>
+        </div>
         <CardDescription>
-          Customize your learning experience, from review intervals to AI features.
+          Speed up your workflow and study sessions with custom keyboard bindings.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-8">
-        {/* SECCIÓN DE IA */}
+      <CardContent className="space-y-10 pt-8">
+        
+        {/* Atajos Fijos */}
         <div className="space-y-4">
-            <h4 className="font-medium text-sm">Artificial Intelligence</h4>
-             <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                  <h3 className="font-medium">AI-Powered Scheduling</h3>
-                  <p className="text-sm text-muted-foreground">Allow AI to automatically reschedule cards based on your test results.</p>
-                </div>
-                <Switch
-                    checked={settings.enable_ai_suggestions}
-                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enable_ai_suggestions: checked }))}
-                    aria-label="Toggle AI-powered scheduling"
-                />
+            <div className="flex items-center gap-2 text-muted-foreground border-b pb-2">
+                <Monitor className="h-4 w-4" />
+                <h4 className="font-semibold text-sm uppercase tracking-wider">Global App Shortcuts</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <ShortcutDisplay label="Go to Dashboard" value="D" />
+              <ShortcutDisplay label="Flip Card (Study)" value="SPACE" />
             </div>
         </div>
 
-        <Separator />
-
-        {/* SECCIÓN DE INTERVALOS */}
+        {/* Atajos Personalizables */}
         <div className="space-y-4">
-          <h4 className="font-medium text-sm">Review Intervals</h4>
-           <p className="text-sm text-muted-foreground">
-              Set the time until a card is shown again after you rate it in Study Mode.
-            </p>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 pt-2">
-            <div className="grid gap-2">
-              <Label htmlFor="again_interval_minutes">"Again" Interval (minutes)</Label>
-              <Input
-                id="again_interval_minutes"
-                name="again_interval_minutes"
-                type="number"
-                value={settings.again_interval_minutes}
-                onChange={handleInputChange}
-                min="1"
-              />
+            <div className="flex items-center gap-2 text-muted-foreground border-b pb-2">
+                <Brain className="h-4 w-4" />
+                <h4 className="font-semibold text-sm uppercase tracking-wider">Study Mode Ratings</h4>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="hard_interval_days">"Hard" Interval (days)</Label>
-              <Input
-                id="hard_interval_days"
-                name="hard_interval_days"
-                type="number"
-                value={settings.hard_interval_days}
-                onChange={handleInputChange}
-                min="1"
-              />
+            <p className="text-sm text-muted-foreground">Click the input and press the key you want to assign.</p>
+            
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 pt-2">
+                
+                <div className="flex flex-col gap-2 p-4 rounded-xl border bg-background shadow-sm items-center text-center focus-within:ring-2 focus-within:ring-destructive/20 focus-within:border-destructive">
+                  <Label htmlFor="rate_again" className="text-destructive font-semibold">Rate "Again"</Label>
+                  <Input 
+                    id="rate_again" name="rate_again" 
+                    value={shortcuts.rate_again} onChange={handleInputChange} 
+                    className="h-14 w-14 text-2xl font-bold uppercase text-center border-2 border-b-4 bg-muted shadow-sm rounded-lg mt-2 cursor-pointer focus-visible:ring-0"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 p-4 rounded-xl border bg-background shadow-sm items-center text-center focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500">
+                  <Label htmlFor="rate_hard" className="text-orange-600 dark:text-orange-500 font-semibold">Rate "Hard"</Label>
+                  <Input 
+                    id="rate_hard" name="rate_hard" 
+                    value={shortcuts.rate_hard} onChange={handleInputChange} 
+                    className="h-14 w-14 text-2xl font-bold uppercase text-center border-2 border-b-4 bg-muted shadow-sm rounded-lg mt-2 cursor-pointer focus-visible:ring-0"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 p-4 rounded-xl border bg-background shadow-sm items-center text-center focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500">
+                  <Label htmlFor="rate_good" className="text-blue-600 dark:text-blue-500 font-semibold">Rate "Good"</Label>
+                  <Input 
+                    id="rate_good" name="rate_good" 
+                    value={shortcuts.rate_good} onChange={handleInputChange} 
+                    className="h-14 w-14 text-2xl font-bold uppercase text-center border-2 border-b-4 bg-muted shadow-sm rounded-lg mt-2 cursor-pointer focus-visible:ring-0"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 p-4 rounded-xl border bg-background shadow-sm items-center text-center focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500">
+                  <Label htmlFor="rate_easy" className="text-green-600 dark:text-green-500 font-semibold">Rate "Easy"</Label>
+                  <Input 
+                    id="rate_easy" name="rate_easy" 
+                    value={shortcuts.rate_easy} onChange={handleInputChange} 
+                    className="h-14 w-14 text-2xl font-bold uppercase text-center border-2 border-b-4 bg-muted shadow-sm rounded-lg mt-2 cursor-pointer focus-visible:ring-0"
+                  />
+                </div>
+
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="good_interval_days">"Good" Interval (days)</Label>
-              <Input
-                id="good_interval_days"
-                name="good_interval_days"
-                type="number"
-                value={settings.good_interval_days}
-                onChange={handleInputChange}
-                min="1"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="easy_interval_days">"Easy" Interval (days)</Label>
-              <Input
-                id="easy_interval_days"
-                name="easy_interval_days"
-                type="number"
-                value={settings.easy_interval_days}
-                onChange={handleInputChange}
-                min="1"
-              />
-            </div>
-          </div>
         </div>
       </CardContent>
-      <CardFooter className="flex justify-between border-t px-6 pt-6">
-        {message && <p className="text-sm text-muted-foreground">{message}</p>}
-        <Button onClick={handleSave} disabled={isLoading} className="ml-auto">
-          {isLoading ? "Saving..." : "Save Settings"}
+      <CardFooter className="flex items-center justify-between border-t bg-muted/10 p-6 mt-4">
+        <div className="h-6">
+            {message && (
+              <p className={`text-sm font-medium ${message.type === 'success' ? 'text-green-600' : 'text-destructive'}`}>
+                {message.text}
+              </p>
+            )}
+        </div>
+        <Button onClick={handleSave} disabled={isLoading} className="shadow-md">
+          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+          {isLoading ? "Saving..." : "Save Shortcuts"}
         </Button>
       </CardFooter>
     </Card>
