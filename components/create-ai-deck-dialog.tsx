@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sparkles, Loader2, CheckCircle, AlertTriangle, FileText, Upload, BrainCircuit } from "lucide-react"
 import Link from "next/link"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { experimental_useObject as useObject } from 'ai/react'
+import { experimental_useObject as useObject } from '@ai-sdk/react' // <-- LÍNEA CORREGIDA AQUÍ
 import { z } from "zod"
 import { Card } from "./ui/card"
 import { ScrollArea } from "./ui/scroll-area"
