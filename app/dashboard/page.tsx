@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Brain, Menu } from "lucide-react"
+import { Brain, Menu, LayoutDashboard, Activity } from "lucide-react"
 import { DashboardClient } from "@/components/dashboard-client"
 import { StudyStats } from "@/components/study-stats"
 import {
@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -37,7 +38,7 @@ export default async function DashboardPage() {
     .order("position", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
 
-  // Obtener Revisiones para Estadísticas (últimos 60 días para optimizar)
+  // Obtener Revisiones para Estadísticas (últimos 60 días)
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
@@ -95,10 +96,37 @@ export default async function DashboardPage() {
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8">
-          {/* NUEVA SECCIÓN DE ESTADÍSTICAS */}
-          <StudyStats reviews={reviews || []} />
           
-          <DashboardClient initialItems={itemsWithCount} />
+          <Tabs defaultValue="decks" className="w-full space-y-6">
+            
+            {/* Pestañas de Selección */}
+            <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-2">
+              <TabsTrigger value="decks" className="flex items-center gap-2">
+                <LayoutDashboard className="h-4 w-4" />
+                My Decks
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Activity
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Contenido: Mazos */}
+            <TabsContent value="decks" className="m-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <DashboardClient initialItems={itemsWithCount} />
+            </TabsContent>
+
+            {/* Contenido: Estadísticas */}
+            <TabsContent value="activity" className="m-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <div className="mb-8 flex flex-col gap-1">
+                 <h2 className="text-3xl font-bold">Your Activity</h2>
+                 <p className="text-muted-foreground">Track your study progress, retention, and learning streaks.</p>
+              </div>
+              <StudyStats reviews={reviews || []} />
+            </TabsContent>
+
+          </Tabs>
+
         </div>
       </main>
     </div>
