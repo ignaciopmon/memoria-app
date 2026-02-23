@@ -1,10 +1,10 @@
-// app/dashboard/page.tsx
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Brain, Menu } from "lucide-react"
 import { DashboardClient } from "@/components/dashboard-client"
+import { StudyStats } from "@/components/study-stats"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,77 +24,58 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-  // --- CORRECCIÓN EN LA CONSULTA ---
-  // Modificar la consulta para contar solo las tarjetas NO borradas
+  // Obtener Mazos
   const { data: allItems, error } = await supabase
     .from("decks")
     .select(`
-      id,
-      name,
-      description,
-      color,
-      position,
-      created_at,
+      id, name, description, color, position, created_at,
       cards!inner(count)
-    `)                             // Selecciona explícitamente y pide el count de 'cards'
-    .is("deleted_at", null)      // Asegura que el deck no esté borrado
-    .eq("is_folder", false)     // Asegura que no sea una carpeta
-    .is('cards.deleted_at', null) // <<< FILTRA LAS TARJETAS QUE SE CUENTAN
+    `)
+    .is("deleted_at", null)
+    .eq("is_folder", false)
+    .is('cards.deleted_at', null)
     .order("position", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
-  // --- FIN DE LA CORRECCIÓN ---
 
-  if (error) {
-    console.error("Error fetching decks with active card count:", error)
-    // Considera devolver un estado de error o un array vacío si prefieres
-  }
+  // Obtener Revisiones para Estadísticas (últimos 60 días para optimizar)
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-  // El mapeo sigue funcionando porque la estructura devuelta es la misma,
-  // pero el 'count' ahora está filtrado por la consulta.
+  const { data: reviews } = await supabase
+    .from("card_reviews")
+    .select("rating, reviewed_at")
+    .gte("reviewed_at", sixtyDaysAgo.toISOString());
+
   const itemsWithCount = allItems?.map((item) => ({
     ...item,
-    cardCount: item.cards && item.cards.length > 0 ? item.cards[0].count : 0, // Ajuste para manejar el caso donde cards puede ser [] si no hay activas
-    // Asegurarse de que las propiedades esperadas por DraggableDeckItem estén presentes
-    is_folder: false, // Añadir explícitamente si es necesario en el componente hijo
-    parent_id: null,  // Añadir explícitamente si es necesario en el componente hijo
+    cardCount: item.cards && item.cards.length > 0 ? item.cards[0].count : 0,
+    is_folder: false,
+    parent_id: null,
   })) || []
 
-return (
+  return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 border-b bg-background">
+      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-         <Link href="/" className="flex items-center gap-2">
-            <Brain className="h-6 w-6" />
+         <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
+            <Brain className="h-6 w-6 text-primary" />
            <span className="text-xl font-bold select-none">Memoria</span>
          </Link>
 
-          {/* Navegación Desktop */}
           <div className="hidden items-center gap-2 md:flex">
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/upcoming">Upcoming</Link>
-            </Button>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/trash">Trash</Link>
-            </Button>
-            <span className="h-6 border-l"></span>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/settings">Settings</Link>
-            </Button>
+            <Button variant="ghost" size="sm" asChild><Link href="/upcoming">Upcoming</Link></Button>
+            <Button variant="ghost" size="sm" asChild><Link href="/trash">Trash</Link></Button>
+            <span className="h-6 border-l mx-1"></span>
+            <Button variant="ghost" size="sm" asChild><Link href="/settings">Settings</Link></Button>
             <form action="/auth/signout" method="post">
-              <Button variant="ghost" size="sm" type="submit">
-                Sign Out
-              </Button>
+              <Button variant="ghost" size="sm" type="submit">Sign Out</Button>
             </form>
           </div>
 
-          {/* Menú Móvil */}
           <div className="md:hidden">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Open menu</span>
-                </Button>
+                <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild><Link href="/upcoming">Upcoming</Link></DropdownMenuItem>
@@ -114,7 +95,9 @@ return (
 
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8">
-          {/* Pasar los items con el conteo ya corregido */}
+          {/* NUEVA SECCIÓN DE ESTADÍSTICAS */}
+          <StudyStats reviews={reviews || []} />
+          
           <DashboardClient initialItems={itemsWithCount} />
         </div>
       </main>

@@ -1,8 +1,7 @@
-// components/create-ai-deck-dialog.tsx
 "use client"
 
 import type React from "react"
-import { useState, useRef } from "react" // Import useRef
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,21 +17,30 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sparkles, Loader2, CheckCircle, AlertTriangle, FileText, Upload } from "lucide-react" // Added FileText, Upload
+import { Sparkles, Loader2, CheckCircle, AlertTriangle, FileText, Upload, BrainCircuit } from "lucide-react"
 import Link from "next/link"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group" // Import RadioGroup
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { experimental_useObject as useObject } from 'ai/react'
+import { z } from "zod"
+import { Card } from "./ui/card"
+import { ScrollArea } from "./ui/scroll-area"
 
-export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeof Button>["size"] }) { // Added size prop
+const cardSchema = z.object({
+    cards: z.array(z.object({
+        front: z.string(),
+        back: z.string()
+    }))
+})
+
+export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeof Button>["size"] }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'form' | 'loading' | 'success' | 'error'>('form')
 
-  // New state for generation source
   const [generationSource, setGenerationSource] = useState<'topic' | 'pdf'>('topic')
   const [pdfFile, setPdfFile] = useState<File | null>(null)
-  const [pageRange, setPageRange] = useState("") // e.g., "1-5, 8, 10-12"
-  const fileInputRef = useRef<HTMLInputElement>(null) // Ref for file input
+  const [pageRange, setPageRange] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Form state
   const [deckName, setDeckName] = useState("")
   const [topic, setTopic] = useState("")
   const [cardType, setCardType] = useState("qa")
@@ -42,273 +50,278 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
 
   const [errorMessage, setErrorMessage] = useState("")
   const [newDeckId, setNewDeckId] = useState<string | null>(null)
-
   const router = useRouter()
 
+  // --- VERCEL AI SDK HOOK PARA STREAMING ---
+  const { object, submit, isLoading, stop, error: streamError } = useObject({
+      api: '/api/generate-deck-stream',
+      schema: cardSchema,
+      onFinish: async (event) => {
+          if (!event.object?.cards || event.object.cards.length === 0) {
+              setErrorMessage("AI generated no valid cards. Try a different prompt.");
+              setView('error');
+              return;
+          }
+
+          try {
+              // Guardar el mazo en la base de datos una vez que el stream ha terminado
+              const response = await fetch('/api/save-generated-deck', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      deckName,
+                      description: `AI-generated from ${generationSource === 'pdf' ? `PDF` : `Topic`}`,
+                      cards: event.object.cards
+                  })
+              });
+
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error);
+
+              setNewDeckId(result.deckId);
+              setView('success');
+              router.refresh();
+          } catch (e: any) {
+              setErrorMessage(e.message || "Failed to save generated cards.");
+              setView('error');
+          }
+      },
+      onError: (err) => {
+          setErrorMessage(err.message || "Stream interrupted.");
+          setView('error');
+      }
+  });
+
   const resetForm = () => {
-    setDeckName("")
-    setTopic("")
-    setPdfFile(null) // Reset PDF file
-    setPageRange("") // Reset page range
-    if (fileInputRef.current) fileInputRef.current.value = ""; // Clear file input visually
-    setGenerationSource('topic') // Reset source
-    setCardType("qa")
-    setCardCount("10")
-    setLanguage("Spanish")
-    setDifficulty("medium")
-    setErrorMessage("")
-    setNewDeckId(null)
-    setView('form')
+    if (isLoading) stop();
+    setDeckName(""); setTopic(""); setPdfFile(null); setPageRange("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setGenerationSource('topic'); setCardType("qa"); setCardCount("10");
+    setLanguage("Spanish"); setDifficulty("medium");
+    setErrorMessage(""); setNewDeckId(null); setView('form');
   }
 
-  // --- MODIFIED handleSubmit ---
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setView('loading')
-    setErrorMessage("")
+    e.preventDefault();
+    setView('loading');
+    setErrorMessage("");
 
-    // Use FormData to send file if PDF source is selected
     const formData = new FormData();
-    formData.append('deckName', deckName);
     formData.append('cardType', cardType);
     formData.append('cardCount', cardCount);
     formData.append('language', language);
     formData.append('difficulty', difficulty);
-    formData.append('generationSource', generationSource); // Send source type
+    formData.append('generationSource', generationSource);
 
     if (generationSource === 'topic') {
       formData.append('topic', topic);
     } else if (generationSource === 'pdf' && pdfFile) {
       formData.append('pdfFile', pdfFile);
-      formData.append('pageRange', pageRange); // Send page range
-    } else if (generationSource === 'pdf' && !pdfFile) {
-        setErrorMessage("Please select a PDF file.");
-        setView('form');
-        return;
+      formData.append('pageRange', pageRange);
     }
 
-    try {
-      const response = await fetch('/api/generate-deck', {
-        method: 'POST',
-        // Body is now FormData, headers are set automatically by fetch
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'An unknown error occurred.')
-      }
-
-      setNewDeckId(result.deckId)
-      setView('success')
-      router.refresh()
-
-    } catch (error: unknown) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to create deck.")
-      setView('error')
-    }
+    // Iniciamos el Stream enviando el formData
+    submit(formData);
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === "application/pdf") {
-      setPdfFile(file);
-      setErrorMessage("");
+      setPdfFile(file); setErrorMessage("");
     } else {
-      setPdfFile(null);
-      setErrorMessage("Please select a valid PDF file.");
-      if (fileInputRef.current) fileInputRef.current.value = ""; // Clear invalid file
+      setPdfFile(null); setErrorMessage("Please select a valid PDF file.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  // Determine if submit should be disabled
-const isSubmitDisabled = view === 'loading' || !deckName.trim() || // <-- Changed isLoading
+  const isSubmitDisabled = view === 'loading' || !deckName.trim() || 
                            (generationSource === 'topic' && !topic.trim()) ||
                            (generationSource === 'pdf' && !pdfFile);
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { setOpen(isOpen); if (!isOpen) setTimeout(resetForm, 300)}}>
       <DialogTrigger asChild>
-        {/* Pass size prop to Button */}
-        <Button variant="outline" size={size}>
+        <Button variant="default" size={size} className="bg-gradient-to-r from-purple-600 to-primary hover:from-purple-700 hover:to-primary/90 shadow-md border-0">
           <Sparkles className="mr-2 h-4 w-4" />
-          New AI Deck
+          Create with AI
         </Button>
       </DialogTrigger>
-      {/* Increased max width for more space */}
-      <DialogContent className="max-w-3xl">
-        <form onSubmit={handleSubmit}>
-          {view === 'form' && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Create Deck with AI</DialogTitle>
-                <DialogDescription>Generate cards from a topic description or a PDF document.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-6 py-4"> {/* Increased gap */}
-                {/* Deck Name */}
-                <div className="grid gap-2">
-                  <Label htmlFor="deckName">Deck Name *</Label>
-                  <Input id="deckName" placeholder="E.g., World War II Basics" value={deckName} onChange={(e) => setDeckName(e.target.value)} required />
-                </div>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        
+        <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+                <BrainCircuit className="h-6 w-6 text-primary" /> Create Deck with AI
+            </DialogTitle>
+            <DialogDescription>Let the AI analyze your topic or document and generate cards instantly.</DialogDescription>
+        </DialogHeader>
 
-                {/* Generation Source Selection */}
-                <div className="grid gap-2">
-                  <Label>Generation Source</Label>
-                  <RadioGroup value={generationSource} onValueChange={(value) => setGenerationSource(value as 'topic' | 'pdf')} className="flex gap-4">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="topic" id="source-topic" />
-                      <Label htmlFor="source-topic">Describe Topic</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="pdf" id="source-pdf" />
-                      <Label htmlFor="source-pdf">From PDF</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                {/* Conditional Inputs */}
-                {generationSource === 'topic' ? (
-                  <div className="grid gap-2">
-                    <Label htmlFor="topic">Topic & Instructions *</Label>
-                    <Textarea
-                      id="topic"
-                      placeholder="E.g., Generate flashcards about the main events and key figures of World War II. Focus on dates and their significance."
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      required={generationSource === 'topic'}
-                      rows={4}
-                    />
-                  </div>
-                ) : (
-                  <div className="grid gap-4 rounded-md border p-4">
-                    <Label>PDF Options *</Label>
-                    <div className="grid gap-2">
-                      {/* File Input Trigger */}
-                      <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />
-                      <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full justify-start text-left font-normal">
-                        <Upload className="mr-2 h-4 w-4" />
-                        {pdfFile ? pdfFile.name : "Select PDF File"}
-                      </Button>
-                      {errorMessage && !pdfFile && <p className="text-sm text-destructive">{errorMessage}</p>}
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="pageRange">Page Range (Optional)</Label>
-                      <Input
-                        id="pageRange"
-                        placeholder="E.g., 1-5, 8, 10-12 (Leave empty for all pages)"
-                        value={pageRange}
-                        onChange={(e) => setPageRange(e.target.value)}
-                        disabled={!pdfFile}
-                      />
-                      <p className="text-xs text-muted-foreground">Specify pages or ranges separated by commas.</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Common Options Grid */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {/* Card Type */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="cardType">Card Type</Label>
-                        <Select value={cardType} onValueChange={setCardType}>
-                            <SelectTrigger id="cardType"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="qa">Question & Answer</SelectItem>
-                                <SelectItem value="vocabulary">Vocabulary/Terms</SelectItem>
-                                <SelectItem value="facts">Key Facts</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {/* Number of Cards */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="cardCount">Number of Cards</Label>
-                        <Select value={cardCount} onValueChange={setCardCount}>
-                            <SelectTrigger id="cardCount"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="5">5</SelectItem>
-                                <SelectItem value="10">10</SelectItem>
-                                <SelectItem value="15">15</SelectItem>
-                                <SelectItem value="20">20</SelectItem> {/* Added option */}
-                                <SelectItem value="25">25</SelectItem> {/* Added option */}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {/* Language */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="language">Language</Label>
-                        <Select value={language} onValueChange={setLanguage}>
-                            <SelectTrigger id="language"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Spanish">Spanish</SelectItem>
-                                <SelectItem value="English">English</SelectItem>
-                                <SelectItem value="French">French</SelectItem>
-                                <SelectItem value="German">German</SelectItem>
-                                <SelectItem value="Portuguese">Portuguese</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {/* Difficulty */}
-                    <div className="grid gap-2">
-                        <Label htmlFor="difficulty">Difficulty</Label>
-                        <Select value={difficulty} onValueChange={setDifficulty}>
-                            <SelectTrigger id="difficulty"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="easy">Easy</SelectItem>
-                                <SelectItem value="medium">Medium</SelectItem>
-                                <SelectItem value="hard">Hard</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                 {/* Display general error if exists and not related to file */}
-                {errorMessage && pdfFile && <p className="text-sm text-destructive">{errorMessage}</p>}
+        {view === 'form' && (
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="grid gap-6 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="deckName">Deck Name *</Label>
+                <Input id="deckName" placeholder="E.g., Anatomy 101" value={deckName} onChange={(e) => setDeckName(e.target.value)} required />
               </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={isSubmitDisabled}>
-                    <Sparkles className="mr-2 h-4 w-4"/>
-                    Generate Deck
-                </Button>
-              </DialogFooter>
-            </>
-          )}
 
-          {/* Loading View */}
-          {view === 'loading' && (
-            <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
-              <h3 className="text-lg font-semibold">Generating your deck...</h3>
-              <p className="text-sm text-muted-foreground">
-                {generationSource === 'pdf' ? 'Processing PDF and generating cards...' : 'The AI is hard at work!'} This may take a moment.
-              </p>
-            </div>
-          )}
+              <div className="grid gap-2">
+                <Label>Source Material</Label>
+                <RadioGroup value={generationSource} onValueChange={(value) => setGenerationSource(value as 'topic' | 'pdf')} className="flex gap-4">
+                  <div className="flex items-center space-x-2 border rounded-lg p-3 flex-1 cursor-pointer data-[state=checked]:border-primary hover:bg-muted/50 transition-colors" onClick={() => setGenerationSource('topic')}>
+                    <RadioGroupItem value="topic" id="source-topic" />
+                    <Label htmlFor="source-topic" className="cursor-pointer font-medium w-full">Topic Description</Label>
+                  </div>
+                  <div className="flex items-center space-x-2 border rounded-lg p-3 flex-1 cursor-pointer data-[state=checked]:border-primary hover:bg-muted/50 transition-colors" onClick={() => setGenerationSource('pdf')}>
+                    <RadioGroupItem value="pdf" id="source-pdf" />
+                    <Label htmlFor="source-pdf" className="cursor-pointer font-medium w-full">PDF Document</Label>
+                  </div>
+                </RadioGroup>
+              </div>
 
-          {/* Success View */}
-          {view === 'success' && (
-             <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
-              <CheckCircle className="h-12 w-12 text-green-500" />
-              <h3 className="text-lg font-semibold">Deck Created Successfully!</h3>
-              <p className="text-sm text-muted-foreground">Your new deck "{deckName}" is ready.</p>
-               <DialogFooter className="mt-4 sm:justify-center">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>Close</Button>
-                  {newDeckId && <Button asChild><Link href={`/deck/${newDeckId}`}>View Deck</Link></Button>}
-              </DialogFooter>
-            </div>
-          )}
+              {generationSource === 'topic' ? (
+                <div className="grid gap-2 animate-in fade-in zoom-in-95 duration-200">
+                  <Label htmlFor="topic">Topic Details *</Label>
+                  <Textarea id="topic" placeholder="E.g., Generate flashcards about the human skeleton, focusing on the bones of the skull and spine." value={topic} onChange={(e) => setTopic(e.target.value)} required={generationSource === 'topic'} rows={4} className="resize-none" />
+                </div>
+              ) : (
+                <div className="grid gap-4 rounded-xl border p-5 bg-muted/20 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="grid gap-2">
+                    <Label>Upload PDF *</Label>
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />
+                    <Button type="button" variant={pdfFile ? "default" : "outline"} onClick={() => fileInputRef.current?.click()} className="w-full justify-start border-dashed border-2 h-12">
+                      <Upload className="mr-2 h-4 w-4" />
+                      {pdfFile ? <span className="font-semibold">{pdfFile.name}</span> : "Click to select PDF"}
+                    </Button>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="pageRange">Specific Pages (Optional)</Label>
+                    <Input id="pageRange" placeholder="E.g., 1-5, 8, 10-12" value={pageRange} onChange={(e) => setPageRange(e.target.value)} disabled={!pdfFile} />
+                  </div>
+                </div>
+              )}
 
-          {/* Error View */}
-          {view === 'error' && (
-             <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
-              <AlertTriangle className="h-12 w-12 text-destructive" />
-              <h3 className="text-lg font-semibold">Generation Failed</h3>
-              <p className="text-sm text-muted-foreground max-w-sm">{errorMessage}</p>
-               <DialogFooter className="mt-4 sm:justify-center">
-                  <Button type="button" variant="outline" onClick={resetForm}>Try Again</Button>
-              </DialogFooter>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="grid gap-2">
+                      <Label htmlFor="cardCount">Amount</Label>
+                      <Select value={cardCount} onValueChange={setCardCount}>
+                          <SelectTrigger id="cardCount"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="5">5 Cards</SelectItem>
+                              <SelectItem value="10">10 Cards</SelectItem>
+                              <SelectItem value="15">15 Cards</SelectItem>
+                              <SelectItem value="20">20 Cards</SelectItem>
+                              <SelectItem value="30">30 Cards</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  <div className="grid gap-2">
+                      <Label htmlFor="cardType">Card Type</Label>
+                      <Select value={cardType} onValueChange={setCardType}>
+                          <SelectTrigger id="cardType"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="qa">Q & A</SelectItem>
+                              <SelectItem value="vocabulary">Vocabulary</SelectItem>
+                              <SelectItem value="facts">Key Facts</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  <div className="grid gap-2">
+                      <Label htmlFor="difficulty">Difficulty</Label>
+                      <Select value={difficulty} onValueChange={setDifficulty}>
+                          <SelectTrigger id="difficulty"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="easy">Easy</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="hard">Hard</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  <div className="grid gap-2">
+                      <Label htmlFor="language">Language</Label>
+                      <Select value={language} onValueChange={setLanguage}>
+                          <SelectTrigger id="language"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="Spanish">Spanish</SelectItem>
+                              <SelectItem value="English">English</SelectItem>
+                              <SelectItem value="French">French</SelectItem>
+                              <SelectItem value="German">German</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+              </div>
+              {errorMessage && <p className="text-sm font-medium text-destructive bg-destructive/10 p-3 rounded-md">{errorMessage}</p>}
             </div>
-          )}
-        </form>
+            
+            <DialogFooter className="sticky bottom-0 bg-background pt-4 border-t mt-4 flex-shrink-0">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isSubmitDisabled} className="bg-primary hover:bg-primary/90 text-white w-full sm:w-auto">
+                  <Sparkles className="mr-2 h-4 w-4"/> Generate Magic
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+
+        {/* --- VISTA DE STREAMING (Cargando y Mostrando Tarjetas en Tiempo Real) --- */}
+        {view === 'loading' && (
+          <div className="flex-1 flex flex-col items-center pt-8 pb-4 h-full min-h-[400px]">
+            <div className="text-center mb-8 space-y-2">
+                <div className="relative inline-flex mb-2">
+                    <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse" />
+                    <Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" />
+                </div>
+                <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-500">
+                    Crafting your deck...
+                </h3>
+                <p className="text-sm text-muted-foreground">Reading source and writing flashcards in real-time.</p>
+            </div>
+
+            <ScrollArea className="w-full flex-1 border rounded-xl bg-muted/10 p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {object?.cards?.map((card, idx) => (
+                        <Card key={idx} className="p-4 shadow-sm border-primary/20 bg-background animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-2">
+                            <div className="text-xs font-semibold text-primary/70 uppercase tracking-wider mb-1">Card {idx + 1}</div>
+                            <div className="font-medium">{card.front || <span className="text-muted-foreground/30 animate-pulse">Thinking...</span>}</div>
+                            <div className="h-px bg-border w-full my-1" />
+                            <div className="text-muted-foreground text-sm">{card.back || <span className="text-muted-foreground/30 animate-pulse">Writing...</span>}</div>
+                        </Card>
+                    ))}
+                    
+                    {/* Tarjeta fantasma parpadeando si aún no se ha completado el total */}
+                    {(!object?.cards || object.cards.length < parseInt(cardCount)) && (
+                        <Card className="p-4 shadow-none border-dashed border-muted-foreground/30 bg-transparent flex flex-col gap-3 opacity-50">
+                            <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+                            <div className="h-5 w-3/4 bg-muted rounded animate-pulse" />
+                            <div className="h-4 w-full bg-muted rounded animate-pulse mt-2" />
+                        </Card>
+                    )}
+                </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        {view === 'success' && (
+           <div className="flex-1 flex flex-col items-center justify-center py-16 gap-4 text-center animate-in zoom-in-95 duration-500">
+            <div className="rounded-full bg-green-500/10 p-4 mb-2">
+                <CheckCircle className="h-16 w-16 text-green-500" />
+            </div>
+            <h3 className="text-2xl font-bold">Deck Ready!</h3>
+            <p className="text-muted-foreground text-lg">"{deckName}" has been created with {object?.cards?.length} cards.</p>
+             <div className="mt-8 flex gap-3 w-full sm:w-auto justify-center">
+                <Button type="button" variant="outline" size="lg" onClick={() => setOpen(false)}>Close</Button>
+                {newDeckId && <Button asChild size="lg"><Link href={`/deck/${newDeckId}`}>Start Studying</Link></Button>}
+            </div>
+          </div>
+        )}
+
+        {view === 'error' && (
+           <div className="flex-1 flex flex-col items-center justify-center py-16 gap-4 text-center">
+            <AlertTriangle className="h-16 w-16 text-destructive" />
+            <h3 className="text-xl font-bold">Something went wrong</h3>
+            <p className="text-muted-foreground max-w-sm">{errorMessage}</p>
+             <div className="mt-6">
+                <Button type="button" variant="outline" onClick={resetForm}>Try Again</Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )
