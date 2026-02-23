@@ -29,6 +29,46 @@ interface StudySessionProps {
   }>
 }
 
+// Función auxiliar para detectar el idioma del texto de manera automática
+const guessLanguage = (text: string): string => {
+  if (!text) return 'en-US';
+  const str = text.toLowerCase();
+
+  // Patrones de caracteres exclusivos
+  const japaneseRegex = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/;
+  const chineseRegex = /[\u4e00-\u9fff]/;
+  const koreanRegex = /[\uac00-\ud7af]/;
+  const russianRegex = /[А-яЁё]/;
+  const spanishRegex = /[áéíóúüñ¿¡]/i;
+  const frenchRegex = /[àâçéèêëîïôûùüÿœæ]/i;
+  const germanRegex = /[äöüß]/i;
+
+  if (japaneseRegex.test(str)) return 'ja-JP';
+  if (koreanRegex.test(str)) return 'ko-KR';
+  if (chineseRegex.test(str)) return 'zh-CN';
+  if (russianRegex.test(str)) return 'ru-RU';
+
+  // Analizar palabras clave comunes (stopwords) para lenguajes latinos
+  const words = str.split(/\s+/);
+  const isSpanish = words.some(w => ['el', 'la', 'los', 'las', 'un', 'una', 'y', 'de', 'en', 'por', 'para', 'con', 'que', 'es'].includes(w)) || spanishRegex.test(str);
+  const isEnglish = words.some(w => ['the', 'a', 'an', 'and', 'of', 'in', 'on', 'for', 'with', 'that', 'is', 'it'].includes(w));
+  const isFrench = words.some(w => ['le', 'la', 'les', 'un', 'une', 'et', 'de', 'en', 'pour', 'avec', 'qui', 'est', 'ce'].includes(w)) || frenchRegex.test(str);
+  const isGerman = words.some(w => ['der', 'die', 'das', 'ein', 'eine', 'und', 'in', 'zu', 'mit', 'ist', 'für'].includes(w)) || germanRegex.test(str);
+  const isItalian = words.some(w => ['il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', 'e', 'di', 'in', 'per', 'con', 'che'].includes(w));
+
+  // Lógica de desempate
+  if (isSpanish && !isFrench && !isItalian) return 'es-ES';
+  if (isFrench && !isSpanish) return 'fr-FR';
+  if (isGerman) return 'de-DE';
+  if (isItalian && !isSpanish && !isFrench) return 'it-IT';
+  if (isSpanish) return 'es-ES'; // Si hay mezcla, priorizamos español si dio positivo
+  
+  // Por defecto, asumimos inglés u otro idioma global
+  if (isEnglish) return 'en-US';
+
+  return 'en-US';
+};
+
 export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [cards, setCards] = useState(initialCards)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -87,12 +127,21 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     if (!('speechSynthesis' in window)) return;
 
     window.speechSynthesis.cancel();
+    
+    const langCode = guessLanguage(text);
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langCode;
     
     const voices = window.speechSynthesis.getVoices();
-    const enVoice = voices.find(voice => voice.lang.startsWith('en-') && voice.name.includes('Google')) 
-                 || voices.find(voice => voice.lang.startsWith('en-'));
-    if (enVoice) utterance.voice = enVoice;
+    const baseLang = langCode.split('-')[0];
+
+    // Buscamos la mejor voz disponible según el idioma detectado
+    let voice = voices.find(v => v.lang.startsWith(baseLang) && v.name.includes('Google'));
+    if (!voice) voice = voices.find(v => v.lang.startsWith(baseLang));
+    if (!voice) voice = voices.find(v => v.lang.startsWith('en-') && v.name.includes('Google'));
+    if (!voice) voice = voices.find(v => v.lang.startsWith('en-'));
+
+    if (voice) utterance.voice = voice;
 
     utterance.onstart = () => setIsPlayingAudio(true);
     utterance.onend = () => setIsPlayingAudio(false);
@@ -288,7 +337,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
              }}
           >
             
-            {/* CARA FRONTAL (PREGUNTA) - AÑADIDO ONCLICK PARA VOLTEAR */}
+            {/* CARA FRONTAL (PREGUNTA) */}
             <Card 
                onClick={() => !showAnswer && setShowAnswer(true)}
                className={`absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 bg-card z-10 select-none ${!showAnswer ? 'cursor-pointer hover:ring-2 ring-primary/20 transition-all' : ''}`}
