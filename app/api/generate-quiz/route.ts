@@ -71,7 +71,10 @@ export async function POST(request: Request) {
 
     promptParts.unshift(promptText);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash",
+  generationConfig: { responseMimeType: "application/json" } // Obliga a devolver JSON válido siempre
+});
     const result = await model.generateContent(promptParts);
     const quizData = cleanAndParseJSON(result.response.text());
 

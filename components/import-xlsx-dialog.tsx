@@ -41,8 +41,9 @@ export function ImportXLSXDialog({ deckId, open, onOpenChange }: ImportXLSXDialo
     }
     setFile(selectedFile); setError(null); setIsLoading(true);
     const reader = new FileReader()
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
+        const XLSX = await import("xlsx");
         const data = new Uint8Array(event.target?.result as ArrayBuffer)
         const workbook = XLSX.read(data, { type: "array" })
         const sheetName = workbook.SheetNames[0]

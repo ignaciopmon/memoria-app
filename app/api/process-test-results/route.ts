@@ -98,7 +98,10 @@ export async function POST(request: Request) {
       `;
 
       // Modelo actualizado a gemini-2.5-flash-lite
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+      const model = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash",
+  generationConfig: { responseMimeType: "application/json" } // Obliga a devolver JSON válido siempre
+});
       
       let aiSuggestion;
       try {

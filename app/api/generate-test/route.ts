@@ -66,7 +66,10 @@ export async function POST(request: Request) {
     `;
 
     // MODELO ELEGIDO POR TI
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const model = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash",
+  generationConfig: { responseMimeType: "application/json" } // Obliga a devolver JSON válido siempre
+});
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
