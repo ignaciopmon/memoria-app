@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle, ChevronLeft, ChevronRight, Shuffle } from "luci
 import Link from "next/link"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { ImageViewerDialog } from "./image-viewer-dialog"
 
 interface PracticeSessionProps {
@@ -17,6 +18,7 @@ interface PracticeSessionProps {
     back: string;
     front_image_url: string | null;
     back_image_url: string | null;
+    is_typing_enabled?: boolean; // NUEVO: lo marcamos opcional por compatibilidad con tarjetas viejas
   }>
 }
 
@@ -33,6 +35,7 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
   const [isShuffled, setIsShuffled] = useState(false)
+  const [userAnswer, setUserAnswer] = useState("")
 
   const cards = useMemo(() => {
     return isShuffled ? shuffleArray(initialCards) : initialCards;
@@ -59,6 +62,7 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
   useEffect(() => {
     setCurrentIndex(0);
     setShowAnswer(false);
+    setUserAnswer("");
   }, [isShuffled]);
 
   if (initialCards.length === 0) {
@@ -80,6 +84,7 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
     if (currentIndex < cards.length - 1) {
       setCurrentIndex(prev => prev + 1)
       setShowAnswer(false)
+      setUserAnswer("")
     }
   }
 
@@ -87,6 +92,7 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1)
       setShowAnswer(false)
+      setUserAnswer("")
     }
   }
 
@@ -96,7 +102,7 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" asChild>
-              <Link href="/dashboard">
+              <Link href={`/deck/${deck.id}`}>
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
@@ -110,7 +116,7 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
         </div>
       </header>
 
-      <main className="flex flex-1 items-center justify-center">
+      <main className="flex flex-1 items-center justify-center py-6">
         <div className="container mx-auto max-w-3xl px-4 flex flex-col items-center">
             <div className="flex items-center space-x-2 mb-4">
                 <Switch id="shuffle-mode" checked={isShuffled} onCheckedChange={setIsShuffled} />
@@ -120,40 +126,65 @@ export function PracticeSession({ deck, initialCards }: PracticeSessionProps) {
                 </Label>
             </div>
 
-          <Card className="mb-6 w-full">
+          <Card className="mb-6 w-full shadow-md">
             <CardContent className="flex min-h-[250px] flex-col justify-center p-4 md:min-h-[300px] md:p-8">
               <div className="text-center">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">FRONT</p>
+                <p className="mb-4 text-xs font-bold tracking-wider text-muted-foreground">FRONT</p>
                 {currentCard.front_image_url && (
-                  <ImageViewerDialog src={currentCard.front_image_url} alt="Front image" triggerClassName="mb-4" />
+                  <ImageViewerDialog src={currentCard.front_image_url} alt="Front image" triggerClassName="mb-4 flex justify-center w-full" />
                 )}
-                <h2 className="text-balance text-xl font-semibold md:text-2xl">{currentCard.front}</h2>
+                <h2 className="text-balance text-xl font-semibold md:text-2xl mb-6">{currentCard.front}</h2>
               </div>
 
+              {/* AQUÍ ESTÁ LA CONDICIÓN: Solo se muestra el Textarea si is_typing_enabled es true */}
+              {!showAnswer && currentCard.is_typing_enabled && (
+                <div className="mt-4 border-t pt-4">
+                  <Label htmlFor="user-answer" className="text-xs font-medium text-muted-foreground mb-2 block text-center">
+                    Type your answer
+                  </Label>
+                  <Textarea 
+                    id="user-answer"
+                    placeholder="Escribe aquí tu respuesta para compararla después..." 
+                    value={userAnswer}
+                    onChange={(e) => setUserAnswer(e.target.value)}
+                    className="resize-none"
+                    rows={3}
+                  />
+                </div>
+              )}
+
               {showAnswer && (
-                <div className="border-t pt-6 text-center mt-6">
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">BACK</p>
-                  {currentCard.back_image_url && (
-                    <ImageViewerDialog src={currentCard.back_image_url} alt="Back image" triggerClassName="mb-4" />
+                <div className="border-t pt-6 text-center mt-4">
+                  {/* Solo mostramos la respuesta del usuario si la tarjeta tenía la opción activada y escribió algo */}
+                  {currentCard.is_typing_enabled && userAnswer.trim() !== "" && (
+                    <div className="mb-6 rounded-lg border bg-muted/50 p-4 text-left">
+                      <p className="mb-1 text-xs font-bold text-muted-foreground">YOUR ANSWER:</p>
+                      <p className="text-sm">{userAnswer}</p>
+                    </div>
                   )}
-                  <p className="text-balance text-lg text-muted-foreground md:text-xl">{currentCard.back}</p>
+                  
+                  <p className="mb-4 text-xs font-bold tracking-wider text-muted-foreground">BACK</p>
+                  {currentCard.back_image_url && (
+                    <ImageViewerDialog src={currentCard.back_image_url} alt="Back image" triggerClassName="mb-4 flex justify-center w-full" />
+                  )}
+                  <p className="text-balance text-lg text-muted-foreground md:text-xl whitespace-pre-wrap">{currentCard.back}</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
           {!showAnswer ? (
-            <div className="flex justify-center">
-              <Button size="lg" onClick={() => setShowAnswer(true)} className="min-w-48">
+            <div className="flex justify-center w-full">
+              <Button size="lg" onClick={() => setShowAnswer(true)} className="w-full max-w-sm">
                 Show Answer
               </Button>
             </div>
           ) : (
             <div className="flex w-full justify-center items-center gap-4">
-              <Button size="lg" variant="outline" onClick={goToPrevious} disabled={currentIndex === 0}>
+              <Button size="lg" variant="outline" onClick={goToPrevious} disabled={currentIndex === 0} className="w-full max-w-[180px]">
                 <ChevronLeft className="mr-2 h-4 w-4" /> Previous
               </Button>
-              <Button size="lg" onClick={goToNext} disabled={currentIndex === cards.length - 1}>
+              <Button size="lg" onClick={goToNext} disabled={currentIndex === cards.length - 1} className="w-full max-w-[180px]">
                 Next <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             </div>

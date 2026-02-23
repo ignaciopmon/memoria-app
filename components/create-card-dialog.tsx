@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Loader2, Image as ImageIcon, X } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Plus, Loader2, Image as ImageIcon, X, Keyboard } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import Image from "next/image"
 
@@ -31,6 +32,7 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
   const [backImage, setBackImage] = useState<File | null>(null)
   const [frontPreview, setFrontPreview] = useState<string | null>(null)
   const [backPreview, setBackPreview] = useState<string | null>(null)
+  const [isTypingEnabled, setIsTypingEnabled] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -77,12 +79,15 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
       let frontImageUrl: string | null = null;
       let backImageUrl: string | null = null;
 
+      const uploadPromises = [];
       if (frontImage) {
-        frontImageUrl = await uploadImage(frontImage)
+        uploadPromises.push(uploadImage(frontImage).then(url => frontImageUrl = url));
       }
       if (backImage) {
-        backImageUrl = await uploadImage(backImage)
+        uploadPromises.push(uploadImage(backImage).then(url => backImageUrl = url));
       }
+      
+      await Promise.all(uploadPromises);
 
       const supabase = createClient()
       const { error } = await supabase.from("cards").insert({
@@ -91,6 +96,7 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
         back,
         front_image_url: frontImageUrl,
         back_image_url: backImageUrl,
+        is_typing_enabled: isTypingEnabled,
         ease_factor: 2.5,
         interval: 0,
         repetitions: 0,
@@ -100,7 +106,7 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
       if (error) throw error
 
       setFront(""); setBack(""); setFrontImage(null); setBackImage(null);
-      setFrontPreview(null); setBackPreview(null);
+      setFrontPreview(null); setBackPreview(null); setIsTypingEnabled(false);
       setOpen(false)
       router.refresh()
     } catch (error: unknown) {
@@ -118,13 +124,32 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
           New Card
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Create new card</DialogTitle>
             <DialogDescription>Add a new study card to this deck.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            
+            {/* Opciones Avanzadas */}
+            <div className="flex items-center space-x-2 rounded-lg border p-3 shadow-sm">
+              <Switch 
+                id="typing-mode" 
+                checked={isTypingEnabled} 
+                onCheckedChange={setIsTypingEnabled} 
+              />
+              <Label htmlFor="typing-mode" className="flex flex-col gap-1 cursor-pointer">
+                <span className="flex items-center gap-2 font-medium">
+                  <Keyboard className="h-4 w-4 text-muted-foreground" />
+                  Require Typed Answer
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Adds a text box during practice to let you type and compare your answer. Ideal for image labels.
+                </span>
+              </Label>
+            </div>
+
             <div className="grid gap-2">
               <Label htmlFor="front">Front (Question) *</Label>
               <Textarea id="front" placeholder="E.g., What is photosynthesis?" value={front} onChange={(e) => setFront(e.target.value)} required rows={3} />
