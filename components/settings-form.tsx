@@ -1,55 +1,57 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { Keyboard, Save, Loader2, Monitor } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Sparkles, Clock, Save, Loader2 } from "lucide-react"
 
-export type Shortcuts = {
+interface Settings {
   id?: string
-  rate_again: string
-  rate_hard: string
-  rate_good: string
-  rate_easy: string
+  again_interval_minutes: number
+  hard_interval_days: number
+  good_interval_days: number
+  easy_interval_days: number
+  enable_ai_suggestions: boolean
 }
 
-interface ShortcutsFormProps {
-  shortcuts: Omit<Shortcuts, 'id'> | null
+interface SettingsFormProps {
+  settings: Settings | null
 }
 
-const ShortcutDisplay = ({ label, value }: { label: string, value: string }) => (
-  <div className="flex items-center justify-between rounded-xl border bg-background p-4 shadow-sm">
-      <p className="font-medium text-foreground">{label}</p>
-      <kbd className="pointer-events-none inline-flex h-8 min-w-[2rem] select-none items-center justify-center rounded-md border border-b-4 bg-muted px-2 font-mono text-sm font-bold text-muted-foreground shadow-sm">
-        {value.toUpperCase()}
-      </kbd>
-  </div>
-);
-
-export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProps) {
-  const defaultShortcuts: Omit<Shortcuts, 'id'> = {
-    rate_again: '1',
-    rate_hard: '2',
-    rate_good: '3',
-    rate_easy: '4',
-  }
-  
-  const [shortcuts, setShortcuts] = useState(initialShortcuts || defaultShortcuts)
+// AQUÍ ESTÁ LA CLAVE: Tiene que decir "export function SettingsForm"
+export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
+  const [settings, setSettings] = useState({
+    again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
+    hard_interval_days: initialSettings?.hard_interval_days ?? 1,
+    good_interval_days: initialSettings?.good_interval_days ?? 3,
+    easy_interval_days: initialSettings?.easy_interval_days ?? 7,
+    enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
   const router = useRouter()
 
+  useEffect(() => {
+    setSettings({
+      again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
+      hard_interval_days: initialSettings?.hard_interval_days ?? 1,
+      good_interval_days: initialSettings?.good_interval_days ?? 3,
+      easy_interval_days: initialSettings?.easy_interval_days ?? 7,
+      enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
+    });
+  }, [initialSettings]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    // Guardamos solo el último carácter introducido
-    const key = value.slice(-1).toLowerCase() 
-    setShortcuts((prev) => ({ ...prev, [name]: key }))
+    const numValue = Math.max(1, Number(value));
+    setSettings((prev) => ({ ...prev, [name]: numValue }))
   }
-  
+
   const handleSave = async () => {
     setIsLoading(true)
     setMessage(null)
@@ -63,18 +65,18 @@ export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProp
     }
 
     try {
-      const { error } = await supabase.from("user_shortcuts").upsert({
+      const { error } = await supabase.from("user_settings").upsert({
         user_id: user.id,
-        ...shortcuts,
+        ...settings,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' })
 
       if (error) throw error
 
-      setMessage({ text: "Shortcuts saved successfully!", type: "success" })
+      setMessage({ text: "Settings saved successfully!", type: "success" })
       router.refresh()
     } catch (error) {
-      setMessage({ text: "Error saving shortcuts.", type: "error" })
+      setMessage({ text: "Error saving settings.", type: "error" })
       console.error(error)
     } finally {
       setIsLoading(false)
@@ -83,92 +85,88 @@ export function ShortcutsForm({ shortcuts: initialShortcuts }: ShortcutsFormProp
   }
 
   return (
-    <Card className="shadow-md border-muted">
-      <CardHeader className="border-b bg-muted/10 pb-6">
-        <div className="flex items-center gap-2">
-            <Keyboard className="h-5 w-5 text-primary" />
-            <CardTitle>Keyboard Shortcuts</CardTitle>
+    <div className="space-y-6">
+      <Card className="shadow-md border-purple-200 dark:border-purple-900/50 overflow-hidden">
+        <div className="bg-gradient-to-r from-purple-50 to-background dark:from-purple-950/20 dark:to-background border-b border-purple-100 dark:border-purple-900/50 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-purple-100 dark:bg-purple-900/50 p-2.5 rounded-xl">
+              <Sparkles className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <CardTitle className="text-xl">AI-Powered Scheduling</CardTitle>
+              <CardDescription className="mt-1">Allow AI to optimize your study schedule.</CardDescription>
+            </div>
+          </div>
+          <Switch
+              checked={settings.enable_ai_suggestions}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enable_ai_suggestions: checked }))}
+              className="data-[state=checked]:bg-purple-600"
+          />
         </div>
-        <CardDescription>
-          Speed up your workflow and study sessions with custom keyboard bindings.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-10 pt-8">
-        
-        {/* Atajos Fijos */}
-        <div className="space-y-4">
-            <div className="flex items-center gap-2 text-muted-foreground border-b pb-2">
-                <Monitor className="h-4 w-4" />
-                <h4 className="font-semibold text-sm uppercase tracking-wider">Global App Shortcuts</h4>
+        <CardContent className="p-6 bg-muted/10 text-sm text-muted-foreground leading-relaxed">
+          When enabled, the AI will analyze your performance in Practice Tests and automatically adjust the next review dates for the cards you struggled with, helping you focus on what matters most.
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-md border-muted">
+        <CardHeader className="border-b bg-muted/10 pb-6">
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            <CardTitle>Spaced Repetition Intervals</CardTitle>
+          </div>
+          <CardDescription>
+            Set the base time added to a card's review date when you select a rating during a study session.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="grid gap-2 p-4 rounded-xl border bg-background shadow-sm hover:border-primary/50 transition-colors focus-within:border-primary">
+              <Label htmlFor="again_interval_minutes" className="text-destructive font-semibold">"Again" Interval</Label>
+              <div className="flex items-center gap-3">
+                <Input id="again_interval_minutes" name="again_interval_minutes" type="number" value={settings.again_interval_minutes} onChange={handleInputChange} min="1" className="w-24 text-center font-mono" />
+                <span className="text-sm text-muted-foreground">minutes</span>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <ShortcutDisplay label="Go to Dashboard" value="D" />
-              <ShortcutDisplay label="Flip Card (Study)" value="SPACE" />
+
+            <div className="grid gap-2 p-4 rounded-xl border bg-background shadow-sm hover:border-primary/50 transition-colors focus-within:border-primary">
+              <Label htmlFor="hard_interval_days" className="text-orange-600 dark:text-orange-500 font-semibold">"Hard" Interval</Label>
+              <div className="flex items-center gap-3">
+                <Input id="hard_interval_days" name="hard_interval_days" type="number" value={settings.hard_interval_days} onChange={handleInputChange} min="1" className="w-24 text-center font-mono" />
+                <span className="text-sm text-muted-foreground">days</span>
+              </div>
             </div>
-        </div>
 
-        {/* Atajos Personalizables */}
-        <div className="space-y-4">
-            <div className="flex items-center gap-2 text-muted-foreground border-b pb-2">
-                <Brain className="h-4 w-4" />
-                <h4 className="font-semibold text-sm uppercase tracking-wider">Study Mode Ratings</h4>
+            <div className="grid gap-2 p-4 rounded-xl border bg-background shadow-sm hover:border-primary/50 transition-colors focus-within:border-primary">
+              <Label htmlFor="good_interval_days" className="text-blue-600 dark:text-blue-500 font-semibold">"Good" Interval</Label>
+              <div className="flex items-center gap-3">
+                <Input id="good_interval_days" name="good_interval_days" type="number" value={settings.good_interval_days} onChange={handleInputChange} min="1" className="w-24 text-center font-mono" />
+                <span className="text-sm text-muted-foreground">days</span>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">Click the input and press the key you want to assign.</p>
-            
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 pt-2">
-                
-                <div className="flex flex-col gap-2 p-4 rounded-xl border bg-background shadow-sm items-center text-center focus-within:ring-2 focus-within:ring-destructive/20 focus-within:border-destructive">
-                  <Label htmlFor="rate_again" className="text-destructive font-semibold">Rate "Again"</Label>
-                  <Input 
-                    id="rate_again" name="rate_again" 
-                    value={shortcuts.rate_again} onChange={handleInputChange} 
-                    className="h-14 w-14 text-2xl font-bold uppercase text-center border-2 border-b-4 bg-muted shadow-sm rounded-lg mt-2 cursor-pointer focus-visible:ring-0"
-                  />
-                </div>
 
-                <div className="flex flex-col gap-2 p-4 rounded-xl border bg-background shadow-sm items-center text-center focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500">
-                  <Label htmlFor="rate_hard" className="text-orange-600 dark:text-orange-500 font-semibold">Rate "Hard"</Label>
-                  <Input 
-                    id="rate_hard" name="rate_hard" 
-                    value={shortcuts.rate_hard} onChange={handleInputChange} 
-                    className="h-14 w-14 text-2xl font-bold uppercase text-center border-2 border-b-4 bg-muted shadow-sm rounded-lg mt-2 cursor-pointer focus-visible:ring-0"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2 p-4 rounded-xl border bg-background shadow-sm items-center text-center focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500">
-                  <Label htmlFor="rate_good" className="text-blue-600 dark:text-blue-500 font-semibold">Rate "Good"</Label>
-                  <Input 
-                    id="rate_good" name="rate_good" 
-                    value={shortcuts.rate_good} onChange={handleInputChange} 
-                    className="h-14 w-14 text-2xl font-bold uppercase text-center border-2 border-b-4 bg-muted shadow-sm rounded-lg mt-2 cursor-pointer focus-visible:ring-0"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2 p-4 rounded-xl border bg-background shadow-sm items-center text-center focus-within:ring-2 focus-within:ring-green-500/20 focus-within:border-green-500">
-                  <Label htmlFor="rate_easy" className="text-green-600 dark:text-green-500 font-semibold">Rate "Easy"</Label>
-                  <Input 
-                    id="rate_easy" name="rate_easy" 
-                    value={shortcuts.rate_easy} onChange={handleInputChange} 
-                    className="h-14 w-14 text-2xl font-bold uppercase text-center border-2 border-b-4 bg-muted shadow-sm rounded-lg mt-2 cursor-pointer focus-visible:ring-0"
-                  />
-                </div>
-
+            <div className="grid gap-2 p-4 rounded-xl border bg-background shadow-sm hover:border-primary/50 transition-colors focus-within:border-primary">
+              <Label htmlFor="easy_interval_days" className="text-green-600 dark:text-green-500 font-semibold">"Easy" Interval</Label>
+              <div className="flex items-center gap-3">
+                <Input id="easy_interval_days" name="easy_interval_days" type="number" value={settings.easy_interval_days} onChange={handleInputChange} min="1" className="w-24 text-center font-mono" />
+                <span className="text-sm text-muted-foreground">days</span>
+              </div>
             </div>
-        </div>
-      </CardContent>
-      <CardFooter className="flex items-center justify-between border-t bg-muted/10 p-6 mt-4">
-        <div className="h-6">
+          </div>
+        </CardContent>
+        <CardFooter className="flex items-center justify-between border-t bg-muted/10 p-6">
+          <div className="h-6">
             {message && (
               <p className={`text-sm font-medium ${message.type === 'success' ? 'text-green-600' : 'text-destructive'}`}>
                 {message.text}
               </p>
             )}
-        </div>
-        <Button onClick={handleSave} disabled={isLoading} className="shadow-md">
-          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-          {isLoading ? "Saving..." : "Save Shortcuts"}
-        </Button>
-      </CardFooter>
-    </Card>
+          </div>
+          <Button onClick={handleSave} disabled={isLoading} className="shadow-md">
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {isLoading ? "Saving..." : "Save Settings"}
+          </Button>
+        </CardFooter>
+      </Card>
+    </div>
   )
 }
