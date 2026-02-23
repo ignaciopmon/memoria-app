@@ -1,3 +1,4 @@
+// components/study-session.tsx
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -35,7 +36,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   
-  // Estados para configuración
   const [isZenMode, setIsZenMode] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
   
@@ -62,7 +62,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     fetchUserSettings()
   }, [])
 
-  // Funciones para guardar preferencias al cambiarlas
   const toggleZenMode = async () => {
     const newVal = !isZenMode
     setIsZenMode(newVal)
@@ -83,7 +82,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const progress = (currentIndex / (cards.length || 1)) * 100
   const isComplete = currentIndex >= cards.length
 
-  // --- REPRODUCCIÓN DE AUDIO ---
   const playAudio = useCallback((text: string) => {
     if (!text || isPlayingAudio || !soundEnabled) return;
     if (!('speechSynthesis' in window)) return;
@@ -103,7 +101,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     window.speechSynthesis.speak(utterance);
   }, [isPlayingAudio, soundEnabled]);
 
-  // --- RESPUESTA TÁCTIL Y SONORA ---
   const playFeedback = useCallback(() => {
     if (!soundEnabled) return;
 
@@ -129,7 +126,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
       osc.start();
       osc.stop(ctx.currentTime + 0.1);
     } catch (e) {
-      // Ignorar si el navegador bloquea el audio
     }
   }, [soundEnabled]);
 
@@ -173,8 +169,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
 
     const key = event.key === ' ' ? ' ' : event.key.toLowerCase()
-    
-    // Solo cargamos los atajos que vienen del tipo Shortcuts
     const s = shortcuts || { rate_again: '1', rate_hard: '2', rate_good: '3', rate_easy: '4' }
 
     if (!isComplete) {
@@ -285,7 +279,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           </Button>
         )}
 
-        {/* CONTENEDOR DE LA TARJETA 3D CON ESTILOS EN LÍNEA GARANTIZADOS */}
         <div className="w-full max-w-2xl flex-1 flex flex-col" style={{ perspective: '1000px' }}>
           <div 
              className="relative w-full h-full min-h-[40vh] sm:min-h-[50vh] transition-transform duration-500 ease-out"
@@ -295,19 +288,20 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
              }}
           >
             
-            {/* CARA FRONTAL (PREGUNTA) */}
+            {/* CARA FRONTAL (PREGUNTA) - AÑADIDO ONCLICK PARA VOLTEAR */}
             <Card 
-               className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 bg-card z-10"
+               onClick={() => !showAnswer && setShowAnswer(true)}
+               className={`absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 bg-card z-10 select-none ${!showAnswer ? 'cursor-pointer hover:ring-2 ring-primary/20 transition-all' : ''}`}
                style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
             >
               <CardContent className="flex-1 overflow-y-auto flex flex-col justify-center p-6 sm:p-10 text-center">
-                <div className="flex-1 flex flex-col justify-center items-center space-y-4">
+                <div className="flex-1 flex flex-col justify-center items-center space-y-4 pointer-events-none">
                   <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-primary/10 text-primary uppercase tracking-wider mb-2">
                       Question
                   </span>
                   
                   {currentCard.front_image_url && (
-                    <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-56 w-full flex justify-center mb-4">
+                    <div className="relative rounded-lg overflow-hidden border bg-muted/20 max-h-56 w-full flex justify-center mb-4 pointer-events-auto">
                        <ImageViewerDialog src={currentCard.front_image_url} alt="Front image" triggerClassName="w-auto h-auto max-h-56 object-contain" />
                     </div>
                   )}
@@ -319,13 +313,16 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                       <Button 
                           size="icon" 
                           variant="ghost" 
-                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors pointer-events-auto"
                           onClick={(e) => { e.stopPropagation(); playAudio(currentCard.front); }}
                           title="Listen"
                       >
                           <Volume2 className={`h-5 w-5 ${isPlayingAudio ? 'animate-pulse text-primary' : ''}`} />
                       </Button>
                   </div>
+                  {!showAnswer && (
+                    <p className="text-xs text-muted-foreground mt-8 animate-pulse">Tap anywhere to reveal</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -373,7 +370,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
           </div>
         </div>
 
-        {/* CONTROLES INFERIORES */}
         <div className="w-full max-w-2xl mt-8 h-24 flex items-end justify-center z-10">
           {!showAnswer ? (
             <Button size="lg" onClick={() => setShowAnswer(true)} className="w-full sm:w-auto min-w-[200px] text-lg h-12 shadow-md hover:shadow-lg transition-all animate-in fade-in zoom-in duration-300">

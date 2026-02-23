@@ -1,8 +1,10 @@
+// app/api/generate-deck/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // <--- AÑADIDO: Evita el timeout 504 de Vercel (permite hasta 60s)
 
 const apiKey = process.env.GOOGLE_API_KEY;
 
@@ -88,7 +90,6 @@ export async function POST(request: Request) {
 
     let generatedCards;
     try {
-        // Configuramos la IA para que devuelva un JSON nativo garantizado
         const model = genAI.getGenerativeModel({ 
             model: "gemini-2.5-flash",
             generationConfig: { responseMimeType: "application/json" }
