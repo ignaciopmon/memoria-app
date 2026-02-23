@@ -491,7 +491,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                         <p className="text-2xl text-muted-foreground">You scored {score} out of {questions.length}</p>
                     </div>
 
-                    {/* 2. AI REPORT */}
+{/* 2. AI REPORT */}
                     {wrongAnswers.length > 0 && (
                         <div ref={reportRef} className="scroll-mt-24">
                             <Card className="border-blue-200 dark:border-blue-900 shadow-xl overflow-hidden">
@@ -515,19 +515,23 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                 {analysisReport && (
                                     <CardContent className="p-0 bg-card/50">
                                         <ScrollArea className="h-[600px] w-full p-8 md:p-10">
-                                            <article className="prose prose-lg dark:prose-invert max-w-none">
+                                            <div className="max-w-3xl mx-auto">
                                                 <ReactMarkdown
                                                     components={{
-                                                        h3: ({node, ...props}) => <h3 className="text-xl font-bold mt-8 mb-4 text-primary border-b pb-2" {...props} />,
-                                                        p: ({node, ...props}) => <p className="mb-6 text-muted-foreground leading-8" {...props} />,
-                                                        strong: ({node, ...props}) => <span className="font-bold text-foreground" {...props} />,
-                                                        hr: ({node, ...props}) => <hr className="my-8 border-muted" {...props} />,
-                                                        li: ({node, ...props}) => <li className="mb-2" {...props} />,
+                                                        h3: ({node, ...props}) => <h3 className="text-2xl font-bold mt-10 mb-5 text-primary border-b border-border pb-3 flex items-center gap-2" {...props} />,
+                                                        p: ({node, ...props}) => <p className="mb-5 text-muted-foreground leading-relaxed text-[1.05rem]" {...props} />,
+                                                        strong: ({node, ...props}) => <strong className="font-semibold text-foreground bg-primary/10 px-1 py-0.5 rounded" {...props} />,
+                                                        hr: ({node, ...props}) => <hr className="my-10 border-border" {...props} />,
+                                                        blockquote: ({node, ...props}) => (
+                                                            <blockquote className="mt-6 mb-8 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-950/30 p-5 rounded-r-xl italic text-foreground/90 shadow-sm" {...props} />
+                                                        ),
+                                                        ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-5 space-y-2 text-muted-foreground" {...props} />,
+                                                        li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
                                                     }}
                                                 >
                                                     {analysisReport}
                                                 </ReactMarkdown>
-                                            </article>
+                                            </div>
                                         </ScrollArea>
                                     </CardContent>
                                 )}

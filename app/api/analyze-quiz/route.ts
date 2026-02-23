@@ -1,3 +1,4 @@
+// app/api/analyze-quiz/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
@@ -11,59 +12,57 @@ export async function POST(request: Request) {
     const { wrongQuestions, language, difficulty } = await request.json();
 
     let difficultyNote = "";
-    if (difficulty === "hard") difficultyNote = "Explain profound nuances.";
-    else if (difficulty === "easy") difficultyNote = "Use simple analogies.";
+    if (difficulty === "hard") difficultyNote = "Explain profound nuances and advanced concepts.";
+    else if (difficulty === "easy") difficultyNote = "Use simple, everyday analogies.";
 
     const prompt = `
-      You are a direct, no-nonsense exam analyzer.
+      You are an expert, direct exam analyzer.
       
       **Context:**
-      - Language: ${language} (Strictly output in this language).
+      - Language: ${language} (Strictly output the entire response in this language).
       - Mistakes: ${JSON.stringify(wrongQuestions)}
       - Level: ${difficultyNote}
 
-      **Your Goal:** Explain mistakes concisely but thoroughly. 
-      **STRICTLY NO INTROS, NO OUTROS, NO HELLO, NO "HERE IS YOUR REPORT". Start directly with the first mistake.**
+      **Your Goal:** Explain the user's mistakes concisely and brilliantly. 
+      **STRICTLY NO INTROS, NO OUTROS. DO NOT wrap the output in JSON. Just return pure Markdown text.**
 
       **Structure Per Mistake:**
-      1. **Header:** Use "### " followed by an Emoji and the Question Concept.
-      2. **The Analysis (The most important part):** Write ONE or TWO solid paragraphs that combine:
-         - What the user's wrong answer actually refers to (contextualize their error).
-         - Why it is incorrect in this context.
-         - Why the correct answer is the right one.
-      3. **The Trick:** A distinct, short bold line with logic hook.
+      Write a header with an Emoji related to the question.
+      Then write 2 short paragraphs:
+      - Paragraph 1: Acknowledge what they answered and gently explain what that concept actually is.
+      - Paragraph 2: Explain why the correct answer is the right one, highlighting the key difference.
+      Finally, add a blockquote with a "💡 Tip:" or memory hook to remember it forever.
 
-      **FORMATTING RULES (READ CAREFULLY):**
-      - **CRITICAL:** You MUST use double line breaks (\\n\\n) to separate paragraphs. Single line breaks are ignored by the renderer.
-      - **CRITICAL:** Add a horizontal rule (---) between each mistake item to visually separate them.
-      - Do not use sub-headers like "Why you were wrong:" or "Correct Answer:". Just write the explanation naturally.
+      **FORMATTING RULES:**
+      - Use standard Markdown.
+      - Use double line breaks (\\n\\n) to separate paragraphs.
+      - Add a horizontal rule (---) between different mistakes.
 
       **Example Output Format:**
 
-      ### ⚖️ Mass vs. Weight
+      ### ⚖️ Masa vs. Peso
 
-      You selected **Weight**, which is the measure of the gravitational pull acting on an object. However, the question asked for the fundamental measurement of the amount of "stuff" or matter an object contains.
+      Seleccionaste **Peso**, que es la medida de la fuerza gravitatoria que actúa sobre un objeto. Sin embargo, la pregunta se refería a la cantidad de materia fundamental de un objeto.
 
-      The correct answer is **Mass** because it is an intrinsic property that stays the same everywhere in the universe. You likely confused a force that changes with gravity (Weight) with a physical property that is constant (Mass).
+      La respuesta correcta es **Masa** porque es una propiedad intrínseca que se mantiene igual en todo el universo. Es normal confundir una fuerza que cambia con la gravedad (Peso) con una propiedad física constante (Masa).
 
-      **💡 Logic Hook:** Your **Mass** is the "stuff" you are made of. You don't lose "stuff" just by traveling to the Moon, but you do lose **Weight** because the Moon isn't pulling on your "stuff" as hard as Earth does.
+      > 💡 **Truco mental:** Tu **Masa** es de lo que estás hecho (no la pierdes al ir a la Luna). Tu **Peso** es cuánto tira de ti el planeta (sí cambia en la Luna).
 
       ---
-    \\n\n
-      ### 📅 French Revolution Date
 
-      (Next analysis...)
+      (Continuar con la siguiente...)
     `;
 
-    const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-  generationConfig: { responseMimeType: "application/json" } // Obliga a devolver JSON válido siempre
-});
+    // IMPORTANTE: Hemos quitado el responseMimeType: "application/json" 
+    // porque necesitamos texto puro (Markdown) para renderizarlo correctamente.
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
     const result = await model.generateContent(prompt);
     
     return NextResponse.json({ report: result.response.text() });
 
   } catch (error: any) {
+    console.error("Analysis Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
