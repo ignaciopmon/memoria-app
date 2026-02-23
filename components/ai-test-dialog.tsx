@@ -14,7 +14,7 @@ import { Sparkles, Loader2, CheckCircle, XCircle, Bot } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "./ui/card"
-import { createClient, SupabaseClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client" // <-- CORREGIDO: Se eliminó SupabaseClient
 import { Textarea } from "./ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useToast } from "./ui/use-toast"
@@ -56,7 +56,7 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
   const [language, setLanguage] = useState("Spanish");
   const [context, setContext] = useState("");
   const [questionCount, setQuestionCount] = useState("10");
-  const [cardSource, setCardSource] = useState<CardSource>("all"); // <-- NUEVO ESTADO
+  const [cardSource, setCardSource] = useState<CardSource>("all"); 
   const [userSettings, setUserSettings] = useState<UserSettings>({ enable_ai_suggestions: true });
   const { toast } = useToast();
   const router = useRouter();
@@ -81,14 +81,12 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
     }
   }, [open]);
 
-  // LÓGICA DE GENERACIÓN DE TEST ACTUALIZADA
   const handleGenerateTest = async () => {
     setTestState('loading');
     setError(null);
     try {
       const supabase = createClient();
       
-      // Construir la consulta dinámicamente
       let query = supabase
         .from('cards')
         .select('id, front, back, last_rating')
@@ -111,7 +109,6 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
         case "easy":
           query = query.eq('last_rating', 4);
           break;
-        // "all" no necesita filtro adicional
       }
 
       const { data: cards, error: cardsError } = await query;
@@ -254,7 +251,6 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
               </div>
             </div>
 
-            {/* */}
              <div>
               <Label htmlFor="cardSource">Generate test from</Label>
               <Select value={cardSource} onValueChange={(value) => setCardSource(value as CardSource)}>
@@ -271,7 +267,6 @@ export function AITestDialog({ deckId, deckName, children }: AITestDialogProps) 
                 </SelectContent>
               </Select>
             </div>
-            {/* */}
 
             <div>
               <Label htmlFor="context">Optional Context</Label>
