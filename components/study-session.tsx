@@ -1,4 +1,3 @@
-// components/study-session.tsx
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -14,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import type { Shortcuts } from "@/components/shortcuts-form"
 import { ImageViewerDialog } from "./image-viewer-dialog"
 import { calculateNextReview, type UserSettings, type Rating } from "@/lib/srs"
+import Image from "next/image"
 
 interface StudySessionProps {
   deck: { id: string; name: string }
@@ -23,7 +23,7 @@ interface StudySessionProps {
     back: string
     front_image_url: string | null
     back_image_url: string | null
-    is_typing_enabled?: boolean // <-- Añadido
+    is_typing_enabled?: boolean
     ease_factor: number
     interval: number
     repetitions: number
@@ -32,7 +32,6 @@ interface StudySessionProps {
   }>
 }
 
-// Función auxiliar para detectar el idioma del texto de manera automática
 const guessLanguage = (text: string): string => {
   if (!text) return 'en-US';
   const str = text.toLowerCase();
@@ -74,7 +73,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [showAnswer, setShowAnswer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
-  const [userAnswer, setUserAnswer] = useState("") // <-- Nuevo estado para la respuesta escrita
+  const [userAnswer, setUserAnswer] = useState("")
   
   const [isZenMode, setIsZenMode] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
@@ -206,7 +205,7 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
       setCurrentIndex((prev) => prev + 1)
       setShowAnswer(false)
-      setUserAnswer("") // <-- Limpiamos la caja de texto al pasar a la siguiente tarjeta
+      setUserAnswer("") 
     } catch (error) {
       console.error("Error submitting rating:", error)
     } finally {
@@ -293,8 +292,20 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
     )
   }
 
+  // Pre-cargar las imágenes de la siguiente tarjeta
+  const nextCard = currentIndex + 1 < cards.length ? cards[currentIndex + 1] : null;
+
   return (
     <div className="flex min-h-screen flex-col bg-background relative">
+      
+      {/* Sistema Invisible de Precarga de Imágenes */}
+      {nextCard && (
+        <div className="hidden" aria-hidden="true">
+          {nextCard.front_image_url && <Image src={nextCard.front_image_url} alt="preload" width={1} height={1} priority />}
+          {nextCard.back_image_url && <Image src={nextCard.back_image_url} alt="preload" width={1} height={1} priority />}
+        </div>
+      )}
+
       <header className={`border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 ${isZenMode ? 'hidden' : 'block'}`}>
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
@@ -337,7 +348,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
              }}
           >
             
-            {/* CARA FRONTAL (PREGUNTA) */}
             <Card 
                onClick={() => !showAnswer && setShowAnswer(true)}
                className={`absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 bg-card z-10 select-none ${!showAnswer ? 'cursor-pointer hover:ring-2 ring-primary/20 transition-all' : ''}`}
@@ -370,7 +380,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                       </Button>
                   </div>
                   
-                  {/* CAJA DE TEXTO PARA ESCRIBIR LA RESPUESTA */}
                   {!showAnswer && currentCard.is_typing_enabled && (
                     <div className="mt-6 w-full max-w-sm pointer-events-auto" onClick={(e) => e.stopPropagation()}>
                         <Textarea
@@ -393,7 +402,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
               </CardContent>
             </Card>
 
-            {/* CARA TRASERA (RESPUESTA) */}
             <Card 
                 className="absolute inset-0 flex flex-col overflow-hidden shadow-xl border-muted/60 bg-card"
                 style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
@@ -409,7 +417,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
                     Answer
                   </span>
                   
-                  {/* AQUÍ MOSTRAMOS LA RESPUESTA DEL USUARIO PARA COMPARAR */}
                   {currentCard.is_typing_enabled && userAnswer.trim() !== "" && (
                     <div className="mb-2 w-full max-w-sm rounded-lg border bg-muted/50 p-4 text-left shadow-sm">
                       <p className="mb-1 text-xs font-bold text-muted-foreground">YOUR ANSWER:</p>

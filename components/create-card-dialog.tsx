@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,7 +16,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Loader2, Image as ImageIcon, X, Keyboard } from "lucide-react"
+import { Plus, X, Keyboard, Image as ImageIcon } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import Image from "next/image"
 
@@ -40,32 +40,46 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
   const frontInputRef = useRef<HTMLInputElement>(null)
   const backInputRef = useRef<HTMLInputElement>(null)
 
+  // Limpiar URLs temporales para evitar fugas de memoria
+  useEffect(() => {
+    return () => {
+      if (frontPreview) URL.revokeObjectURL(frontPreview)
+      if (backPreview) URL.revokeObjectURL(backPreview)
+    }
+  }, [frontPreview, backPreview])
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'front' | 'back') => {
     const file = e.target.files?.[0]
-    if (!file) return;
+    if (!file) return
 
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      if (type === 'front') {
-        setFrontImage(file)
-        setFrontPreview(reader.result as string)
-      } else {
-        setBackImage(file)
-        setBackPreview(reader.result as string)
-      }
+    const previewUrl = URL.createObjectURL(file)
+
+    if (type === 'front') {
+      if (frontPreview) URL.revokeObjectURL(frontPreview)
+      setFrontImage(file)
+      setFrontPreview(previewUrl)
+    } else {
+      if (backPreview) URL.revokeObjectURL(backPreview)
+      setBackImage(file)
+      setBackPreview(previewUrl)
     }
-    reader.readAsDataURL(file)
   }
 
-  const uploadImage = async (file: File): Promise<string | null> => {
+  const uploadImage = async (file: File): Promise<string> => {
     const supabase = createClient()
     const fileExt = file.name.split('.').pop()
-    const fileName = `${Math.random()}.${fileExt}`
-    const filePath = `${fileName}`
-    const { data, error } = await supabase.storage.from('card-images').upload(filePath, file)
+    // Uso de UUID para garantizar nombres únicos en Supabase y evitar problemas de caché
+    const fileName = `${crypto.randomUUID()}.${fileExt}`
+    
+    const { data, error } = await supabase.storage.from('card-images').upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    })
+    
     if (error) {
       throw new Error(`Image upload failed: ${error.message}`)
     }
+    
     const { data: { publicUrl } } = supabase.storage.from('card-images').getPublicUrl(data.path)
     return publicUrl
   }
@@ -76,18 +90,12 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
     setError(null)
 
     try {
-      let frontImageUrl: string | null = null;
-      let backImageUrl: string | null = null;
+      let frontImageUrl: string | null = null
+      let backImageUrl: string | null = null
 
-      const uploadPromises = [];
-      if (frontImage) {
-        uploadPromises.push(uploadImage(frontImage).then(url => frontImageUrl = url));
-      }
-      if (backImage) {
-        uploadPromises.push(uploadImage(backImage).then(url => backImageUrl = url));
-      }
-      
-      await Promise.all(uploadPromises);
+      // Subida secuencial segura
+      if (frontImage) frontImageUrl = await uploadImage(frontImage)
+      if (backImage) backImageUrl = await uploadImage(backImage)
 
       const supabase = createClient()
       const { error } = await supabase.from("cards").insert({
@@ -132,7 +140,6 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             
-            {/* Opciones Avanzadas */}
             <div className="flex items-center space-x-2 rounded-lg border p-3 shadow-sm">
               <Switch 
                 id="typing-mode" 
@@ -155,7 +162,7 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
               <Textarea id="front" placeholder="E.g., What is photosynthesis?" value={front} onChange={(e) => setFront(e.target.value)} required rows={3} />
               {frontPreview && (
                 <div className="relative mt-2 h-24 w-24">
-                  <Image src={frontPreview} alt="Front preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                  <Image src={frontPreview} alt="Front preview" fill style={{ objectFit: 'contain' }} className="rounded-md bg-muted/50 border" />
                   <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={() => { setFrontImage(null); setFrontPreview(null); if (frontInputRef.current) frontInputRef.current.value = ""; }}>
                     <X className="h-4 w-4" />
                   </Button>
@@ -171,7 +178,7 @@ export function CreateCardDialog({ deckId }: CreateCardDialogProps) {
               <Textarea id="back" placeholder="E.g., The process by which plants convert sunlight into chemical energy." value={back} onChange={(e) => setBack(e.target.value)} required rows={4} />
               {backPreview && (
                  <div className="relative mt-2 h-24 w-24">
-                  <Image src={backPreview} alt="Back preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                  <Image src={backPreview} alt="Back preview" fill style={{ objectFit: 'contain' }} className="rounded-md bg-muted/50 border" />
                   <Button type="button" variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full" onClick={() => { setBackImage(null); setBackPreview(null); if (backInputRef.current) backInputRef.current.value = ""; }}>
                     <X className="h-4 w-4" />
                   </Button>
