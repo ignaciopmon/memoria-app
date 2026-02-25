@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import { Switch } from "@/components/ui/switch"
-import { Sparkles, Clock, Save, Loader2, GraduationCap, AlertCircle, CheckCircle2 } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Sparkles, Clock, Save, Loader2, GraduationCap, AlertCircle, CheckCircle2, HelpCircle } from "lucide-react"
 
 interface Settings {
   id?: string
@@ -92,134 +93,156 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
   }
 
   return (
-    <div className="space-y-8">
-      {/* AI Settings */}
-      <Card className="border-border shadow-sm">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 gap-4">
-          <div className="flex items-start gap-4">
-            <div className="mt-1 bg-primary/10 p-2 rounded-md">
-              <Sparkles className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold">AI-Powered Scheduling</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                Automatically adjust review dates for challenging cards based on your Practice Test performance.
-              </p>
-            </div>
-          </div>
-          <Switch
-            checked={settings.enable_ai_suggestions}
-            onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enable_ai_suggestions: checked }))}
-          />
-        </div>
-      </Card>
-
-      {/* Spaced Repetition Settings */}
-      <Card className="border-border shadow-sm">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-muted-foreground" />
-            <CardTitle className="text-xl">Spaced Repetition Intervals</CardTitle>
-          </div>
-          <CardDescription>
-            Configure the base time added to a card's review date when you select a rating.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2 rounded-lg border bg-card p-4">
-              <Label htmlFor="again_interval_minutes" className="text-sm font-medium">"Again" Interval</Label>
-              <div className="flex items-center gap-2">
-                <Input id="again_interval_minutes" name="again_interval_minutes" type="number" value={settings.again_interval_minutes} onChange={handleInputChange} min="1" className="w-24 font-mono bg-background" />
-                <span className="text-sm text-muted-foreground">minutes</span>
+    <TooltipProvider delayDuration={200}>
+      <div className="space-y-8">
+        {/* AI Settings */}
+        <Card className="border-border shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 gap-4">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 bg-primary/10 p-2 rounded-md">
+                <Sparkles className="h-5 w-5 text-primary" />
               </div>
-            </div>
-
-            <div className="space-y-2 rounded-lg border bg-card p-4">
-              <Label htmlFor="hard_interval_days" className="text-sm font-medium">"Hard" Interval</Label>
-              <div className="flex items-center gap-2">
-                <Input id="hard_interval_days" name="hard_interval_days" type="number" value={settings.hard_interval_days} onChange={handleInputChange} min="1" className="w-24 font-mono bg-background" />
-                <span className="text-sm text-muted-foreground">days</span>
-              </div>
-            </div>
-
-            <div className="space-y-2 rounded-lg border bg-card p-4">
-              <Label htmlFor="good_interval_days" className="text-sm font-medium">"Good" Interval</Label>
-              <div className="flex items-center gap-2">
-                <Input id="good_interval_days" name="good_interval_days" type="number" value={settings.good_interval_days} onChange={handleInputChange} min="1" className="w-24 font-mono bg-background" />
-                <span className="text-sm text-muted-foreground">days</span>
-              </div>
-            </div>
-
-            <div className="space-y-2 rounded-lg border bg-card p-4">
-              <Label htmlFor="easy_interval_days" className="text-sm font-medium">"Easy" Interval</Label>
-              <div className="flex items-center gap-2">
-                <Input id="easy_interval_days" name="easy_interval_days" type="number" value={settings.easy_interval_days} onChange={handleInputChange} min="1" className="w-24 font-mono bg-background" />
-                <span className="text-sm text-muted-foreground">days</span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-
-        <div className="border-t bg-muted/20 p-6">
-          <div className="flex flex-col space-y-4">
-            <div className="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
-              <div className="flex items-center gap-3">
-                <div className="bg-muted p-2 rounded-md">
-                  <GraduationCap className="h-5 w-5 text-foreground" />
-                </div>
-                <div>
-                  <Label htmlFor="enable_max_interval" className="text-base font-semibold cursor-pointer">
-                    Exam Mode
-                  </Label>
-                  <p className="text-sm text-muted-foreground mt-0.5 max-w-lg">
-                    Set a hard limit cap for intervals. Ideal when studying for a specific upcoming exam.
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="enable_max_interval"
-                checked={settings.enable_max_interval}
-                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enable_max_interval: checked }))}
-              />
-            </div>
-
-            {settings.enable_max_interval && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-background p-4 rounded-lg border shadow-sm animate-in fade-in slide-in-from-top-2 mt-2">
-                <AlertCircle className="h-4 w-4 text-muted-foreground hidden sm:block" />
-                <Label htmlFor="max_interval_days" className="font-medium whitespace-nowrap text-sm">Maximum interval cap:</Label>
+              <div>
                 <div className="flex items-center gap-2">
-                  <Input 
-                    id="max_interval_days" 
-                    name="max_interval_days" 
-                    type="number" 
-                    value={settings.max_interval_days} 
-                    onChange={handleInputChange} 
-                    min="1" 
-                    className="w-20 text-center font-mono bg-background h-9" 
-                  />
+                  <h3 className="text-base font-semibold">AI-Powered Scheduling</h3>
+                  <Tooltip>
+                    <TooltipTrigger type="button" className="cursor-help">
+                      <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[320px] p-3 text-sm leading-relaxed shadow-lg">
+                      When enabled, Memoria's AI analyzes your practice sessions. If you repeatedly struggle with specific concepts, the AI automatically intervenes to shorten their review intervals, ensuring you master the hardest material faster.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                  Automatically adjust review dates for challenging cards based on your Practice Test performance.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={settings.enable_ai_suggestions}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enable_ai_suggestions: checked }))}
+            />
+          </div>
+        </Card>
+
+        {/* Spaced Repetition Settings */}
+        <Card className="border-border shadow-sm">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-muted-foreground" />
+              <CardTitle className="text-xl">Spaced Repetition Intervals</CardTitle>
+            </div>
+            <CardDescription>
+              Configure the base time added to a card's review date when you select a rating.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 rounded-lg border bg-card p-4">
+                <Label htmlFor="again_interval_minutes" className="text-sm font-medium">"Again" Interval</Label>
+                <div className="flex items-center gap-2">
+                  <Input id="again_interval_minutes" name="again_interval_minutes" type="number" value={settings.again_interval_minutes} onChange={handleInputChange} min="1" className="w-24 font-mono bg-background" />
+                  <span className="text-sm text-muted-foreground">minutes</span>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-lg border bg-card p-4">
+                <Label htmlFor="hard_interval_days" className="text-sm font-medium">"Hard" Interval</Label>
+                <div className="flex items-center gap-2">
+                  <Input id="hard_interval_days" name="hard_interval_days" type="number" value={settings.hard_interval_days} onChange={handleInputChange} min="1" className="w-24 font-mono bg-background" />
                   <span className="text-sm text-muted-foreground">days</span>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
 
-        <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t bg-muted/10 p-6">
-          <div className="w-full sm:w-auto flex-1 h-6 flex items-center">
-            {message && (
-              <div className={`flex items-center gap-2 text-sm font-medium ${message.type === 'success' ? 'text-green-600 dark:text-green-500' : 'text-destructive'}`}>
-                {message.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                {message.text}
+              <div className="space-y-2 rounded-lg border bg-card p-4">
+                <Label htmlFor="good_interval_days" className="text-sm font-medium">"Good" Interval</Label>
+                <div className="flex items-center gap-2">
+                  <Input id="good_interval_days" name="good_interval_days" type="number" value={settings.good_interval_days} onChange={handleInputChange} min="1" className="w-24 font-mono bg-background" />
+                  <span className="text-sm text-muted-foreground">days</span>
+                </div>
               </div>
-            )}
+
+              <div className="space-y-2 rounded-lg border bg-card p-4">
+                <Label htmlFor="easy_interval_days" className="text-sm font-medium">"Easy" Interval</Label>
+                <div className="flex items-center gap-2">
+                  <Input id="easy_interval_days" name="easy_interval_days" type="number" value={settings.easy_interval_days} onChange={handleInputChange} min="1" className="w-24 font-mono bg-background" />
+                  <span className="text-sm text-muted-foreground">days</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+
+          <div className="border-t bg-muted/20 p-6">
+            <div className="flex flex-col space-y-4">
+              <div className="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
+                <div className="flex items-center gap-3">
+                  <div className="bg-muted p-2 rounded-md">
+                    <GraduationCap className="h-5 w-5 text-foreground" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="enable_max_interval" className="text-base font-semibold cursor-pointer">
+                        Exam Mode
+                      </Label>
+                      <Tooltip>
+                        <TooltipTrigger type="button" className="cursor-help">
+                          <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[320px] p-3 text-sm leading-relaxed shadow-lg">
+                          Traditional spaced repetition focuses on lifetime retention, sometimes hiding easy cards for months or years. Exam Mode lets you set a maximum limit (e.g., 30 days) so no card is hidden longer than your cap, guaranteeing a comprehensive review of all material before test day.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5 max-w-lg">
+                      Set a hard limit cap for intervals. Ideal when studying for a specific upcoming exam.
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="enable_max_interval"
+                  checked={settings.enable_max_interval}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enable_max_interval: checked }))}
+                />
+              </div>
+
+              {settings.enable_max_interval && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-background p-4 rounded-lg border shadow-sm animate-in fade-in slide-in-from-top-2 mt-2">
+                  <AlertCircle className="h-4 w-4 text-muted-foreground hidden sm:block" />
+                  <Label htmlFor="max_interval_days" className="font-medium whitespace-nowrap text-sm">Maximum interval cap:</Label>
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      id="max_interval_days" 
+                      name="max_interval_days" 
+                      type="number" 
+                      value={settings.max_interval_days} 
+                      onChange={handleInputChange} 
+                      min="1" 
+                      className="w-20 text-center font-mono bg-background h-9" 
+                    />
+                    <span className="text-sm text-muted-foreground">days</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <Button onClick={handleSave} disabled={isLoading} className="w-full sm:w-auto px-8 transition-all">
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {isLoading ? "Saving..." : "Save Preferences"}
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
+
+          <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t bg-muted/10 p-6">
+            <div className="w-full sm:w-auto flex-1 h-6 flex items-center">
+              {message && (
+                <div className={`flex items-center gap-2 text-sm font-medium ${message.type === 'success' ? 'text-green-600 dark:text-green-500' : 'text-destructive'}`}>
+                  {message.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                  {message.text}
+                </div>
+              )}
+            </div>
+            <Button onClick={handleSave} disabled={isLoading} className="w-full sm:w-auto px-8 transition-all">
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {isLoading ? "Saving..." : "Save Preferences"}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    </TooltipProvider>
   )
 }
