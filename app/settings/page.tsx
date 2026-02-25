@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { Brain, ArrowLeft, HelpCircle, Settings as SettingsIcon } from "lucide-react"
+import { Brain, ArrowLeft, HelpCircle, Settings as SettingsIcon, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { SettingsForm } from "@/components/settings-form"
@@ -35,18 +35,21 @@ export default async function SettingsPage() {
     .single()
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/20">
-      {/* Navbar */}
-      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-         <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <Brain className="h-6 w-6 text-primary" />
-           <span className="text-xl font-bold select-none">Memoria</span>
+    <div className="flex min-h-screen flex-col bg-background selection:bg-primary/10">
+      {/* Navbar Minimalista */}
+      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-xl">
+        <div className="container mx-auto flex h-14 items-center justify-between px-4 sm:px-8">
+         <Link href="/dashboard" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Brain className="h-5 w-5" />
+            </div>
+           <span className="text-lg font-bold tracking-tight">Memoria</span>
          </Link>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">{user.email}</span>
+            <span className="hidden text-sm font-medium text-muted-foreground sm:inline-block">{user.email}</span>
             <form action="/auth/signout" method="post">
-              <Button variant="ghost" size="sm" type="submit" className="hover:bg-destructive/10 hover:text-destructive">
+              <Button variant="ghost" size="sm" type="submit" className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </Button>
             </form>
@@ -56,74 +59,71 @@ export default async function SettingsPage() {
 
       <main className="flex-1">
         {/* Cabecera de la página */}
-        <div className="relative border-b bg-background pt-12 pb-10 overflow-hidden">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-          <div className="container relative z-10 mx-auto max-w-5xl px-4">
-            <Button variant="ghost" asChild className="mb-6 -ml-4 text-muted-foreground hover:text-foreground">
+        <div className="border-b bg-muted/30 pt-12 pb-8">
+          <div className="container mx-auto max-w-5xl px-4 sm:px-8">
+            <Button variant="ghost" asChild className="mb-6 -ml-3 text-muted-foreground hover:bg-background">
               <Link href="/dashboard">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Dashboard
               </Link>
             </Button>
-            <div className="flex items-center gap-4 mb-2">
-              <div className="rounded-xl bg-primary/10 p-3 ring-1 ring-primary/20">
-                <SettingsIcon className="h-8 w-8 text-primary" />
-              </div>
-              <h1 className="text-4xl font-extrabold tracking-tight">Settings</h1>
+            <div className="flex items-center gap-3 mb-2">
+              <SettingsIcon className="h-8 w-8 text-foreground" strokeWidth={1.5} />
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">Settings</h1>
             </div>
-            <p className="text-lg text-muted-foreground mt-2 max-w-xl">
-              Manage your account settings, study preferences, and customize your experience.
+            <p className="text-base text-muted-foreground max-w-2xl">
+              Manage your account preferences, configure spaced repetition intervals, and customize your study experience.
             </p>
           </div>
         </div>
 
         {/* Contenido principal con Sidebar de Pestañas */}
-        <div className="container mx-auto max-w-5xl px-4 py-8">
-          <Tabs defaultValue="study" className="flex flex-col md:flex-row gap-8 w-full">
+        <div className="container mx-auto max-w-5xl px-4 sm:px-8 py-10">
+          <Tabs defaultValue="study" className="flex flex-col md:flex-row gap-8 lg:gap-12 w-full items-start">
             
-            {/* Sidebar Menú (TabsList) */}
-            <TabsList className="flex flex-row md:flex-col justify-start h-auto w-full md:w-64 bg-transparent p-0 space-y-0 md:space-y-2 space-x-2 md:space-x-0 overflow-x-auto md:overflow-visible">
+            {/* Menú Lateral */}
+            <TabsList className="flex flex-row md:flex-col justify-start h-auto w-full md:w-56 bg-transparent p-0 space-y-0 md:space-y-1 space-x-2 md:space-x-0 overflow-x-auto md:overflow-visible border-b md:border-b-0 pb-2 md:pb-0">
               <TabsTrigger 
                 value="study" 
-                className="w-full justify-start px-4 py-2.5 text-base data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted"
+                className="w-full justify-start px-3 py-2 text-sm font-medium transition-all data-[state=active]:bg-muted data-[state=active]:text-foreground text-muted-foreground data-[state=active]:shadow-none hover:bg-muted/50 rounded-md"
               >
                 Study & AI
               </TabsTrigger>
               <TabsTrigger 
                 value="shortcuts" 
-                className="w-full justify-start px-4 py-2.5 text-base data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted"
+                className="w-full justify-start px-3 py-2 text-sm font-medium transition-all data-[state=active]:bg-muted data-[state=active]:text-foreground text-muted-foreground data-[state=active]:shadow-none hover:bg-muted/50 rounded-md"
               >
                 Keyboard Shortcuts
               </TabsTrigger>
               <TabsTrigger 
                 value="appearance" 
-                className="w-full justify-start px-4 py-2.5 text-base data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted"
+                className="w-full justify-start px-3 py-2 text-sm font-medium transition-all data-[state=active]:bg-muted data-[state=active]:text-foreground text-muted-foreground data-[state=active]:shadow-none hover:bg-muted/50 rounded-md"
               >
                 Appearance
               </TabsTrigger>
             </TabsList>
 
             {/* Contenedores de las opciones */}
-            <div className="flex-1 w-full max-w-3xl">
-              <TabsContent value="study" className="mt-0 animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="flex-1 w-full min-w-0">
+              <TabsContent value="study" className="mt-0 outline-none animate-in fade-in-50 duration-500">
                 <SettingsForm settings={settings} />
               </TabsContent>
 
-              <TabsContent value="shortcuts" className="mt-0 animate-in fade-in slide-in-from-right-4 duration-500">
+              <TabsContent value="shortcuts" className="mt-0 outline-none animate-in fade-in-50 duration-500">
                 <ShortcutsForm shortcuts={shortcuts as Shortcuts | null} />
               </TabsContent>
               
-              <TabsContent value="appearance" className="mt-0 animate-in fade-in slide-in-from-right-4 duration-500">
-                <Card className="shadow-md border-muted">
-                  <CardHeader className="border-b bg-muted/10 pb-6">
-                    <CardTitle>Appearance</CardTitle>
+              <TabsContent value="appearance" className="mt-0 outline-none animate-in fade-in-50 duration-500">
+                <Card className="border-border shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-xl">Appearance</CardTitle>
                     <CardDescription>Customize the look and feel of Memoria.</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6 pt-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border p-5 bg-background shadow-sm">
-                      <div className="mb-4 sm:mb-0">
-                        <h3 className="font-semibold text-foreground">Color Theme</h3>
-                        <p className="text-sm text-muted-foreground mt-1">Select your preferred color theme for the interface.</p>
+                  <CardContent className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
+                      <div className="mb-4 sm:mb-0 space-y-1">
+                        <h3 className="font-medium text-foreground">Color Theme</h3>
+                        <p className="text-sm text-muted-foreground">Select your preferred lighting environment.</p>
                       </div>
                       <ThemeToggle />
                     </div>
@@ -133,8 +133,8 @@ export default async function SettingsPage() {
             </div>
           </Tabs>
 
-          <div className="mt-12 flex justify-center border-t pt-8">
-            <Button variant="outline" asChild className="text-muted-foreground hover:text-foreground rounded-full">
+          <div className="mt-16 flex justify-center border-t pt-8">
+            <Button variant="ghost" asChild className="text-muted-foreground hover:text-foreground">
               <Link href="/help">
                 <HelpCircle className="mr-2 h-4 w-4" />
                 How does Memoria work?
