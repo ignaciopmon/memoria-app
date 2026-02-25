@@ -15,6 +15,7 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
+  DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -30,7 +31,7 @@ import { FolderCard } from "./folder-card";
 import { MoveToFolderDialog } from "./move-to-folder-dialog";
 import { Button } from "./ui/button";
 import {
-  GripVertical, Trash2, Edit, Loader2, BookOpen, Info, GraduationCap
+  Trash2, Edit, Loader2, BookOpen, Info, GraduationCap, ArrowDownToLine
 } from "lucide-react";
 import { RenameDialog } from "./rename-dialog";
 import { ColorPopover } from "./color-popover";
@@ -48,6 +49,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 export type Item = {
   id: string;
@@ -65,21 +67,30 @@ function DraggableDeckItem({
   item,
   isEditMode,
   onUpdate,
-  availableFolders
+  availableFolders,
+  isHoveredFolder,
 }: {
   item: Item;
   isEditMode: boolean;
   onUpdate: (updater: (prev: Item[]) => Item[]) => void;
   availableFolders: any[];
+  isHoveredFolder?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: !isEditMode });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id: item.id, 
+    disabled: !isEditMode 
+  });
   const { toast } = useToast();
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   if (isDragging) {
     return (
-      <div ref={setNodeRef} style={{ transition }} className="rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 h-full min-h-[180px] w-full" />
+      <div 
+        ref={setNodeRef} 
+        style={{ transition }} 
+        className="rounded-xl border-2 border-dashed border-primary/40 bg-primary/10 h-full min-h-[180px] w-full scale-105 opacity-60" 
+      />
     );
   }
 
@@ -89,7 +100,6 @@ function DraggableDeckItem({
     setIsDeleting(true);
     const supabase = createClient();
     
-    // Si es una carpeta, mandar sus hijos a la papelera también
     if (item.is_folder) {
         await supabase.from("decks").update({ deleted_at: new Date().toISOString() }).eq("parent_id", item.id);
     }
@@ -105,20 +115,39 @@ function DraggableDeckItem({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="relative group touch-manipulation h-full">
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className={cn(
+        "relative group touch-manipulation h-full transition-all",
+        isEditMode ? "cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg" : "",
+        isHoveredFolder ? "ring-4 ring-primary ring-offset-2 scale-105 bg-primary/5 rounded-xl z-50 overflow-hidden" : ""
+      )}
+      // APLICAMOS LOS LISTENERS A TODA LA TARJETA EN MODO EDICIÓN
+      {...(isEditMode ? { ...listeners, ...attributes } : {})}
+    >
       {isRenaming && (
         <RenameDialog item={item} isOpen={isRenaming} onClose={() => setIsRenaming(false)} />
       )}
       
-      {isEditMode && (
-         <div {...listeners} {...attributes} className="absolute top-1/2 -left-3 transform -translate-y-1/2 z-20 p-2 cursor-grab active:cursor-grabbing touch-none bg-background/80 border rounded-full shadow-md hover:bg-accent transition-colors" title="Move Position">
-            <GripVertical className="h-5 w-5 text-foreground" />
-          </div>
+      {/* Indicador visual de que se va a soltar dentro */}
+      {isHoveredFolder && (
+        <div className="absolute inset-0 bg-primary/10 z-40 flex items-center justify-center backdrop-blur-[1px]">
+           <div className="bg-primary text-primary-foreground font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 animate-in zoom-in duration-200">
+              <ArrowDownToLine className="h-5 w-5 animate-bounce" />
+              Drop inside
+           </div>
+        </div>
       )}
 
+      {/* Capa invisible para evitar clics accidentales dentro de la tarjeta al arrastrar */}
+      {isEditMode && <div className="absolute inset-0 z-10" />}
+
       {isEditMode && (
-        <div className="absolute top-3 right-3 z-20 flex items-center bg-background/95 backdrop-blur-md rounded-lg border shadow-lg p-1 gap-1 animate-in fade-in zoom-in-95 duration-200">
-            {/* Solo se permite mover mazos o carpetas vacías (para evitar bugs de recursión), en este caso dejamos mover a todos */}
+        <div 
+          className="absolute top-3 right-3 z-30 flex items-center bg-background/95 backdrop-blur-md rounded-lg border shadow-lg p-1 gap-1 animate-in fade-in zoom-in-95 duration-200"
+          onPointerDown={(e) => e.stopPropagation()} // ESTO EVITA QUE LOS BOTONES DISPAREN EL ARRASTRE
+        >
             {!item.is_folder && (
                 <MoveToFolderDialog 
                     item={item} 
@@ -158,6 +187,7 @@ function DraggableDeckItem({
 export function DashboardClient({ initialItems, availableFolders, currentFolderId = null }: { initialItems: Item[], availableFolders: any[], currentFolderId?: string | null }) {
     const [items, setItems] = useState<Item[]>(initialItems);
     const [activeDragItem, setActiveDragItem] = useState<Item | null>(null);
+    const [hoveredFolderId, setHoveredFolderId] = useState<string | null>(null); // NUEVO ESTADO PARA CARPETAS
     const [isEditMode, setIsEditMode] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
@@ -194,7 +224,26 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
         const { active } = event;
         const item = items.find((i) => i.id === active.id);
         setActiveDragItem(item || null);
-     };
+    };
+
+    // LOGICA PARA DETECTAR SI ESTAMOS SOBRE UNA CARPETA
+    const handleDragOver = (event: DragOverEvent) => {
+        const { active, over } = event;
+        if (!over) {
+            setHoveredFolderId(null);
+            return;
+        }
+
+        const activeItem = items.find((i) => i.id === active.id);
+        const overItem = items.find((i) => i.id === over.id);
+
+        // Si lo que arrastramos es un mazo, y pasamos por encima de una carpeta, marcamos la carpeta
+        if (overItem?.is_folder && activeItem && !activeItem.is_folder && active.id !== over.id) {
+            setHoveredFolderId(over.id as string);
+        } else {
+            setHoveredFolderId(null);
+        }
+    };
 
     const calculateNewPosition = (prevPos: number | null | undefined, nextPos: number | null | undefined, idx: number): number => {
         const defaultIncrement = 1000;
@@ -205,6 +254,30 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
 
    const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+    
+    // --- LÓGICA PARA METER DENTRO DE CARPETA ---
+    if (hoveredFolderId && active.id !== hoveredFolderId) {
+        const targetFolderId = hoveredFolderId;
+        setHoveredFolderId(null);
+        setActiveDragItem(null);
+
+        const supabase = createClient();
+        
+        // Optimistic UI update
+        setItems((prev) => prev.filter((i) => i.id !== active.id));
+        toast({ title: "Card moved!", description: "Deck successfully placed inside the folder.", variant: "default" });
+
+        const { error } = await supabase.from("decks").update({ parent_id: targetFolderId }).eq("id", active.id);
+        if (error) {
+            toast({ variant: "destructive", title: "Error", description: "Could not move deck." });
+            router.refresh();
+        }
+        return;
+    }
+
+    setHoveredFolderId(null);
+    // -------------------------------------------
+
     if (!active || !over || active.id === over.id) {
         setActiveDragItem(null);
         return;
@@ -239,7 +312,6 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
                 supabase.from("decks").update(data).eq("id", id)
             );
             await Promise.all(promises);
-            toast({ title: "Success", description: "Order saved." });
         }
 
     } catch (error: any) {
@@ -257,10 +329,10 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
              <p className="text-muted-foreground">{currentFolderId ? "Manage decks inside this folder" : "Manage your study flashcard decks"}</p> 
          </div>
         <div className="flex flex-wrap items-center gap-2">
-            <Button variant={isEditMode ? "default" : "outline"} onClick={() => setIsEditMode((prev) => !prev)} className={isEditMode ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}> 
+            <Button variant={isEditMode ? "default" : "outline"} onClick={() => setIsEditMode((prev) => !prev)} className={isEditMode ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all" : "transition-all"}> 
               <Edit className="mr-2 h-4 w-4" /> {isEditMode ? "Done Editing" : "Edit / Move"} 
             </Button>
-            <Button asChild variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary">
+            <Button asChild variant="outline" className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary transition-all">
                 <Link href="/ai-test"><GraduationCap className="mr-2 h-4 w-4" />Practice Test</Link>
             </Button>
             <CreateFolderDialog parentId={currentFolderId} />
@@ -268,6 +340,13 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
             <CreateDeckDialog onDeckCreated={() => router.refresh()} size="default" parentId={currentFolderId} />
          </div>
       </div>
+
+      {isEditMode && (
+          <div className="bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-300 p-3 rounded-lg mb-6 flex items-center justify-center gap-2 text-sm font-medium border border-blue-200 dark:border-blue-900 animate-in fade-in slide-in-from-top-4">
+              <Info className="h-4 w-4" />
+              <span>You are in Edit Mode. Drag cards anywhere to reorder them, or drop a deck onto a folder to move it inside!</span>
+          </div>
+      )}
 
       {items.length === 0 && !isEditMode ? (
          <div className="flex h-[60vh] flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-500">
@@ -287,10 +366,11 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={itemIds} strategy={rectSortingStrategy}>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-stretch">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-stretch pb-10">
               {items.map((item) => (
                 <DraggableDeckItem
                   key={item.id}
@@ -298,6 +378,7 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
                   isEditMode={isEditMode}
                   onUpdate={setItems}
                   availableFolders={availableFolders}
+                  isHoveredFolder={hoveredFolderId === item.id}
                 />
               ))}
             </div>
@@ -305,7 +386,7 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
 
           <DragOverlay dropAnimation={{ duration: 250, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
               {activeDragItem ? (
-                    <div className="shadow-2xl scale-105 cursor-grabbing opacity-90 rotate-2">
+                    <div className="shadow-2xl scale-105 cursor-grabbing opacity-90 rotate-3">
                       {activeDragItem.is_folder ? <FolderCard folder={activeDragItem} isEditMode={true} /> : <DeckCard deck={activeDragItem} isEditMode={true} />}
                     </div>
               ) : null}
