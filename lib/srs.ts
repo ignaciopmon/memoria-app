@@ -20,6 +20,8 @@ export interface UserSettings {
 
 export type Rating = 1 | 2 | 3 | 4;
 
+const MAX_INTERVAL_DAYS = 3650; // Límite máximo de revisión (10 años aprox)
+
 /**
  * Calculates the next review schedule based on the rating and user settings.
  * Implements a variation of the SM-2 algorithm.
@@ -46,7 +48,7 @@ export const calculateNextReview = (card: CardSRS, rating: Rating, settings: Use
       nextReviewDate = addMinutes(now, safeSettings.again);
     } else {
       if (card.last_rating === 2) {
-        interval = Math.max(1, Math.ceil(interval * 0.5));
+        interval = Math.max(1, Math.round(interval * 0.5));
       } else {
         interval = safeSettings.hard;
       }
@@ -59,13 +61,19 @@ export const calculateNextReview = (card: CardSRS, rating: Rating, settings: Use
     } else if (repetitions === 2) {
       interval = safeSettings.easy;
     } else {
-      interval = Math.ceil(interval * ease_factor);
+      interval = Math.round(interval * ease_factor);
     }
   }
 
   // Adjust Ease Factor (Standard SM-2 adjustment)
   // EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
-  ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02)));
+  ease_factor = ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02));
+  
+  // Limitar el ease factor (mínimo 1.3 es estándar en Anki/SM-2)
+  ease_factor = Math.max(1.3, Number(ease_factor.toFixed(2)));
+
+  // Límite de intervalo máximo
+  interval = Math.min(interval, MAX_INTERVAL_DAYS);
 
   // Apply interval for valid ratings > 1 (Again handled by minutes above)
   if (rating > 1) {

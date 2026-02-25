@@ -6,16 +6,8 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Prevenir timeout de Vercel (60s)
 
-const apiKey = process.env.GOOGLE_API_KEY;
-
-// Definimos el orden de prioridad de los modelos
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemma-3-27b",
-  "gemma-3-12b"
-];
-
 export async function POST(request: Request) {
+  const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "API Key missing." }, { status: 500 });
   }
@@ -58,8 +50,18 @@ export async function POST(request: Request) {
 
     let promptParts: any[] = [];
     let sourceInstruction = "";
+    
+    // Lista base de modelos
+    let availableModels = [
+      "gemini-2.5-flash",
+      "gemma-3-27b",
+      "gemma-3-12b"
+    ];
 
     if (generationSource === 'pdf' && pdfFile) {
+        // Excluimos modelos que puedan tener problemas con mimeType de PDF nativo
+        availableModels = availableModels.filter(m => m.includes("gemini"));
+
         const arrayBuffer = await pdfFile.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString("base64");
         
@@ -79,69 +81,78 @@ export async function POST(request: Request) {
     }
 
     const promptText = `
-      You are an expert in creating educational content.
+      You are an expert in creating educational flashcards.
       **Source Material:** ${sourceInstruction}
       **Language:** ${language}
       **Number of Cards:** ${cardCount}
-      **Type:** ${cardTypeInstructions[cardType!]}
-      **Difficulty:** ${difficultyInstructions[difficulty!]}
+      **Type:** ${cardTypeInstructions[cardType]}
+      **Difficulty:** ${difficultyInstructions[difficulty]}
 
       **Instructions:**
-      1. Generate exactly ${cardCount} flashcards based strictly on the Source Material.
-      2. Output (front/back) must be in ${language}.
-      3. Return ONLY a raw JSON array.
-      4. Structure: [{"front": "...", "back": "..."}]
+      1. Generate EXACTLY ${cardCount} flashcards based STRICTLY on the Source Material.
+      2. Output (both front and back) MUST be in ${language}.
+      3. Return ONLY a valid JSON array. Do not add any conversational text.
+      4. Required Structure: [{"front": "...", "back": "..."}]
     `;
 
     promptParts.unshift(promptText);
 
-    let generatedCards;
-    let success = false;
+    let generatedCards = null;
     let lastError: any;
 
-    // SISTEMA DE FALLBACK: Bucle que prueba modelos hasta que uno funcione
-    for (const modelName of MODELS) {
+    for (const modelName of availableModels) {
         try {
-            console.log(`Intentando generar mazo con: ${modelName}`);
+            const isGemini = modelName.includes("gemini");
             
-            // Si es un modelo Gemma, evitamos el mimeType estricto de la SDK para evitar errores 400
-            const generationConfig = modelName.includes("gemini") 
-                ? { responseMimeType: "application/json" } 
-                : undefined;
-
             const model = genAI.getGenerativeModel({ 
                 model: modelName,
-                generationConfig
+                generationConfig: {
+                  ...(isGemini ? { responseMimeType: "application/json" } : {}),
+                  maxOutputTokens: 8192 // Evita que se corte a la mitad si son muchas tarjetas
+                }
             });
             
             const result = await model.generateContent(promptParts);
             const text = result.response.text();
             
-            // Limpieza manual por si el modelo envuelve el JSON en markdown
-            let cleanText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-            const firstOpen = cleanText.indexOf('[');
-            const lastClose = cleanText.lastIndexOf(']');
-            if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
-                cleanText = cleanText.substring(firstOpen, lastClose + 1);
+            // Extracción robusta del JSON buscando corchetes
+            const firstOpen = text.indexOf('[');
+            const lastClose = text.lastIndexOf(']');
+            
+            if (firstOpen === -1 || lastClose === -1 || lastClose < firstOpen) {
+              throw new Error("No JSON array found in response.");
             }
 
+            const cleanText = text.substring(firstOpen, lastClose + 1);
             generatedCards = JSON.parse(cleanText);
 
-            if (!Array.isArray(generatedCards)) throw new Error("Invalid JSON structure.");
+            if (!Array.isArray(generatedCards) || generatedCards.length === 0) {
+              throw new Error("Invalid or empty JSON array.");
+            }
             
-            success = true;
-            break; // Si tuvo éxito, salimos del bucle
+            // Verificamos que al menos la primera tarjeta tenga la estructura correcta
+            if (!generatedCards[0].front || !generatedCards[0].back) {
+              throw new Error("Missing 'front' or 'back' keys in JSON object.");
+            }
+
+            break; // Éxito, salimos del bucle
         } catch (aiError: any) {
-            console.warn(`Fallo con el modelo ${modelName}. Intentando el siguiente... Error:`, aiError.message);
             lastError = aiError;
+            generatedCards = null; // Reiniciamos por si falló a medias
         }
     }
 
-    // Si terminó el bucle y success es false, todos los modelos fallaron
-    if (!success || !generatedCards) {
-        return NextResponse.json({ error: `Generación fallida tras probar todos los modelos. Último error: ${lastError?.message}` }, { status: 500 });
+    if (!generatedCards) {
+        return NextResponse.json({ 
+          error: "Generación fallida tras probar todos los modelos.", 
+          details: lastError?.message 
+        }, { status: 500 });
     }
 
+    // Aseguramos la cantidad exacta pedida (por si la IA generó de más)
+    const cardsToProcess = generatedCards.slice(0, cardCount);
+
+    // Creamos el mazo SOLO si la generación de tarjetas fue exitosa
     const { data: newDeck, error: deckError } = await supabase
         .from('decks')
         .insert({
@@ -150,28 +161,29 @@ export async function POST(request: Request) {
             description: `AI-generated from ${generationSource === 'pdf' ? `PDF` : `Topic`}`
         }).select('id').single();
 
-    if (deckError || !newDeck) return NextResponse.json({ error: "DB Error." }, { status: 500 });
+    if (deckError || !newDeck) return NextResponse.json({ error: "Database error while creating deck." }, { status: 500 });
 
-    const cardsToInsert = generatedCards.map((card: {front: string, back: string}) => ({
+    const cardsToInsert = cardsToProcess.map((card: {front: string, back: string}) => ({
         deck_id: newDeck.id,
-        front: card.front,
-        back: card.back,
+        front: String(card.front).trim(),
+        back: String(card.back).trim(),
         ease_factor: 2.5,
         interval: 0,
         repetitions: 0,
         next_review_date: new Date().toISOString()
     }));
 
-    const { error: cardsError } = await supabase.from('cards').insert(cardsToInsert.slice(0, cardCount));
+    const { error: cardsError } = await supabase.from('cards').insert(cardsToInsert);
 
     if (cardsError) {
+        // Limpieza: si fallan las tarjetas, borramos el mazo vacío
         await supabase.from('decks').delete().eq('id', newDeck.id);
-        return NextResponse.json({ error: "Could not save cards." }, { status: 500 });
+        return NextResponse.json({ error: "Could not save cards to database." }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, deckId: newDeck.id });
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Unknown error." }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Unknown server error." }, { status: 500 });
   }
 }
