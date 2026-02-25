@@ -81,6 +81,7 @@ function DraggableDeckItem({
     disabled: !isEditMode 
   });
   const { toast } = useToast();
+  const router = useRouter(); // <-- AÑADIDO PARA REFRESCOS INTERNOS
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -111,6 +112,7 @@ function DraggableDeckItem({
     } else {
       onUpdate((prevItems) => prevItems.filter((i) => i.id !== item.id));
       toast({ title: "Moved to trash." });
+      router.refresh(); // <-- REFRESCA LA CACHÉ TRAS BORRAR
     }
   };
 
@@ -123,14 +125,12 @@ function DraggableDeckItem({
         isEditMode ? "cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg" : "",
         isHoveredFolder ? "ring-4 ring-primary ring-offset-2 scale-105 bg-primary/5 rounded-xl z-50 overflow-hidden" : ""
       )}
-      // APLICAMOS LOS LISTENERS A TODA LA TARJETA EN MODO EDICIÓN
       {...(isEditMode ? { ...listeners, ...attributes } : {})}
     >
       {isRenaming && (
         <RenameDialog item={item} isOpen={isRenaming} onClose={() => setIsRenaming(false)} />
       )}
       
-      {/* Indicador visual de que se va a soltar dentro */}
       {isHoveredFolder && (
         <div className="absolute inset-0 bg-primary/10 z-40 flex items-center justify-center backdrop-blur-[1px]">
            <div className="bg-primary text-primary-foreground font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 animate-in zoom-in duration-200">
@@ -140,13 +140,12 @@ function DraggableDeckItem({
         </div>
       )}
 
-      {/* Capa invisible para evitar clics accidentales dentro de la tarjeta al arrastrar */}
       {isEditMode && <div className="absolute inset-0 z-10" />}
 
       {isEditMode && (
         <div 
           className="absolute top-3 right-3 z-30 flex items-center bg-background/95 backdrop-blur-md rounded-lg border shadow-lg p-1 gap-1 animate-in fade-in zoom-in-95 duration-200"
-          onPointerDown={(e) => e.stopPropagation()} // ESTO EVITA QUE LOS BOTONES DISPAREN EL ARRASTRE
+          onPointerDown={(e) => e.stopPropagation()} 
         >
             {!item.is_folder && (
                 <MoveToFolderDialog 
@@ -155,6 +154,7 @@ function DraggableDeckItem({
                     onMoved={(id) => {
                         onUpdate((prev) => prev.filter((i) => i.id !== id));
                         toast({ title: "Moved successfully!" });
+                        router.refresh(); // <-- REFRESCA LA CACHÉ TRAS MOVER DESDE EL BOTÓN
                     }} 
                 />
             )}
@@ -187,7 +187,7 @@ function DraggableDeckItem({
 export function DashboardClient({ initialItems, availableFolders, currentFolderId = null }: { initialItems: Item[], availableFolders: any[], currentFolderId?: string | null }) {
     const [items, setItems] = useState<Item[]>(initialItems);
     const [activeDragItem, setActiveDragItem] = useState<Item | null>(null);
-    const [hoveredFolderId, setHoveredFolderId] = useState<string | null>(null); // NUEVO ESTADO PARA CARPETAS
+    const [hoveredFolderId, setHoveredFolderId] = useState<string | null>(null); 
     const [isEditMode, setIsEditMode] = useState(false);
     const router = useRouter();
     const { toast } = useToast();
@@ -226,7 +226,6 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
         setActiveDragItem(item || null);
     };
 
-    // LOGICA PARA DETECTAR SI ESTAMOS SOBRE UNA CARPETA
     const handleDragOver = (event: DragOverEvent) => {
         const { active, over } = event;
         if (!over) {
@@ -237,7 +236,6 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
         const activeItem = items.find((i) => i.id === active.id);
         const overItem = items.find((i) => i.id === over.id);
 
-        // Si lo que arrastramos es un mazo, y pasamos por encima de una carpeta, marcamos la carpeta
         if (overItem?.is_folder && activeItem && !activeItem.is_folder && active.id !== over.id) {
             setHoveredFolderId(over.id as string);
         } else {
@@ -270,8 +268,10 @@ export function DashboardClient({ initialItems, availableFolders, currentFolderI
         const { error } = await supabase.from("decks").update({ parent_id: targetFolderId }).eq("id", active.id);
         if (error) {
             toast({ variant: "destructive", title: "Error", description: "Could not move deck." });
-            router.refresh();
         }
+        
+        // REFRESCA LA CACHÉ TRAS METER EN CARPETA
+        router.refresh();
         return;
     }
 
