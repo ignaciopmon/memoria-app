@@ -14,34 +14,32 @@ export interface UserSettings {
   hard_interval_days: number;
   good_interval_days: number;
   easy_interval_days: number;
+  enable_max_interval?: boolean; // NUEVO: Switch para activar
+  max_interval_days?: number;    // NUEVO: Límite de días
   zen_mode?: boolean;
   sound_enabled?: boolean;
 }
 
 export type Rating = 1 | 2 | 3 | 4;
 
-const MAX_INTERVAL_DAYS = 3650; // Límite máximo de revisión (10 años aprox)
+const ABSOLUTE_MAX_INTERVAL = 3650; // Límite de seguridad de 10 años para evitar errores en BD
 
-/**
- * Calculates the next review schedule based on the rating and user settings.
- * Implements a variation of the SM-2 algorithm.
- */
 export const calculateNextReview = (card: CardSRS, rating: Rating, settings: UserSettings) => {
   let { ease_factor, interval, repetitions } = card;
 
-  // Default values if settings are missing/partial
   const safeSettings = {
     again: settings?.again_interval_minutes ?? 1,
     hard: settings?.hard_interval_days ?? 1,
     good: settings?.good_interval_days ?? 3,
     easy: settings?.easy_interval_days ?? 7,
+    enable_max: settings?.enable_max_interval ?? false,
+    max_days: settings?.max_interval_days ?? 30,
   };
 
   const now = new Date();
   let nextReviewDate = now;
 
   if (rating < 3) {
-    // Incorrect answer (Again or Hard)
     repetitions = 0;
     if (rating === 1) {
       interval = 0;
@@ -54,7 +52,6 @@ export const calculateNextReview = (card: CardSRS, rating: Rating, settings: Use
       }
     }
   } else {
-    // Correct answer (Good or Easy)
     repetitions += 1;
     if (repetitions === 1) {
       interval = safeSettings.good;
@@ -65,17 +62,18 @@ export const calculateNextReview = (card: CardSRS, rating: Rating, settings: Use
     }
   }
 
-  // Adjust Ease Factor (Standard SM-2 adjustment)
-  // EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+  // Ajuste del Ease Factor
   ease_factor = ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02));
-  
-  // Limitar el ease factor (mínimo 1.3 es estándar en Anki/SM-2)
   ease_factor = Math.max(1.3, Number(ease_factor.toFixed(2)));
 
-  // Límite de intervalo máximo
-  interval = Math.min(interval, MAX_INTERVAL_DAYS);
+  // 1. Aplicamos el límite absoluto de seguridad siempre
+  interval = Math.min(interval, ABSOLUTE_MAX_INTERVAL);
 
-  // Apply interval for valid ratings > 1 (Again handled by minutes above)
+  // 2. Si el "Modo Examen" está activado, aplicamos tu límite personalizado
+  if (safeSettings.enable_max) {
+    interval = Math.min(interval, safeSettings.max_days);
+  }
+
   if (rating > 1) {
     nextReviewDate = addDays(now, interval);
   }

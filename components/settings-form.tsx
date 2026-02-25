@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import { Switch } from "@/components/ui/switch"
-import { Sparkles, Clock, Save, Loader2 } from "lucide-react"
+import { Sparkles, Clock, Save, Loader2, GraduationCap, AlertCircle } from "lucide-react"
 
 interface Settings {
   id?: string
@@ -17,13 +17,14 @@ interface Settings {
   good_interval_days: number
   easy_interval_days: number
   enable_ai_suggestions: boolean
+  enable_max_interval: boolean
+  max_interval_days: number
 }
 
 interface SettingsFormProps {
   settings: Settings | null
 }
 
-// AQUÍ ESTÁ LA CLAVE: Tiene que decir "export function SettingsForm"
 export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
   const [settings, setSettings] = useState({
     again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
@@ -31,19 +32,25 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
     good_interval_days: initialSettings?.good_interval_days ?? 3,
     easy_interval_days: initialSettings?.easy_interval_days ?? 7,
     enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
+    enable_max_interval: initialSettings?.enable_max_interval ?? false,
+    max_interval_days: initialSettings?.max_interval_days ?? 30,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    setSettings({
-      again_interval_minutes: initialSettings?.again_interval_minutes ?? 1,
-      hard_interval_days: initialSettings?.hard_interval_days ?? 1,
-      good_interval_days: initialSettings?.good_interval_days ?? 3,
-      easy_interval_days: initialSettings?.easy_interval_days ?? 7,
-      enable_ai_suggestions: initialSettings?.enable_ai_suggestions ?? true,
-    });
+    if (initialSettings) {
+      setSettings({
+        again_interval_minutes: initialSettings.again_interval_minutes ?? 1,
+        hard_interval_days: initialSettings.hard_interval_days ?? 1,
+        good_interval_days: initialSettings.good_interval_days ?? 3,
+        easy_interval_days: initialSettings.easy_interval_days ?? 7,
+        enable_ai_suggestions: initialSettings.enable_ai_suggestions ?? true,
+        enable_max_interval: initialSettings.enable_max_interval ?? false,
+        max_interval_days: initialSettings.max_interval_days ?? 30,
+      });
+    }
   }, [initialSettings]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +115,7 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
         </CardContent>
       </Card>
 
-      <Card className="shadow-md border-muted">
+      <Card className="shadow-md border-muted overflow-hidden">
         <CardHeader className="border-b bg-muted/10 pb-6">
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
@@ -153,6 +160,55 @@ export function SettingsForm({ settings: initialSettings }: SettingsFormProps) {
             </div>
           </div>
         </CardContent>
+
+        <div className="border-t bg-blue-50/40 dark:bg-blue-950/20 p-6">
+          <div className="flex flex-col space-y-4">
+            <div className="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                <Label htmlFor="enable_max_interval" className="text-lg font-semibold cursor-pointer text-blue-900 dark:text-blue-100">
+                  Exam Mode (Maximum Interval Cap)
+                </Label>
+              </div>
+              <Switch
+                id="enable_max_interval"
+                checked={settings.enable_max_interval}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enable_max_interval: checked }))}
+                className="data-[state=checked]:bg-blue-600"
+              />
+            </div>
+            
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-3xl">
+              Standard spaced repetition is designed for <strong>lifetime retention</strong>. This means cards you know very well might be scheduled months or even years into the future. <br/><br/>
+              Turn this on if you are studying for a specific upcoming exam. It forces a "hard limit" so that no card is scheduled further than your chosen number of days, guaranteeing you review everything frequently before test day.
+            </p>
+
+            {settings.enable_max_interval && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-background/60 p-4 rounded-xl border border-blue-200 dark:border-blue-800/50 shadow-sm animate-in fade-in slide-in-from-top-2 max-w-xl mt-4">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-blue-500" />
+                  <Label htmlFor="max_interval_days" className="font-medium whitespace-nowrap">Hard limit cap:</Label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Input 
+                    id="max_interval_days" 
+                    name="max_interval_days" 
+                    type="number" 
+                    value={settings.max_interval_days} 
+                    onChange={handleInputChange} 
+                    min="1" 
+                    className="w-24 text-center font-mono border-blue-300 dark:border-blue-700 focus-visible:ring-blue-500 bg-background" 
+                  />
+                  <span className="text-sm font-medium">days</span>
+                </div>
+                <p className="text-xs text-muted-foreground ml-auto hidden sm:block">
+                  e.g., "30" ensures you see every card at least once a month.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
         <CardFooter className="flex items-center justify-between border-t bg-muted/10 p-6">
           <div className="h-6">
             {message && (

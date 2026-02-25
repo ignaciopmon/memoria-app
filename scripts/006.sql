@@ -1,0 +1,3 @@
+ALTER TABLE public.user_settings 
+ADD COLUMN IF NOT EXISTS enable_max_interval BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS max_interval_days INTEGER NOT NULL DEFAULT 30;
