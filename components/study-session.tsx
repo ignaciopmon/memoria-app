@@ -1,3 +1,4 @@
+// components/study-session.tsx
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -5,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles, Volume2, VolumeX, Maximize, Minimize } from "lucide-react"
+import { Brain, ArrowLeft, CheckCircle, RotateCcw, Clock, ThumbsUp, Sparkles, Volume2, VolumeX, Maximize, Minimize, Trophy } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,6 +15,7 @@ import type { Shortcuts } from "@/components/shortcuts-form"
 import { ImageViewerDialog } from "./image-viewer-dialog"
 import { calculateNextReview, type UserSettings, type Rating } from "@/lib/srs"
 import Image from "next/image"
+import confetti from "canvas-confetti" // <-- AÑADIDO
 
 interface StudySessionProps {
   deck: { id: string; name: string }
@@ -82,6 +84,31 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
   const [shortcuts, setShortcuts] = useState<Shortcuts | null>(null)
   const router = useRouter()
 
+  const isComplete = currentIndex >= cards.length
+
+  // Efecto para el confeti
+  useEffect(() => {
+    if (isComplete && cards.length > 0) {
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const interval: any = setInterval(function() {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+      }, 250);
+    }
+  }, [isComplete, cards.length]);
+
   useEffect(() => {
     const fetchUserSettings = async () => {
       const supabase = createClient()
@@ -119,7 +146,6 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
   const currentCard = cards[currentIndex]
   const progress = (currentIndex / (cards.length || 1)) * 100
-  const isComplete = currentIndex >= cards.length
 
   const playAudio = useCallback((text: string) => {
     if (!text || isPlayingAudio || !soundEnabled) return;
@@ -276,29 +302,29 @@ export function StudySession({ deck, initialCards }: StudySessionProps) {
 
   if (isComplete) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-4 text-center">
-        <div className="bg-primary/10 p-8 rounded-full mb-6 animate-in zoom-in duration-300">
-            <Sparkles className="h-12 w-12 text-primary" />
+      <div className="flex min-h-screen flex-col items-center justify-center p-4 text-center bg-gradient-to-b from-background to-primary/5">
+        <div className="bg-gradient-to-br from-yellow-400 to-orange-500 p-8 rounded-full mb-8 shadow-xl shadow-orange-500/20 animate-in zoom-in duration-500 bounce">
+            <Trophy className="h-16 w-16 text-white" />
         </div>
-        <h1 className="mb-2 text-3xl font-bold tracking-tight">Session complete!</h1>
-        <p className="mb-8 text-muted-foreground">
-          You have reviewed <span className="font-semibold text-foreground">{cards.length}</span> card{cards.length !== 1 ? "s" : ""}.
+        <h1 className="mb-3 text-4xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-orange-500">
+            Session Conquered!
+        </h1>
+        <p className="mb-10 text-lg text-muted-foreground max-w-md">
+          Great job! You have successfully reviewed <span className="font-bold text-foreground">{cards.length}</span> cards today. Your brain is getting stronger! 🧠💪
         </p>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <Button asChild variant="outline" size="lg"><Link href={`/deck/${deck.id}`}>View Deck</Link></Button>
-          <Button asChild size="lg"><Link href="/dashboard">Go to Dashboard</Link></Button>
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs sm:max-w-md justify-center">
+          <Button asChild variant="outline" size="lg" className="h-14 text-base rounded-xl"><Link href={`/deck/${deck.id}`}>View Deck</Link></Button>
+          <Button asChild size="lg" className="h-14 text-base rounded-xl shadow-lg"><Link href="/dashboard">Go to Dashboard</Link></Button>
         </div>
       </div>
     )
   }
 
-  // Pre-cargar las imágenes de la siguiente tarjeta
   const nextCard = currentIndex + 1 < cards.length ? cards[currentIndex + 1] : null;
 
   return (
     <div className="flex min-h-screen flex-col bg-background relative">
       
-      {/* Sistema Invisible de Precarga de Imágenes */}
       {nextCard && (
         <div className="hidden" aria-hidden="true">
           {nextCard.front_image_url && <Image src={nextCard.front_image_url} alt="preload" width={1} height={1} priority />}

@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
@@ -25,20 +26,25 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-  // Obtener Mazos
+  // Obtener Mazos y Carpetas (Solo del nivel RAÍZ)
   const { data: allItems, error } = await supabase
     .from("decks")
     .select(`
-      id, name, description, color, position, created_at,
-      cards!inner(count)
+      id, name, description, color, position, created_at, is_folder, parent_id,
+      cards!left(count)
     `)
     .is("deleted_at", null)
-    .eq("is_folder", false)
-    .is('cards.deleted_at', null)
+    .is("parent_id", null) // Solo raíz
     .order("position", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
 
-  // Obtener Revisiones para Estadísticas (últimos 60 días)
+  // Obtener todas las carpetas disponibles (para el menú Move to...)
+  const { data: availableFolders } = await supabase
+    .from("decks")
+    .select("id, name")
+    .eq("is_folder", true)
+    .is("deleted_at", null);
+
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
@@ -50,8 +56,6 @@ export default async function DashboardPage() {
   const itemsWithCount = allItems?.map((item) => ({
     ...item,
     cardCount: item.cards && item.cards.length > 0 ? item.cards[0].count : 0,
-    is_folder: false,
-    parent_id: null,
   })) || []
 
   return (
@@ -99,7 +103,6 @@ export default async function DashboardPage() {
           
           <Tabs defaultValue="decks" className="w-full space-y-6">
             
-            {/* Pestañas de Selección */}
             <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-2">
               <TabsTrigger value="decks" className="flex items-center gap-2">
                 <LayoutDashboard className="h-4 w-4" />
@@ -111,12 +114,13 @@ export default async function DashboardPage() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Contenido: Mazos */}
             <TabsContent value="decks" className="m-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
-              <DashboardClient initialItems={itemsWithCount} />
+              <DashboardClient 
+                initialItems={itemsWithCount} 
+                availableFolders={availableFolders || []} 
+              />
             </TabsContent>
 
-            {/* Contenido: Estadísticas */}
             <TabsContent value="activity" className="m-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
               <div className="mb-8 flex flex-col gap-1">
                  <h2 className="text-3xl font-bold">Your Activity</h2>

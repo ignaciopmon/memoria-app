@@ -32,7 +32,7 @@ const cardSchema = z.object({
     }))
 })
 
-export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeof Button>["size"] }) {
+export function CreateAIDeckDialog({ size, parentId = null }: { size?: React.ComponentProps<typeof Button>["size"], parentId?: string | null }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'form' | 'loading' | 'success' | 'error'>('form')
 
@@ -63,16 +63,16 @@ export function CreateAIDeckDialog({ size }: { size?: React.ComponentProps<typeo
           }
 
           try {
-              const response = await fetch('/api/save-generated-deck', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      deckName,
-                      description: `AI-generated from ${generationSource === 'pdf' ? `PDF` : `Topic`}`,
-                      cards: event.object.cards
-                  })
-              });
-
+const response = await fetch('/api/save-generated-deck', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        deckName,
+        description: `AI-generated from ${generationSource === 'pdf' ? `PDF` : `Topic`}`,
+        cards: event.object.cards,
+        parentId // <- AÑADIR ESTA LÍNEA
+    })
+});
               const result = await response.json();
               if (!response.ok) throw new Error(result.error);
 

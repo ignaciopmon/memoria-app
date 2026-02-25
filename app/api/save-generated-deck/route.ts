@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { deckName, description, cards } = await request.json();
+    const { deckName, description, cards, parentId } = await request.json(); // <-- AÑADIDO
 
     // 1. Crear el Mazo
     const { data: newDeck, error: deckError } = await supabase
@@ -15,7 +15,8 @@ export async function POST(request: Request) {
         .insert({
             user_id: user.id,
             name: deckName,
-            description: description
+            description: description,
+            parent_id: parentId || null // <-- AÑADIDO
         }).select('id').single();
 
     if (deckError || !newDeck) throw new Error("Database error creating deck.");

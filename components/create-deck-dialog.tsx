@@ -1,19 +1,10 @@
 // components/create-deck-dialog.tsx
 "use client"
-
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button, buttonVariants } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -21,7 +12,7 @@ import { Plus, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { type VariantProps } from "class-variance-authority"
 
-export function CreateDeckDialog({ onDeckCreated, size }: { onDeckCreated?: () => void, size?: VariantProps<typeof buttonVariants>["size"] }) {
+export function CreateDeckDialog({ onDeckCreated, size, parentId = null }: { onDeckCreated?: () => void, size?: VariantProps<typeof buttonVariants>["size"], parentId?: string | null }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -33,30 +24,17 @@ export function CreateDeckDialog({ onDeckCreated, size }: { onDeckCreated?: () =
     e.preventDefault()
     setIsLoading(true)
     setError(null)
-
     const supabase = createClient()
-
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        throw new Error("You are not authenticated")
-      }
-
-      const { data, error } = await supabase
-        .from("decks")
-        .insert({
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("You are not authenticated")
+      const { data, error } = await supabase.from("decks").insert({
           name,
           description: description || null,
           user_id: user.id,
-        })
-        .select()
-        .single()
-
+          parent_id: parentId // <- AQUÍ ES LA CLAVE
+        }).select().single()
       if (error) throw error
-
       setName("")
       setDescription("")
       setOpen(false)
@@ -67,52 +45,23 @@ export function CreateDeckDialog({ onDeckCreated, size }: { onDeckCreated?: () =
       setIsLoading(false)
     }
   }
-
+// El resto del JSX queda igual
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size={size}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Deck
-        </Button>
+        <Button size={size}><Plus className="mr-2 h-4 w-4" />New Deck</Button>
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create new deck</DialogTitle>
-            <DialogDescription>Create a new deck to organize your study cards.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Create new deck</DialogTitle><DialogDescription>Create a new deck to organize your study cards.</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                placeholder="E.g., English Vocabulary"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Describe the content of this deck..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-            </div>
+            <div className="grid gap-2"><Label htmlFor="name">Name *</Label><Input id="name" placeholder="E.g., English Vocabulary" value={name} onChange={(e) => setName(e.target.value)} required /></div>
+            <div className="grid gap-2"><Label htmlFor="description">Description</Label><Textarea id="description" placeholder="Describe the content of this deck..." value={description} onChange={(e) => setDescription(e.target.value)} rows={3} /></div>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading || !name.trim()}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? "Creating..." : "Create Deck"}
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>Cancel</Button>
+            <Button type="submit" disabled={isLoading || !name.trim()}>{isLoading ? "Creating..." : "Create Deck"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
