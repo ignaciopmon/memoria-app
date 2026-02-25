@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, CheckCircle, XCircle, FileText, AlertTriangle, Save, Sparkles, Trophy, ArrowRight, RefreshCcw, Plus, RotateCcw } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, FileText, AlertTriangle, Save, Sparkles, Trophy, ArrowRight, RefreshCcw, Plus, RotateCcw, Clock } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
@@ -52,6 +52,11 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
   const [score, setScore] = useState(0);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   
+  // Timer States
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [timeToComplete, setTimeToComplete] = useState(0);
+
   // Setup Form States
   const [sourceType, setSourceType] = useState<"topic" | "pdf">("topic");
   const [topic, setTopic] = useState("");
@@ -83,6 +88,23 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
   const { toast } = useToast();
   const router = useRouter();
 
+  // Handle Timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (step === "testing" && startTime) {
+      interval = setInterval(() => {
+        setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [step, startTime]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   useEffect(() => {
     if (analysisReport && reportRef.current) {
         reportRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -113,6 +135,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
       setUserAnswers(test.user_answers);
       setScore(test.score);
       setTopic(test.topic || "Unknown Topic");
+      setTimeToComplete(0); // Optional: if history doesn't have time, reset it
       
       const wrongs: WrongAnswer[] = [];
       test.questions.forEach((q, idx) => {
@@ -171,10 +194,14 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
           setUserAnswers([]);
           setStep("testing");
           setIsGeneratingMore(false);
+          setStartTime(Date.now());
+          setElapsedSeconds(0);
           toast({ title: "New Session Started", description: `Loaded ${newQuestions.length} questions.` });
       } else {
           setQuestions(data);
           setStep("testing");
+          setStartTime(Date.now());
+          setElapsedSeconds(0);
       }
 
     } catch (e: any) {
@@ -199,6 +226,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
   };
 
   const finishTest = async () => {
+    setTimeToComplete(elapsedSeconds);
     let correctCount = 0;
     const wrongs: WrongAnswer[] = [];
 
@@ -294,26 +322,32 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                 </CardHeader>
                 <CardContent>
                     {isLoadingHistory ? (
-                        <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
+                        <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>
                     ) : history.length === 0 ? (
-                        <div className="text-center p-8 text-muted-foreground">No tests taken yet.</div>
+                        <div className="text-center p-12 text-muted-foreground bg-muted/20 rounded-xl border-dashed border-2">
+                            <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>No tests taken yet. Start a new session to see your history here!</p>
+                        </div>
                     ) : (
                         <div className="space-y-4">
                             {history.map((test) => (
-                                <div key={test.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                                    <div className="space-y-1">
-                                        <p className="font-semibold">{test.topic}</p>
-                                        <div className="flex gap-2 text-xs text-muted-foreground">
+                                <div key={test.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-xl hover:bg-muted/50 transition-colors gap-4">
+                                    <div className="space-y-1.5">
+                                        <p className="font-semibold text-lg">{test.topic}</p>
+                                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                                             <Badge variant="outline">{test.difficulty}</Badge>
-                                            <span>{formatDistanceToNow(new Date(test.created_at))} ago</span>
+                                            <Badge variant="secondary">{test.total_questions} Qs</Badge>
+                                            <span className="flex items-center mt-0.5">{formatDistanceToNow(new Date(test.created_at))} ago</span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
                                         <div className="text-right">
-                                            <p className="font-bold text-lg">{Math.round((test.score / test.total_questions) * 100)}%</p>
-                                            <p className="text-xs text-muted-foreground">{test.score}/{test.total_questions}</p>
+                                            <p className={`font-bold text-xl ${Math.round((test.score / test.total_questions) * 100) >= 50 ? 'text-green-500' : 'text-amber-500'}`}>
+                                                {Math.round((test.score / test.total_questions) * 100)}%
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">{test.score}/{test.total_questions}</p>
                                         </div>
-                                        <Button size="sm" variant="secondary" onClick={() => loadHistoricalTest(test)}>
+                                        <Button size="sm" variant="outline" onClick={() => loadHistoricalTest(test)} className="rounded-lg">
                                             Review
                                         </Button>
                                     </div>
@@ -327,7 +361,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
 
         <TabsContent value="new">
             {step === "setup" && (
-                <Card className="shadow-lg border-muted max-w-2xl mx-auto mt-8">
+                <Card className="shadow-lg border-muted max-w-2xl mx-auto mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <CardHeader className="text-center pb-2">
                     <div className="mx-auto bg-primary/10 p-4 rounded-full w-fit mb-4">
                         <Sparkles className="h-8 w-8 text-primary" />
@@ -340,18 +374,18 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                         <Label className="text-base font-semibold">What do you want to practice?</Label>
                         <div className="grid grid-cols-2 gap-4">
                             <div 
-                                className={`cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center gap-2 transition-all ${sourceType === "topic" ? "border-primary bg-primary/5" : "border-muted hover:border-muted-foreground/50"}`}
+                                className={`cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center gap-2 transition-all hover:scale-[1.02] ${sourceType === "topic" ? "border-primary bg-primary/5" : "border-muted hover:border-muted-foreground/50"}`}
                                 onClick={() => setSourceType("topic")}
                             >
-                                <Sparkles className="h-6 w-6" />
-                                <span className="font-medium">Specific Topic</span>
+                                <Sparkles className={`h-6 w-6 ${sourceType === "topic" ? "text-primary" : "text-muted-foreground"}`} />
+                                <span className={`font-medium ${sourceType === "topic" ? "text-primary" : ""}`}>Specific Topic</span>
                             </div>
                             <div 
-                                className={`cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center gap-2 transition-all ${sourceType === "pdf" ? "border-primary bg-primary/5" : "border-muted hover:border-muted-foreground/50"}`}
+                                className={`cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center gap-2 transition-all hover:scale-[1.02] ${sourceType === "pdf" ? "border-primary bg-primary/5" : "border-muted hover:border-muted-foreground/50"}`}
                                 onClick={() => setSourceType("pdf")}
                             >
-                                <FileText className="h-6 w-6" />
-                                <span className="font-medium">From PDF</span>
+                                <FileText className={`h-6 w-6 ${sourceType === "pdf" ? "text-primary" : "text-muted-foreground"}`} />
+                                <span className={`font-medium ${sourceType === "pdf" ? "text-primary" : ""}`}>From PDF</span>
                             </div>
                         </div>
 
@@ -360,7 +394,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                 placeholder="E.g., The French Revolution, Python Basics, Introduction to Marketing..." 
                                 value={topic} 
                                 onChange={e => setTopic(e.target.value)} 
-                                className="resize-none min-h-[120px] text-base p-4"
+                                className="resize-none min-h-[120px] text-base p-4 rounded-xl focus-visible:ring-primary"
                             />
                         ) : (
                             <div className="border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center bg-muted/20 hover:bg-muted/40 transition-colors cursor-pointer relative">
@@ -385,7 +419,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                         <div className="space-y-2">
                             <Label>Questions</Label>
                             <Select value={count} onValueChange={setCount}>
-                                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="5">5 Questions</SelectItem>
                                     <SelectItem value="10">10 Questions</SelectItem>
@@ -396,7 +430,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                         <div className="space-y-2">
                             <Label>Difficulty</Label>
                             <Select value={difficulty} onValueChange={setDifficulty}>
-                                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="easy">Easy</SelectItem>
                                     <SelectItem value="medium">Medium</SelectItem>
@@ -407,18 +441,20 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                         <div className="space-y-2">
                             <Label>Language</Label>
                             <Select value={language} onValueChange={setLanguage}>
-                                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="English">English</SelectItem>
                                     <SelectItem value="Spanish">Spanish</SelectItem>
                                     <SelectItem value="Portuguese">Portuguese</SelectItem>
+                                    <SelectItem value="French">French</SelectItem>
+                                    <SelectItem value="German">German</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
                     </CardContent>
                     <CardFooter className="pb-8 pt-2">
-                        <Button className="w-full text-lg h-14 shadow-lg rounded-xl" onClick={() => handleGenerate(false)}>
+                        <Button className="w-full text-lg h-14 shadow-lg rounded-xl transition-transform hover:scale-[1.02]" onClick={() => handleGenerate(false)}>
                             Start Test <ArrowRight className="ml-2 h-5 w-5" />
                         </Button>
                     </CardFooter>
@@ -441,27 +477,36 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
             )}
 
             {step === "testing" && (
-                <div className="max-w-3xl mx-auto py-8 px-4">
-                    <div className="mb-8 space-y-3">
-                        <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                            <span className="bg-muted px-2 py-1 rounded">Question {currentQIndex + 1} of {questions.length}</span>
-                            <span>{Math.round(((currentQIndex) / questions.length) * 100)}%</span>
+                <div className="max-w-3xl mx-auto py-8 px-4 animate-in slide-in-from-right-8 duration-500">
+                    <div className="mb-8 space-y-4">
+                        <div className="flex items-center justify-between text-sm font-medium">
+                            <div className="flex items-center gap-3">
+                                <Badge variant="secondary" className="px-3 py-1 text-sm rounded-lg">
+                                    Q {currentQIndex + 1} of {questions.length}
+                                </Badge>
+                                <span className="text-muted-foreground">{Math.round(((currentQIndex) / questions.length) * 100)}%</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-primary font-mono bg-primary/10 px-3 py-1 rounded-lg">
+                                <Clock className="h-4 w-4" />
+                                {formatTime(elapsedSeconds)}
+                            </div>
                         </div>
                         <Progress value={((currentQIndex) / questions.length) * 100} className="h-3 rounded-full" />
                     </div>
                     
-                    <Card className="border-none shadow-xl ring-1 ring-muted">
-                        <CardHeader className="pb-2">
+                    {/* El key en la card hace que React la re-renderice (animando) cada vez que cambia la pregunta */}
+                    <Card key={currentQIndex} className="border-none shadow-xl ring-1 ring-muted animate-in fade-in slide-in-from-right-4 duration-300">
+                        <CardHeader className="pb-4">
                             <CardTitle className="text-xl md:text-2xl leading-relaxed font-semibold">
                                 {questions[currentQIndex].question}
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="pt-6">
+                        <CardContent className="pt-2">
                             <RadioGroup onValueChange={handleAnswer} value={userAnswers[currentQIndex]} className="gap-4">
                                 {questions[currentQIndex].options.map((opt, i) => (
                                     <div 
                                         key={i} 
-                                        className={`flex items-center space-x-3 border-2 p-5 rounded-2xl transition-all cursor-pointer ${userAnswers[currentQIndex] === opt ? 'border-primary bg-primary/5 shadow-sm' : 'border-transparent bg-muted/40 hover:bg-muted/70'}`}
+                                        className={`flex items-center space-x-3 border-2 p-5 rounded-2xl transition-all cursor-pointer hover:shadow-md ${userAnswers[currentQIndex] === opt ? 'border-primary bg-primary/5 shadow-sm scale-[1.01]' : 'border-transparent bg-muted/40 hover:bg-muted/70 hover:border-muted-foreground/20'}`}
                                         onClick={() => handleAnswer(opt)}
                                     >
                                         <RadioGroupItem value={opt} id={`opt-${i}`} className="data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
@@ -471,7 +516,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                             </RadioGroup>
                         </CardContent>
                         <CardFooter className="justify-end pt-6 pb-6 pr-6">
-                            <Button onClick={handleNext} disabled={!userAnswers[currentQIndex]} size="lg" className="min-w-[160px] h-12 text-base rounded-xl">
+                            <Button onClick={handleNext} disabled={!userAnswers[currentQIndex]} size="lg" className="min-w-[160px] h-12 text-base rounded-xl transition-all">
                                 {currentQIndex === questions.length - 1 ? "Finish Test" : "Next Question"}
                             </Button>
                         </CardFooter>
@@ -483,15 +528,25 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                 <div className="max-w-4xl mx-auto py-8 px-4 space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
                     
                     {/* 1. SCORE CARD */}
-                    <div className="text-center space-y-4">
-                        <div className="inline-flex items-center justify-center p-6 rounded-full bg-background shadow-lg border mb-4">
-                            <Trophy className={`h-16 w-16 ${Math.round((score / questions.length) * 100) >= 50 ? 'text-green-500' : 'text-red-500'}`} />
+                    <div className="text-center space-y-6">
+                        <div className="inline-flex items-center justify-center p-6 rounded-full bg-background shadow-lg border mb-2 relative">
+                            {score === questions.length && (
+                                <div className="absolute inset-0 bg-yellow-400/20 blur-xl rounded-full animate-pulse" />
+                            )}
+                            <Trophy className={`h-16 w-16 relative z-10 ${Math.round((score / questions.length) * 100) >= 50 ? 'text-green-500' : 'text-red-500'}`} />
                         </div>
-                        <h1 className="text-5xl font-black tracking-tight">{Math.round((score / questions.length) * 100)}%</h1>
-                        <p className="text-2xl text-muted-foreground">You scored {score} out of {questions.length}</p>
+                        <div>
+                            <h1 className="text-6xl font-black tracking-tight">{Math.round((score / questions.length) * 100)}%</h1>
+                            <p className="text-xl text-muted-foreground mt-2">You scored {score} out of {questions.length}</p>
+                            {timeToComplete > 0 && (
+                                <p className="text-sm font-medium text-muted-foreground/80 mt-2 flex items-center justify-center gap-1">
+                                    <Clock className="h-4 w-4" /> Completed in {formatTime(timeToComplete)}
+                                </p>
+                            )}
+                        </div>
                     </div>
 
-{/* 2. AI REPORT */}
+                    {/* 2. AI REPORT */}
                     {wrongAnswers.length > 0 && (
                         <div ref={reportRef} className="scroll-mt-24">
                             <Card className="border-blue-200 dark:border-blue-900 shadow-xl overflow-hidden">
@@ -506,8 +561,8 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                         </div>
                                     </div>
                                     {!analysisReport && (
-                                        <Button onClick={handleAnalyze} disabled={isAnalyzing} size="lg" className="bg-blue-600 hover:bg-blue-700 text-white shadow-md w-full md:w-auto">
-                                            {isAnalyzing ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : "Generate Full Analysis"}
+                                        <Button onClick={handleAnalyze} disabled={isAnalyzing} size="lg" className="bg-blue-600 hover:bg-blue-700 text-white shadow-md w-full md:w-auto rounded-xl">
+                                            {isAnalyzing ? <><Loader2 className="mr-2 h-5 w-5 animate-spin"/> Analyzing...</> : "Generate Full Analysis"}
                                         </Button>
                                     )}
                                 </div>
@@ -515,7 +570,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                 {analysisReport && (
                                     <CardContent className="p-0 bg-card/50">
                                         <ScrollArea className="h-[600px] w-full p-8 md:p-10">
-                                            <div className="max-w-3xl mx-auto">
+                                            <div className="max-w-3xl mx-auto prose dark:prose-invert prose-blue">
                                                 <ReactMarkdown
                                                     components={{
                                                         h3: ({node, ...props}) => <h3 className="text-2xl font-bold mt-10 mb-5 text-primary border-b border-border pb-3 flex items-center gap-2" {...props} />,
@@ -550,9 +605,9 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                     </CardTitle>
                                     <CardDescription>Don't lose this knowledge. Turn mistakes into flashcards.</CardDescription>
                                 </CardHeader>
-                                <CardContent className="space-y-4 pt-6">
+                                <CardContent className="space-y-5 pt-6">
                                     <Select value={saveMode} onValueChange={(v: any) => setSaveMode(v)}>
-                                        <SelectTrigger className="h-11"><SelectValue placeholder="Choose action..." /></SelectTrigger>
+                                        <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Choose action..." /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="none">Select an option...</SelectItem>
                                             <SelectItem value="existing">Add to existing deck</SelectItem>
@@ -562,7 +617,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
 
                                     {saveMode === "existing" && (
                                         <Select value={selectedDeckId} onValueChange={setSelectedDeckId}>
-                                            <SelectTrigger className="h-11"><SelectValue placeholder="Select Deck" /></SelectTrigger>
+                                            <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select Deck" /></SelectTrigger>
                                             <SelectContent>
                                                 {userDecks.map(deck => (
                                                     <SelectItem key={deck.id} value={deck.id}>{deck.name}</SelectItem>
@@ -572,13 +627,13 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                     )}
 
                                     {saveMode === "new" && (
-                                        <Input className="h-11" placeholder="New Deck Name" value={newDeckName} onChange={e => setNewDeckName(e.target.value)} />
+                                        <Input className="h-11 rounded-xl" placeholder="New Deck Name" value={newDeckName} onChange={e => setNewDeckName(e.target.value)} />
                                     )}
 
                                     <Button 
                                         onClick={handleSaveToDeck} 
                                         disabled={isSaving || saveMode === "none"} 
-                                        className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-semibold"
+                                        className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl"
                                     >
                                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Save Cards"}
                                     </Button>
@@ -592,7 +647,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                         <CardTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-500">
                                             <AlertTriangle className="h-5 w-5" /> Quick Review
                                         </CardTitle>
-                                        <span className="text-sm font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-md">
+                                        <span className="text-sm font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-3 py-1 rounded-lg">
                                             {wrongAnswers.length} items
                                         </span>
                                     </div>
@@ -601,16 +656,16 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                     <ScrollArea className="h-[350px]">
                                         <div className="p-4 space-y-4">
                                             {wrongAnswers.map((w, i) => (
-                                                <div key={i} className="p-4 rounded-xl border bg-muted/10 space-y-3">
+                                                <div key={i} className="p-4 rounded-xl border bg-muted/10 space-y-3 hover:bg-muted/30 transition-colors">
                                                     <p className="font-semibold text-base leading-snug">{w.question}</p>
                                                     <div className="grid gap-2 text-sm">
-                                                        <div className="flex gap-2 text-red-600 dark:text-red-400">
+                                                        <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
                                                             <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                                                            <span className="font-medium">{w.userAnswer}</span>
+                                                            <span className="font-medium leading-tight">{w.userAnswer}</span>
                                                         </div>
-                                                        <div className="flex gap-2 text-green-600 dark:text-green-400">
+                                                        <div className="flex items-start gap-2 text-green-600 dark:text-green-400">
                                                             <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                                                            <span className="font-medium">{w.correctAnswer}</span>
+                                                            <span className="font-medium leading-tight">{w.correctAnswer}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -628,22 +683,22 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                         
                         <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
                             {/* Option A: Continue on same topic */}
-                            <div className="p-6 border rounded-2xl bg-primary/5 border-primary/20 space-y-4">
+                            <div className="p-6 border rounded-2xl bg-primary/5 border-primary/20 space-y-6 hover:shadow-md transition-shadow">
                                 <div className="flex items-center gap-3">
-                                    <div className="bg-primary text-primary-foreground p-2 rounded-lg">
+                                    <div className="bg-primary text-primary-foreground p-3 rounded-xl shadow-sm">
                                         <RotateCcw className="h-6 w-6" />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-lg">Keep Practicing</h4>
+                                        <h4 className="font-bold text-xl">Keep Practicing</h4>
                                         <p className="text-sm text-muted-foreground">Generate more questions on this topic.</p>
                                     </div>
                                 </div>
                                 
-                                <div className="space-y-4 pt-2">
+                                <div className="space-y-5 pt-2">
                                     <div className="flex items-center justify-between">
-                                        <Label>New Questions:</Label>
+                                        <Label className="text-base">New Questions:</Label>
                                         <Select value={moreCount} onValueChange={setMoreCount}>
-                                            <SelectTrigger className="w-[100px] h-8"><SelectValue /></SelectTrigger>
+                                            <SelectTrigger className="w-[120px] h-10 rounded-lg"><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="5">5</SelectItem>
                                                 <SelectItem value="10">10</SelectItem>
@@ -653,31 +708,31 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                                     </div>
                                     
                                     {wrongAnswers.length > 0 && (
-                                        <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg bg-background">
-                                            <div className="space-y-0.5">
-                                                <Label className="text-sm font-medium">Retry Mistakes</Label>
-                                                <p className="text-xs text-muted-foreground">Include your {wrongAnswers.length} errors in the new set.</p>
+                                        <div className="flex items-center justify-between space-x-2 border p-4 rounded-xl bg-background shadow-sm">
+                                            <div className="space-y-1">
+                                                <Label className="text-base font-semibold">Retry Mistakes</Label>
+                                                <p className="text-sm text-muted-foreground">Include your {wrongAnswers.length} errors.</p>
                                             </div>
                                             <Switch checked={includeMistakes} onCheckedChange={setIncludeMistakes} />
                                         </div>
                                     )}
 
-                                    <Button onClick={() => handleGenerate(true)} disabled={isGeneratingMore} className="w-full">
-                                        {isGeneratingMore ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : "Generate & Start"}
+                                    <Button onClick={() => handleGenerate(true)} disabled={isGeneratingMore} className="w-full h-12 text-base rounded-xl">
+                                        {isGeneratingMore ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Generate & Start"}
                                     </Button>
                                 </div>
                             </div>
 
                             {/* Option B: Completely New */}
-                            <div className="p-6 border rounded-2xl flex flex-col justify-center items-center text-center space-y-4 hover:bg-muted/30 transition-colors">
-                                <div className="bg-muted p-3 rounded-full">
-                                    <Plus className="h-8 w-8 text-muted-foreground" />
+                            <div className="p-8 border rounded-2xl flex flex-col justify-center items-center text-center space-y-6 hover:bg-muted/30 transition-colors">
+                                <div className="bg-muted p-4 rounded-full shadow-inner">
+                                    <Plus className="h-10 w-10 text-muted-foreground" />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-lg">New Topic</h4>
-                                    <p className="text-sm text-muted-foreground">Done with this? Start something fresh.</p>
+                                    <h4 className="font-bold text-xl">New Topic</h4>
+                                    <p className="text-base text-muted-foreground mt-1">Done with this? Start something fresh.</p>
                                 </div>
-                                <Button variant="outline" className="w-full" onClick={() => window.location.reload()}>
+                                <Button variant="outline" className="w-full h-12 text-base rounded-xl" onClick={() => window.location.reload()}>
                                     Start New Test
                                 </Button>
                             </div>
@@ -685,7 +740,7 @@ export function AITestFlow({ userDecks }: { userDecks: { id: string, name: strin
                     </div>
                 </div>
             )}
-        </TabsContent> {/* 👈 AQUÍ ESTABA EL ERROR: FALTABA CERRAR TABSCONTENT */}
+        </TabsContent>
     </Tabs>
   );
 }
