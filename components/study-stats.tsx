@@ -63,7 +63,9 @@ export function StudyStats({ reviews }: { reviews: Review[] }) {
     // 5. Análisis de Distribución (Ratings)
     const ratingCounts = { again: 0, hard: 0, good: 0, easy: 0 };
     const timeOfDay = { morning: 0, afternoon: 0, evening: 0, night: 0 };
-    const dayOfWeek = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    
+    // SOLUCIÓN: Declaramos explícitamente el tipo Record<number, number> para evitar el error de TS
+    const dayOfWeek: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
 
     reviews.forEach(r => {
         if (r.rating === 1) ratingCounts.again++;
