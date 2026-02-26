@@ -16,17 +16,20 @@ import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, S
 import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 
+import { createClient } from "@/lib/supabase/client";
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
+const supabase = createClient();
+
 type Message = { role: "user" | "model"; content: string; excerpt?: string };
 type Question = { question: string; options: { [key: string]: string }; answer: string; explanation?: string };
 type WrongAnswer = Question & { userAnswer: string };
 
-type Notebook = { id: string; name: string; created_at: string };
+type Notebook = { id: string; name: string; created_at: string; file_path?: string; file_name?: string };
 
 export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string, name: string }[], userId: string }) {
   // Notebook System State
@@ -34,6 +37,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
   const [activeNotebook, setActiveNotebook] = useState<Notebook | null>(null);
   const [isCreatingNotebook, setIsCreatingNotebook] = useState(false);
   const [newNotebookName, setNewNotebookName] = useState("");
+  const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(true);
 
   // Document State
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
@@ -79,6 +83,43 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
 
   const { toast } = useToast();
 
+  // --- PERSISTENCE: INITIAL LOAD ---
+  useEffect(() => {
+    const fetchNotebooks = async () => {
+        setIsLoadingNotebooks(true);
+        const { data } = await supabase.from('notebooks').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+        if (data) setNotebooks(data);
+        setIsLoadingNotebooks(false);
+    };
+    fetchNotebooks();
+  }, [userId]);
+
+  // --- PERSISTENCE: AUTO-SAVE ASSETS ---
+  useEffect(() => {
+    if (activeNotebook && messages.length > 1) {
+        supabase.from('notebook_assets')
+            .upsert({ notebook_id: activeNotebook.id, type: 'chat', content: messages }, { onConflict: 'notebook_id, type' })
+            .then();
+    }
+  }, [messages, activeNotebook]);
+
+  useEffect(() => {
+    if (activeNotebook && summary) {
+        supabase.from('notebook_assets')
+            .upsert({ notebook_id: activeNotebook.id, type: 'summary', content: summary }, { onConflict: 'notebook_id, type' })
+            .then();
+    }
+  }, [summary, activeNotebook]);
+
+  useEffect(() => {
+    if (activeNotebook && studyGuide) {
+        supabase.from('notebook_assets')
+            .upsert({ notebook_id: activeNotebook.id, type: 'guide', content: studyGuide }, { onConflict: 'notebook_id, type' })
+            .then();
+    }
+  }, [studyGuide, activeNotebook]);
+
+  // UI Effects
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages, summary, studyGuide]);
@@ -92,23 +133,105 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
       return () => document.removeEventListener("mousedown", handleGlobalMouseDown);
   }, []);
 
-  // --- Notebook Handlers (UI Mocks for now, connect to your Supabase client here) ---
-  const handleCreateNotebook = (e: React.FormEvent) => {
+  const resetWorkspace = () => {
+    setIsReady(false); setPdfBase64(null); setPdfFile(null); setSummary(null); setStudyGuide(null);
+    setPageNumber(1); setScale(1.2); setTestState("setup"); setFileName("");
+    setMessages([{ role: "model", content: "Hi! I'm your AI tutor. \n\n**✨ Magic Canvas:** Select any text on the document to instantly translate, explain, or create flashcards!" }]);
+  };
+
+  const handleExitNotebook = () => {
+      resetWorkspace();
+      setActiveNotebook(null);
+  };
+
+  // --- ACTIONS ---
+  const handleCreateNotebook = async (e: React.FormEvent) => {
       e.preventDefault();
       if(!newNotebookName.trim()) return;
-      const newNb = { id: crypto.randomUUID(), name: newNotebookName, created_at: new Date().toISOString() };
-      setNotebooks([newNb, ...notebooks]);
-      setActiveNotebook(newNb);
+      
+      const { data, error } = await supabase
+          .from('notebooks')
+          .insert({ user_id: userId, name: newNotebookName })
+          .select()
+          .single();
+
+      if (error || !data) {
+          toast({ title: "Error creating notebook", variant: "destructive" });
+          return;
+      }
+
+      setNotebooks([data, ...notebooks]);
+      setActiveNotebook(data);
       setIsCreatingNotebook(false);
       setNewNotebookName("");
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const openNotebook = async (nb: Notebook) => {
+      resetWorkspace();
+      setActiveNotebook(nb);
+
+      if (nb.file_path) {
+          setIsProcessingFile(true);
+          setFileName(nb.file_name || "Document.pdf");
+
+          // 1. Download File
+          const { data, error } = await supabase.storage.from('notebook_files').download(nb.file_path);
+          if (!error && data) {
+              const file = new File([data], nb.file_name || "Document.pdf", { type: 'application/pdf' });
+              setPdfFile(file);
+              const reader = new FileReader();
+              reader.onload = () => {
+                  const base64String = (reader.result as string).split(',')[1];
+                  setPdfBase64(base64String);
+                  setIsProcessingFile(false);
+                  setIsReady(true);
+              };
+              reader.readAsDataURL(file);
+          } else {
+              setIsProcessingFile(false);
+              toast({ title: "Error loading document from cloud", variant: "destructive" });
+          }
+
+          // 2. Load Assets (Chats, Guides, etc)
+          const { data: assets } = await supabase.from('notebook_assets').select('*').eq('notebook_id', nb.id);
+          if (assets && assets.length > 0) {
+              const chatAsset = assets.find(a => a.type === 'chat');
+              if (chatAsset) setMessages(chatAsset.content);
+
+              const guideAsset = assets.find(a => a.type === 'guide');
+              if (guideAsset) setStudyGuide(guideAsset.content);
+
+              const summaryAsset = assets.find(a => a.type === 'summary');
+              if (summaryAsset) setSummary(summaryAsset.content);
+          }
+      }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !activeNotebook) return;
     if (file.size > 10 * 1024 * 1024) return toast({ title: "File too large", variant: "destructive" });
 
     setIsProcessingFile(true);
+
+    // 1. Upload to Supabase Storage
+    const filePath = `${userId}/${activeNotebook.id}/${file.name}`;
+    const { error: uploadError } = await supabase.storage.from('notebook_files').upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+        toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" });
+        setIsProcessingFile(false);
+        return;
+    }
+
+    // 2. Update DB Notebook Record
+    await supabase.from('notebooks').update({ file_path: filePath, file_name: file.name }).eq('id', activeNotebook.id);
+
+    // Update Local State
+    const updatedNb = { ...activeNotebook, file_path: filePath, file_name: file.name };
+    setActiveNotebook(updatedNb);
+    setNotebooks(notebooks.map(n => n.id === activeNotebook.id ? updatedNb : n));
+    
     setFileName(file.name);
     setPdfFile(file);
     
@@ -119,14 +242,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
         setIsProcessingFile(false);
         setIsReady(true);
     };
-    reader.onerror = () => { setIsProcessingFile(false); toast({ title: "Error reading file", variant: "destructive" }); };
     reader.readAsDataURL(file);
-  };
-
-  const resetWorkspace = () => {
-    setIsReady(false); setPdfBase64(null); setPdfFile(null); setSummary(null); setStudyGuide(null);
-    setPageNumber(1); setScale(1.2); setTestState("setup");
-    setMessages([{ role: "model", content: "Hi! I'm your AI tutor. \n\n**✨ Magic Canvas:** Select any text on the document to instantly translate, explain, or create flashcards!" }]);
   };
 
   const handleSendMessage = async (customPrompt?: string, excerptData?: string, actionType: string = "chat") => {
@@ -173,7 +289,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
       }, 50);
   };
 
-  // --- FLASHCARD DIRECTA ---
   const generateDirectFlashcard = async (text: string) => {
       setIsFlashcardModalOpen(true);
       setIsGeneratingFlashcard(true);
@@ -184,29 +299,20 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
           const res = await fetch("/api/turbo-study", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                  action: "create_flashcard", 
-                  messages: [{ role: "user", content: `Create a flashcard from this text: "${text}"` }] 
-              })
+              body: JSON.stringify({ action: "create_flashcard", messages: [{ role: "user", content: `Create a flashcard from this text: "${text}"` }] })
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error);
 
-          // Parse simple formatting "**Front:** X \n **Back:** Y"
           const resultStr = data.data;
           const frontMatch = resultStr.match(/\*\*Front:\*\*\s*([\s\S]+?)(?=\*\*Back:\*\*|$)/i);
           const backMatch = resultStr.match(/\*\*Back:\*\*\s*([\s\S]+)$/i);
           
-          setFlashcardDraft({
-              front: frontMatch ? frontMatch[1].trim() : "Concept from text",
-              back: backMatch ? backMatch[1].trim() : resultStr
-          });
+          setFlashcardDraft({ front: frontMatch ? frontMatch[1].trim() : "Concept from text", back: backMatch ? backMatch[1].trim() : resultStr });
       } catch (e: any) {
-          toast({ title: "Error generating flashcard", description: e.message, variant: "destructive" });
+          toast({ title: "Error generating flashcard", variant: "destructive" });
           setIsFlashcardModalOpen(false);
-      } finally {
-          setIsGeneratingFlashcard(false);
-      }
+      } finally { setIsGeneratingFlashcard(false); }
   };
 
   const saveDirectFlashcard = async () => {
@@ -223,17 +329,12 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
           setIsFlashcardModalOpen(false);
       } catch (e) {
           toast({ title: "Error", variant: "destructive" });
-      } finally {
-          setIsSaving(false);
-      }
+      } finally { setIsSaving(false); }
   };
 
   const executeActionOnSelection = (actionType: "explain" | "summarize" | "translate" | "eli5" | "flashcard") => {
       if (!selection) return;
-      if (actionType === "flashcard") {
-          generateDirectFlashcard(selection.text);
-          return;
-      }
+      if (actionType === "flashcard") { generateDirectFlashcard(selection.text); return; }
       
       let prompt = "";
       if (actionType === "explain") prompt = `Please explain the selected excerpt in detail.`;
@@ -251,9 +352,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
           const result = await res.json();
           if (result.error) throw new Error(result.error);
           setQuestions(result.data); setUserAnswers(new Array(result.data.length).fill("")); setCurrentQIndex(0); setTestState("taking");
-      } catch (e: any) {
-          toast({ title: "Error generating test", description: e.message, variant: "destructive" }); setTestState("setup");
-      }
+      } catch (e: any) { toast({ title: "Error", variant: "destructive" }); setTestState("setup"); }
   };
 
   const handleGenerateSummary = async () => { 
@@ -263,7 +362,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
           const result = await res.json();
           if (result.error) throw new Error(result.error);
           setSummary(result.data);
-      } catch (e: any) { toast({ title: "Error generating summary", description: e.message, variant: "destructive" }); } finally { setIsGeneratingSummary(false); }
+      } catch (e: any) { toast({ title: "Error", variant: "destructive" }); } finally { setIsGeneratingSummary(false); }
   };
 
   const handleGenerateGuide = async () => { 
@@ -273,7 +372,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
           const result = await res.json();
           if (result.error) throw new Error(result.error);
           setStudyGuide(result.data);
-      } catch (e: any) { toast({ title: "Error generating guide", description: e.message, variant: "destructive" }); } finally { setIsGeneratingGuide(false); }
+      } catch (e: any) { toast({ title: "Error", variant: "destructive" }); } finally { setIsGeneratingGuide(false); }
   };
 
   const finishTest = () => { 
@@ -290,7 +389,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
     try {
       const res = await fetch("/api/save-quiz-cards", { method: "POST", body: JSON.stringify({ deckId: selectedDeckId, cards: formattedCards }), headers: { "Content-Type": "application/json" } });
       if (!res.ok) throw new Error("Failed to save");
-      toast({ title: "Cards Saved!", description: `Successfully added ${formattedCards.length} cards to your deck.` });
+      toast({ title: "Cards Saved!" });
     } catch (e) { toast({ title: "Error saving cards", variant: "destructive" }); } finally { setIsSaving(false); }
   };
 
@@ -327,30 +426,34 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                           </Card>
                       )}
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {notebooks.length === 0 && !isCreatingNotebook && (
-                              <div className="col-span-full py-20 text-center border-2 border-dashed rounded-3xl bg-muted/10">
-                                  <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                                  <h3 className="text-xl font-bold mb-2">No Notebooks yet</h3>
-                                  <p className="text-muted-foreground mb-6">Create your first intelligent workspace to start uploading documents.</p>
-                                  <Button onClick={() => setIsCreatingNotebook(true)}><Plus className="mr-2 h-4 w-4"/> Create Notebook</Button>
-                              </div>
-                          )}
-                          {notebooks.map(nb => (
-                              <Card key={nb.id} className="group hover:border-primary/50 hover:shadow-xl transition-all cursor-pointer overflow-hidden border-border/50" onClick={() => setActiveNotebook(nb)}>
-                                  <div className="h-2 bg-gradient-to-r from-primary/40 to-primary/10 w-full" />
-                                  <CardHeader>
-                                      <CardTitle className="flex items-center gap-2 text-xl"><Book className="h-5 w-5 text-primary/60" /> {nb.name}</CardTitle>
-                                      <CardDescription>Created {new Date(nb.created_at).toLocaleDateString()}</CardDescription>
-                                  </CardHeader>
-                                  <CardContent>
-                                      <div className="flex gap-2 text-sm text-muted-foreground font-medium">
-                                          <span className="bg-muted px-2 py-1 rounded-md">Empty Workspace</span>
-                                      </div>
-                                  </CardContent>
-                              </Card>
-                          ))}
-                      </div>
+                      {isLoadingNotebooks ? (
+                          <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-muted-foreground" /></div>
+                      ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                              {notebooks.length === 0 && !isCreatingNotebook && (
+                                  <div className="col-span-full py-20 text-center border-2 border-dashed rounded-3xl bg-muted/10">
+                                      <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                                      <h3 className="text-xl font-bold mb-2">No Notebooks yet</h3>
+                                      <p className="text-muted-foreground mb-6">Create your first intelligent workspace to start uploading documents.</p>
+                                      <Button onClick={() => setIsCreatingNotebook(true)}><Plus className="mr-2 h-4 w-4"/> Create Notebook</Button>
+                                  </div>
+                              )}
+                              {notebooks.map(nb => (
+                                  <Card key={nb.id} className="group hover:border-primary/50 hover:shadow-xl transition-all cursor-pointer overflow-hidden border-border/50" onClick={() => openNotebook(nb)}>
+                                      <div className={`h-2 w-full ${nb.file_path ? 'bg-gradient-to-r from-green-500/40 to-green-500/10' : 'bg-gradient-to-r from-primary/40 to-primary/10'}`} />
+                                      <CardHeader>
+                                          <CardTitle className="flex items-center gap-2 text-xl"><Book className="h-5 w-5 text-primary/60" /> {nb.name}</CardTitle>
+                                          <CardDescription>Created {new Date(nb.created_at).toLocaleDateString()}</CardDescription>
+                                      </CardHeader>
+                                      <CardContent>
+                                          <div className="flex gap-2 text-sm text-muted-foreground font-medium">
+                                              {nb.file_path ? <span className="bg-green-500/10 text-green-600 px-2 py-1 rounded-md flex items-center gap-1"><FileText className="w-3 h-3"/> {nb.file_name}</span> : <span className="bg-muted px-2 py-1 rounded-md">Empty Workspace</span>}
+                                          </div>
+                                      </CardContent>
+                                  </Card>
+                              ))}
+                          </div>
+                      )}
                   </div>
               </div>
           </div>
@@ -361,12 +464,12 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
   if (!isReady) {
       return (
           <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
-              <Button variant="ghost" className="absolute top-4 left-4" onClick={() => setActiveNotebook(null)}><ChevronLeft className="mr-2 h-4 w-4"/> Back to Notebooks</Button>
+              <Button variant="ghost" className="absolute top-4 left-4" onClick={handleExitNotebook}><ChevronLeft className="mr-2 h-4 w-4"/> Back to Notebooks</Button>
               <div className="max-w-2xl w-full animate-in fade-in slide-in-from-bottom-4">
                   <div className="mb-10 text-center space-y-3">
                       <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-2xl mb-2"><Zap className="h-8 w-8 text-primary fill-primary/20" /></div>
                       <h1 className="text-4xl font-extrabold tracking-tight">{activeNotebook.name} <span className="text-primary text-xl align-top font-bold uppercase tracking-widest bg-primary/10 px-2 py-1 rounded-md ml-1">Studio</span></h1>
-                      <p className="text-muted-foreground text-lg max-w-lg mx-auto">Upload a document to this notebook to unlock the AI Canvas tools.</p>
+                      <p className="text-muted-foreground text-lg max-w-lg mx-auto">Upload a document to this notebook. It will be saved securely to the cloud.</p>
                   </div>
                   <Card className="border-muted shadow-2xl bg-card/40 backdrop-blur-xl ring-1 ring-border/50">
                       <CardContent className="pt-8 pb-8">
@@ -374,13 +477,13 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                               {isProcessingFile ? (
                                   <div className="flex flex-col items-center text-primary z-10">
                                       <Loader2 className="h-12 w-12 animate-spin mb-4" />
-                                      <p className="font-semibold text-lg tracking-wide">Initializing Neural Canvas...</p>
+                                      <p className="font-semibold text-lg tracking-wide">Syncing to Cloud Canvas...</p>
                                   </div>
                               ) : (
                                   <div className="flex flex-col items-center z-10 pointer-events-none">
                                       <div className="p-4 bg-background rounded-full shadow-sm mb-6 group-hover:scale-110 transition-transform duration-300"><Upload className="h-10 w-10 text-primary" /></div>
                                       <h3 className="text-2xl font-bold mb-2">Add Source Document</h3>
-                                      <p className="text-muted-foreground text-center mb-6 max-w-sm">Drop your PDF here. It will be temporarily loaded into this Notebook session.</p>
+                                      <p className="text-muted-foreground text-center mb-6 max-w-sm">Drop your PDF here to persist it in this workspace.</p>
                                       <Button className="pointer-events-auto shadow-lg shadow-primary/20 h-12 px-8 text-md rounded-full" onClick={(e) => e.stopPropagation()}>
                                           <Label htmlFor="pdf-upload" className="cursor-pointer w-full h-full flex items-center">Select File</Label>
                                       </Button>
@@ -456,7 +559,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
           {/* Top Navbar */}
           <div className="h-14 bg-background/80 backdrop-blur-md border-b flex justify-between items-center px-4 shrink-0 shadow-sm z-20">
               <div className="flex items-center gap-4 overflow-hidden">
-                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setActiveNotebook(null)}>
+                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleExitNotebook}>
                       <ChevronLeft className="h-4 w-4 mr-1"/> My Notebooks
                   </Button>
                   <div className="h-4 w-[1px] bg-border"></div>
@@ -547,7 +650,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                                   <div ref={scrollRef} />
                               </div>
                           </div>
-                          {/* Chat Input */}
                           <div className="bg-background/80 backdrop-blur-xl border-t p-4 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] z-10">
                               <div className="max-w-3xl mx-auto">
                                   <form onSubmit={e => { e.preventDefault(); handleSendMessage(); }} className="relative group">
@@ -598,7 +700,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                           </div>
                       </TabsContent>
 
-                      {/* TEST TAB (The fix for decks is applied here via the new API compatibility) */}
+                      {/* TEST TAB */}
                       <TabsContent value="test" className="flex-1 overflow-auto p-4 sm:p-8 m-0 bg-background data-[state=inactive]:hidden">
                           <div className="max-w-2xl mx-auto h-full flex flex-col">
                               {testState === "setup" && (
