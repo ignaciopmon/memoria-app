@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   try {
     const { deckId, newDeckName, cards } = await request.json();
-    // Llama a createClient() sin argumentos
     const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
@@ -12,14 +11,13 @@ export async function POST(request: Request) {
 
     let targetDeckId = deckId;
 
-    // Si hay que crear mazo nuevo
     if (!targetDeckId && newDeckName) {
         const { data: newDeck, error: deckError } = await supabase
             .from('decks')
             .insert({
                 user_id: user.id,
                 name: newDeckName,
-                description: "Created from AI Test errors"
+                description: "Created from Turbo Canvas"
             })
             .select('id')
             .single();
@@ -28,11 +26,12 @@ export async function POST(request: Request) {
         targetDeckId = newDeck.id;
     }
 
-    // Insertar cartas
+    // ARREGLO: Manejar tanto c.front/c.back (que envía el cliente ahora) 
+    // como c.question/c.correctAnswer por retrocompatibilidad.
     const cardsToInsert = cards.map((c: any) => ({
         deck_id: targetDeckId,
-        front: c.question,
-        back: c.correctAnswer,
+        front: c.front || c.question,
+        back: c.back || c.correctAnswer,
         ease_factor: 2.5,
         interval: 0,
         repetitions: 0,

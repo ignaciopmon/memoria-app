@@ -11,7 +11,6 @@ export default async function TurboPage() {
     redirect("/auth/login");
   }
 
-  // Fetch decks to pass to the component (for saving cards)
   const { data: decks } = await supabase
     .from("decks")
     .select("id, name")
@@ -20,8 +19,7 @@ export default async function TurboPage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
-      {/* Pass decks as prop */}
-      <TurboStudyFlow userDecks={decks || []} />
+      <TurboStudyFlow userDecks={decks || []} userId={user.id} />
     </div>
   );
 }
