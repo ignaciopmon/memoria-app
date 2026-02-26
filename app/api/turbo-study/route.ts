@@ -8,6 +8,7 @@ export const maxDuration = 60;
 const apiKey = process.env.GOOGLE_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
+// MANTENIDO EXACTAMENTE IGUAL QUE EN TU CÓDIGO ORIGINAL
 const MODELS = [
   "gemini-3-flash",
   "gemini-2.5-flash",
@@ -51,6 +52,12 @@ export async function POST(request: Request) {
     } else if (action === "summarize") {
          systemInstruction = "You are an elite academic summarizer. Provide a master-level, perfectly structured executive summary of the document using Markdown. Include: 1. A catchy Title. 2. A 'TL;DR' paragraph. 3. Bullet points of 'Core Concepts'. 4. A 'Key Takeaways' conclusion. Make it look beautiful and easy to read.";
          promptText = "Generate the Executive Summary.";
+    } else if (action === "generate_guide") {
+         systemInstruction = `You are an expert study coach. Create a comprehensive 'Cheat Sheet' or Study Guide from the document in ${language || 'English'}. Include: 1. A quick overview. 2. Glossary of important terms. 3. Key formulas, dates, or core principles. Use Markdown format extensively with tables if necessary.`;
+         promptText = "Create the Study Guide / Cheat Sheet.";
+    } else if (action === "create_flashcard") {
+         systemInstruction = "You are a flashcard creator. The user will provide a text excerpt. Create a concise, highly effective flashcard (front and back) based ONLY on that excerpt. Return it as a simple string formatted as: \n**Front:** [Question/Concept]\n**Back:** [Answer/Explanation]";
+         // promptText comes from the messages array
     }
 
     const parts: any[] = [];

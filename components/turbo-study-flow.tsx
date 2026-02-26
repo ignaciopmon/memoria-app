@@ -1,3 +1,4 @@
+// components/turbo-study-flow.tsx
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -11,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, Upload, AlignLeft, MessageSquare, ListTodo, Lightbulb, Languages, Zap, Quote, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, Upload, AlignLeft, MessageSquare, ListTodo, Lightbulb, Languages, Zap, Quote, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, GraduationCap, PlusCircle, Baby } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 
@@ -41,7 +42,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
   const popupRef = useRef<HTMLDivElement>(null);
 
   // Chat State
-  const [messages, setMessages] = useState<Message[]>([{ role: "model", content: "Hi! I'm your AI tutor. \n\n**✨ Magic Feature:** Select any text directly on the document to instantly translate, summarize or explain it!" }]);
+  const [messages, setMessages] = useState<Message[]>([{ role: "model", content: "Hi! I'm your AI tutor. \n\n**✨ Magic Canvas:** Select any text on the document to instantly translate, explain, or create flashcards!" }]);
   const [chatInput, setChatInput] = useState("");
   const [isChatting, setIsChatting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -60,9 +61,11 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
   const [isSaving, setIsSaving] = useState(false);
   const [saveOption, setSaveOption] = useState<"mistakes" | "all">("mistakes");
   
-  // Summary State
+  // Summary & Guide State
   const [summary, setSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [studyGuide, setStudyGuide] = useState<string | null>(null);
+  const [isGeneratingGuide, setIsGeneratingGuide] = useState(false);
 
   const { toast } = useToast();
 
@@ -70,16 +73,13 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     if (scrollRef.current) {
         scrollRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, summary]);
+  }, [messages, summary, studyGuide]);
 
-  // Robust click-outside detection for the floating menu
   useEffect(() => {
       const handleGlobalMouseDown = (e: MouseEvent) => {
-          // If we click inside the popup, do nothing (let the button handlers run)
           if (popupRef.current && popupRef.current.contains(e.target as Node)) {
               return;
           }
-          // Otherwise, clear the selection UI
           setSelection(null);
       };
       
@@ -91,8 +91,8 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 4 * 1024 * 1024) {
-        return toast({ title: "File too large", description: "Please upload a PDF smaller than 4MB.", variant: "destructive" });
+    if (file.size > 10 * 1024 * 1024) { // Increased to 10MB for better usability
+        return toast({ title: "File too large", description: "Please upload a PDF smaller than 10MB.", variant: "destructive" });
     }
 
     setIsProcessingFile(true);
@@ -118,13 +118,14 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     setPdfBase64(null);
     setPdfFile(null);
     setSummary(null);
+    setStudyGuide(null);
     setPageNumber(1);
     setScale(1.2);
-    setMessages([{ role: "model", content: "Hi! I'm your AI tutor. What would you like to learn today?" }]);
+    setMessages([{ role: "model", content: "Hi! I'm your AI tutor. \n\n**✨ Magic Canvas:** Select any text on the document to instantly translate, explain, or create flashcards!" }]);
     setTestState("setup");
   };
 
-  const handleSendMessage = async (customPrompt?: string, excerptData?: string) => {
+  const handleSendMessage = async (customPrompt?: string, excerptData?: string, actionType: string = "chat") => {
       const finalInput = customPrompt || chatInput;
       if (!finalInput.trim()) return;
       
@@ -134,7 +135,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       if(!customPrompt) setChatInput("");
       setIsChatting(true);
       
-      // Clean up selection after sending
       setSelection(null);
       window.getSelection()?.removeAllRanges();
 
@@ -147,7 +147,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           const res = await fetch("/api/turbo-study", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "chat", messages: apiMessages, pdfBase64 })
+              body: JSON.stringify({ action: actionType, messages: apiMessages, pdfBase64 })
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error);
@@ -160,9 +160,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       }
   };
 
-  // --- IMPROVED FLOATING MENU HIGHLIGHT DETECTOR ---
   const handleTextSelection = () => {
-      // Small timeout to let the browser finish its native selection process
       setTimeout(() => {
           const sel = window.getSelection();
           if (!sel || sel.isCollapsed) return;
@@ -173,7 +171,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           const range = sel.getRangeAt(0);
           const rect = range.getBoundingClientRect();
 
-          // Calculate middle top position of the selection
           setSelection({
               text,
               x: rect.left + rect.width / 2,
@@ -182,15 +179,22 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       }, 50);
   };
 
-  const executeActionOnSelection = (actionType: "explain" | "summarize" | "translate") => {
+  const executeActionOnSelection = (actionType: "explain" | "summarize" | "translate" | "eli5" | "flashcard") => {
       if (!selection) return;
       
       let prompt = "";
-      if (actionType === "explain") prompt = `Please explain the selected excerpt in simple terms.`;
+      let apiAction = "chat";
+
+      if (actionType === "explain") prompt = `Please explain the selected excerpt in detail.`;
+      if (actionType === "eli5") prompt = `Explain the selected text as if I were a 5-year-old. Use very simple analogies.`;
       if (actionType === "summarize") prompt = `Please provide a brief, easy-to-understand summary of the selected excerpt.`;
       if (actionType === "translate") prompt = `Please translate the selected excerpt to my native language and briefly explain its context.`;
+      if (actionType === "flashcard") {
+          prompt = `Create a flashcard from this text.`;
+          apiAction = "create_flashcard";
+      }
 
-      handleSendMessage(prompt, selection.text);
+      handleSendMessage(prompt, selection.text, apiAction);
   };
 
   const handleGenerateTest = async () => { 
@@ -216,6 +220,20 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           toast({ title: "Error generating summary", description: e.message, variant: "destructive" });
       } finally {
           setIsGeneratingSummary(false);
+      }
+  };
+
+  const handleGenerateGuide = async () => { 
+      setIsGeneratingGuide(true);
+      try {
+          const res = await fetch("/api/turbo-study", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate_guide", language, pdfBase64 }) });
+          const result = await res.json();
+          if (result.error) throw new Error(result.error);
+          setStudyGuide(result.data);
+      } catch (e: any) {
+          toast({ title: "Error generating guide", description: e.message, variant: "destructive" });
+      } finally {
+          setIsGeneratingGuide(false);
       }
   };
 
@@ -247,8 +265,8 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                       <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-2xl mb-2">
                           <Zap className="h-8 w-8 text-primary fill-primary/20" />
                       </div>
-                      <h1 className="text-5xl font-extrabold tracking-tight">Turbo Study <span className="text-primary text-xl align-top font-bold uppercase tracking-widest bg-primary/10 px-2 py-1 rounded-md ml-1">Pro</span></h1>
-                      <p className="text-muted-foreground text-lg max-w-lg mx-auto">Your ultra-advanced AI workspace. Extract intelligence, chat with complex documents, and master any subject instantly.</p>
+                      <h1 className="text-5xl font-extrabold tracking-tight">Turbo <span className="text-primary text-xl align-top font-bold uppercase tracking-widest bg-primary/10 px-2 py-1 rounded-md ml-1">Canvas</span></h1>
+                      <p className="text-muted-foreground text-lg max-w-lg mx-auto">Your ultimate AI workspace. Chat with documents, extract intelligence, and generate flashcards instantly.</p>
                   </div>
                   <Card className="border-muted shadow-2xl bg-card/40 backdrop-blur-xl ring-1 ring-border/50">
                       <CardContent className="pt-8 pb-8">
@@ -256,14 +274,14 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                               {isProcessingFile ? (
                                   <div className="flex flex-col items-center text-primary z-10">
                                       <Loader2 className="h-12 w-12 animate-spin mb-4" />
-                                      <p className="font-semibold text-lg tracking-wide">Initializing Neural Workspace...</p>
+                                      <p className="font-semibold text-lg tracking-wide">Initializing Neural Canvas...</p>
                                   </div>
                               ) : (
                                   <div className="flex flex-col items-center z-10 pointer-events-none">
                                       <div className="p-4 bg-background rounded-full shadow-sm mb-6 group-hover:scale-110 transition-transform duration-300">
                                           <Upload className="h-10 w-10 text-primary" />
                                       </div>
-                                      <h3 className="text-2xl font-bold mb-2">Upload a Document</h3>
+                                      <h3 className="text-2xl font-bold mb-2">Upload your Document</h3>
                                       <p className="text-muted-foreground text-center mb-6 max-w-sm">Drop your PDF here or click to browse. Let the AI do the heavy lifting.</p>
                                       <Button className="pointer-events-auto shadow-lg shadow-primary/20 h-12 px-8 text-md rounded-full" onClick={(e) => e.stopPropagation()}>
                                           <Label htmlFor="pdf-upload" className="cursor-pointer w-full h-full flex items-center">
@@ -288,35 +306,25 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           {selection && (
               <div 
                   ref={popupRef}
-                  className="fixed z-[100] flex gap-1.5 items-center bg-background/95 backdrop-blur-xl border shadow-2xl p-1.5 rounded-xl animate-in fade-in zoom-in-95 pointer-events-auto"
+                  className="fixed z-[100] flex gap-1.5 items-center bg-background/95 backdrop-blur-xl border border-border/60 shadow-2xl p-1.5 rounded-xl animate-in fade-in zoom-in-95 pointer-events-auto"
                   style={{ top: Math.max(10, selection.y - 60), left: selection.x, transform: 'translateX(-50%)' }}
               >
-                  {/* Notice the onMouseDown with e.preventDefault() -> This is the magic trick to not lose selection */}
-                  <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      className="h-9 px-3 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-600 transition-colors" 
-                      onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('explain'); }}
-                  >
+                  <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-600 transition-colors" onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('explain'); }}>
                       <Lightbulb className="w-4 h-4 mr-2 text-yellow-500" /> Explain
                   </Button>
-                  <div className="w-[1px] h-6 bg-border mx-1"></div>
-                  <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      className="h-9 px-3 rounded-lg hover:bg-blue-500/10 hover:text-blue-600 transition-colors" 
-                      onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('summarize'); }}
-                  >
-                      <AlignLeft className="w-4 h-4 mr-2 text-blue-500" /> Summarize
+                  <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-pink-500/10 hover:text-pink-600 transition-colors" onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('eli5'); }}>
+                      <Baby className="w-4 h-4 mr-2 text-pink-500" /> ELI5
                   </Button>
                   <div className="w-[1px] h-6 bg-border mx-1"></div>
-                  <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      className="h-9 px-3 rounded-lg hover:bg-green-500/10 hover:text-green-600 transition-colors" 
-                      onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('translate'); }}
-                  >
+                  <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-blue-500/10 hover:text-blue-600 transition-colors" onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('summarize'); }}>
+                      <AlignLeft className="w-4 h-4 mr-2 text-blue-500" /> Summarize
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-green-500/10 hover:text-green-600 transition-colors" onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('translate'); }}>
                       <Languages className="w-4 h-4 mr-2 text-green-500" /> Translate
+                  </Button>
+                  <div className="w-[1px] h-6 bg-border mx-1"></div>
+                  <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors" onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('flashcard'); }}>
+                      <PlusCircle className="w-4 h-4 mr-2 text-primary" /> Flashcard
                   </Button>
               </div>
           )}
@@ -332,16 +340,15 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                   </span>
               </div>
               <Button variant="ghost" size="sm" className="hover:bg-destructive/10 hover:text-destructive transition-colors" onClick={resetWorkspace}>
-                  Close Workspace
+                  Exit Canvas
               </Button>
           </div>
 
           {/* Main Workspace */}
           <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
               
-              {/* Left Panel: CUSTOM PDF VIEWER WITH NATIVE SCROLL */}
+              {/* Left Panel: CUSTOM PDF VIEWER */}
               <ResizablePanel defaultSize={50} minSize={30} className="bg-zinc-100 dark:bg-zinc-900/50 hidden md:flex flex-col border-r relative z-10">
-                  {/* PDF Toolbar */}
                   <div className="h-12 bg-background/80 border-b flex items-center justify-between px-4 shrink-0 backdrop-blur-md z-20">
                       <div className="flex items-center gap-2">
                           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageNumber(p => Math.max(1, p - 1))} disabled={pageNumber <= 1}>
@@ -365,13 +372,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                       </div>
                   </div>
 
-                  {/* PROPER PDF CONTAINER: Native overflow for smooth scrolling and zooming */}
-                  <div 
-                      className="flex-1 overflow-auto relative" 
-                      onMouseUp={handleTextSelection}
-                      onScroll={() => { if(selection) setSelection(null); }} // Hide popup gracefully on scroll
-                  >
-                      {/* min-w-max ensures the container grows if the PDF is zoomed out of bounds */}
+                  <div className="flex-1 overflow-auto relative" onMouseUp={handleTextSelection} onScroll={() => { if(selection) setSelection(null); }}>
                       <div className="flex justify-center p-8 min-h-full min-w-max">
                           {pdfFile && (
                               <Document 
@@ -385,13 +386,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                   }
                               >
                                   <div className="shadow-2xl border border-border/50 rounded-sm bg-white ring-1 ring-black/5">
-                                      <Page 
-                                          pageNumber={pageNumber} 
-                                          scale={scale} 
-                                          renderTextLayer={true}
-                                          renderAnnotationLayer={true}
-                                          className="pdf-page-container"
-                                      />
+                                      <Page pageNumber={pageNumber} scale={scale} renderTextLayer={true} renderAnnotationLayer={true} className="pdf-page-container" />
                                   </div>
                               </Document>
                           )}
@@ -404,10 +399,11 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
               {/* Right Panel: AI Tools */}
               <ResizablePanel defaultSize={50} minSize={30} className="flex flex-col bg-background/50 relative">
                   <Tabs defaultValue="chat" className="flex-1 flex flex-col h-full overflow-hidden">
-                      <TabsList className="grid w-full grid-cols-3 rounded-none h-14 border-b bg-muted/10 p-1 gap-1">
-                          <TabsTrigger value="chat" className="text-sm rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"><MessageSquare className="w-4 h-4 mr-2"/> Copilot</TabsTrigger>
-                          <TabsTrigger value="test" className="text-sm rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"><ListTodo className="w-4 h-4 mr-2"/> Quiz Maker</TabsTrigger>
-                          <TabsTrigger value="summary" className="text-sm rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"><AlignLeft className="w-4 h-4 mr-2"/> Executive Summary</TabsTrigger>
+                      <TabsList className="grid w-full grid-cols-4 rounded-none h-14 border-b bg-muted/10 p-1 gap-1">
+                          <TabsTrigger value="chat" className="text-xs sm:text-sm rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"><MessageSquare className="w-4 h-4 sm:mr-2"/><span className="hidden sm:inline">Copilot</span></TabsTrigger>
+                          <TabsTrigger value="guide" className="text-xs sm:text-sm rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"><GraduationCap className="w-4 h-4 sm:mr-2"/><span className="hidden sm:inline">Study Guide</span></TabsTrigger>
+                          <TabsTrigger value="test" className="text-xs sm:text-sm rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"><ListTodo className="w-4 h-4 sm:mr-2"/><span className="hidden sm:inline">Quiz Maker</span></TabsTrigger>
+                          <TabsTrigger value="summary" className="text-xs sm:text-sm rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"><AlignLeft className="w-4 h-4 sm:mr-2"/><span className="hidden sm:inline">Summary</span></TabsTrigger>
                       </TabsList>
 
                       {/* CHAT TAB */}
@@ -420,7 +416,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                           <div className={`p-4 rounded-2xl max-w-[85%] text-[15px] leading-relaxed shadow-sm flex flex-col gap-3 ${msg.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-card border rounded-tl-sm prose dark:prose-invert prose-p:leading-relaxed prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800'}`}>
                                               {msg.role === 'user' ? msg.content : <ReactMarkdown>{msg.content}</ReactMarkdown>}
                                               
-                                              {/* Beautiful Smart Attachment for Excerpts */}
                                               {msg.excerpt && (
                                                   <div className="bg-primary-foreground/10 border border-primary-foreground/20 rounded-xl p-3 text-sm mt-1">
                                                       <div className="flex items-center gap-2 font-semibold text-primary-foreground/90 mb-2 text-xs uppercase tracking-wider">
@@ -445,6 +440,20 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                           </div>
                                       </div>
                                   )}
+                                  
+                                  {/* Quick Prompts when chat is empty */}
+                                  {messages.length === 1 && !isChatting && (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8 animate-in fade-in">
+                                          <Button variant="outline" className="h-auto py-3 px-4 justify-start text-left font-normal border-primary/20 hover:bg-primary/5" onClick={() => handleSendMessage("What are the main topics covered in this document?")}>
+                                              <Lightbulb className="h-4 w-4 mr-3 text-yellow-500 shrink-0" />
+                                              What are the main topics covered?
+                                          </Button>
+                                          <Button variant="outline" className="h-auto py-3 px-4 justify-start text-left font-normal border-primary/20 hover:bg-primary/5" onClick={() => handleSendMessage("Ask me a hard question to test my understanding.")}>
+                                              <ListTodo className="h-4 w-4 mr-3 text-blue-500 shrink-0" />
+                                              Test me with a hard question
+                                          </Button>
+                                      </div>
+                                  )}
                                   <div ref={scrollRef} />
                               </div>
                           </div>
@@ -458,7 +467,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                           <Textarea 
                                               value={chatInput} 
                                               onChange={e => setChatInput(e.target.value)}
-                                              placeholder="Ask a question or select text on the PDF to use Magic Actions..." 
+                                              placeholder="Ask anything, or select text in the PDF to use Magic Actions..." 
                                               className="min-h-[52px] max-h-[200px] border-0 focus-visible:ring-0 resize-y bg-transparent py-3 px-4 text-[15px]"
                                               onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
                                           />
@@ -468,6 +477,71 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                       </div>
                                   </form>
                               </div>
+                          </div>
+                      </TabsContent>
+
+                      {/* STUDY GUIDE TAB (NEW) */}
+                      <TabsContent value="guide" className="flex-1 overflow-auto p-4 sm:p-8 m-0 bg-background data-[state=inactive]:hidden">
+                          <div className="max-w-3xl mx-auto h-full flex flex-col">
+                              {!studyGuide && !isGeneratingGuide && (
+                                  <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                                      <div className="bg-primary/10 p-5 rounded-3xl shadow-inner border border-primary/10">
+                                          <GraduationCap className="h-10 w-10 text-primary" />
+                                      </div>
+                                      <div className="space-y-2">
+                                          <h2 className="text-3xl font-bold">Smart Cheat Sheet</h2>
+                                          <p className="text-muted-foreground text-lg max-w-md mx-auto">Generate a complete study guide with glossaries, key formulas, and core principles instantly.</p>
+                                      </div>
+                                      
+                                      <div className="w-full max-w-xs space-y-3 mt-4 text-left">
+                                          <Label className="text-sm font-semibold uppercase tracking-wider text-muted-foreground ml-1">Language</Label>
+                                          <Select value={language} onValueChange={setLanguage}>
+                                              <SelectTrigger className="h-12 bg-background shadow-sm"><SelectValue /></SelectTrigger>
+                                              <SelectContent>
+                                                  <SelectItem value="English">English</SelectItem>
+                                                  <SelectItem value="Spanish">Spanish</SelectItem>
+                                                  <SelectItem value="Portuguese">Portuguese</SelectItem>
+                                              </SelectContent>
+                                          </Select>
+                                      </div>
+
+                                      <Button size="lg" onClick={handleGenerateGuide} className="w-full max-w-xs h-14 text-lg rounded-xl shadow-lg shadow-primary/20">
+                                          Generate Guide <Sparkles className="ml-2 h-5 w-5" />
+                                      </Button>
+                                  </div>
+                              )}
+
+                              {isGeneratingGuide && (
+                                  <div className="flex flex-col items-center justify-center h-full gap-6">
+                                      <div className="relative">
+                                          <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse"></div>
+                                          <Loader2 className="h-16 w-16 animate-spin text-primary relative z-10" />
+                                      </div>
+                                      <div className="text-center space-y-2">
+                                          <p className="text-2xl font-bold">Structuring knowledge...</p>
+                                          <p className="text-muted-foreground">Building your personal cheat sheet.</p>
+                                      </div>
+                                  </div>
+                              )}
+
+                              {studyGuide && (
+                                  <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-8 mt-4">
+                                      <div className="flex justify-between items-center bg-muted/30 p-4 rounded-xl border">
+                                          <div className="flex items-center gap-3">
+                                              <div className="bg-primary/20 p-2 rounded-lg"><GraduationCap className="h-5 w-5 text-primary"/></div>
+                                              <h2 className="text-xl font-bold">Study Guide</h2>
+                                          </div>
+                                          <Button variant="outline" size="sm" onClick={handleGenerateGuide} className="h-9">Regenerate</Button>
+                                      </div>
+                                      <Card className="border-border shadow-xl">
+                                          <CardContent className="p-8 sm:p-10">
+                                              <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-bold prose-h1:text-3xl prose-h2:text-2xl prose-a:text-primary prose-li:marker:text-primary prose-table:border-collapse prose-td:border prose-td:p-2 prose-th:border prose-th:p-2 prose-th:bg-muted/50">
+                                                  <ReactMarkdown>{studyGuide}</ReactMarkdown>
+                                              </div>
+                                          </CardContent>
+                                      </Card>
+                                  </div>
+                              )}
                           </div>
                       </TabsContent>
 
@@ -503,8 +577,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                                           <SelectContent>
                                                               <SelectItem value="English">English</SelectItem>
                                                               <SelectItem value="Spanish">Spanish</SelectItem>
-                                                              <SelectItem value="French">French</SelectItem>
-                                                              <SelectItem value="German">German</SelectItem>
+                                                              <SelectItem value="Portuguese">Portuguese</SelectItem>
                                                           </SelectContent>
                                                       </Select>
                                                   </div>
