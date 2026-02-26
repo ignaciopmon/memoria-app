@@ -194,8 +194,8 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
 
           // Parse simple formatting "**Front:** X \n **Back:** Y"
           const resultStr = data.data;
-          const frontMatch = resultStr.match(/\*\*Front:\*\*\s*(.+?)(?=\*\*Back:\*\*|$)/is);
-          const backMatch = resultStr.match(/\*\*Back:\*\*\s*(.+)$/is);
+          const frontMatch = resultStr.match(/\*\*Front:\*\*\s*([\s\S]+?)(?=\*\*Back:\*\*|$)/i);
+          const backMatch = resultStr.match(/\*\*Back:\*\*\s*([\s\S]+)$/i);
           
           setFlashcardDraft({
               front: frontMatch ? frontMatch[1].trim() : "Concept from text",
