@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, FileText, Youtube, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, BookOpen, Upload } from "lucide-react";
+import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, BookOpen, Upload } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 
@@ -19,17 +19,13 @@ type Question = { question: string; options: { [key: string]: string }; answer: 
 type WrongAnswer = Question & { userAnswer: string };
 
 export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: string }[] }) {
-  const [sourceType, setSourceType] = useState<"pdf" | "youtube" | null>(null);
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
-  const [youtubeTranscript, setYoutubeTranscript] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
-  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isReady, setIsReady] = useState(false);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
-  const [isProcessingYoutube, setIsProcessingYoutube] = useState(false);
 
   // Chat State
-  const [messages, setMessages] = useState<Message[]>([{ role: "model", content: "Hi! I have analyzed your material. What questions do you have or what concepts would you like me to explain?" }]);
+  const [messages, setMessages] = useState<Message[]>([{ role: "model", content: "Hi! I have analyzed your document. What questions do you have or what concepts would you like me to explain?" }]);
   const [chatInput, setChatInput] = useState("");
   const [isChatting, setIsChatting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -43,6 +39,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
   const [userAnswers, setUserAnswers] = useState<string[]>([]);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   
+  // Save State
   const [selectedDeckId, setSelectedDeckId] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   
@@ -79,85 +76,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     reader.readAsDataURL(file);
   };
 
-  // ==========================================
-  // EXTRACCIÓN CLIENT-SIDE NATIVA (Sin webs de terceros)
-  // ==========================================
-  const handleStartWithYoutube = async () => {
-      const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
-      const match = youtubeUrl.match(regex);
-      const videoId = match ? match[1] : null;
-
-      if (!videoId) {
-          return toast({ title: "URL Inválida", description: "Por favor introduce un enlace válido de YouTube.", variant: "destructive" });
-      }
-      
-      setIsProcessingYoutube(true);
-      try {
-          // El navegador se conecta directamente a la página de YouTube usando un proxy neutral para evitar el bloqueo CORS del navegador
-          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}`;
-          const response = await fetch(proxyUrl);
-          
-          if (!response.ok) throw new Error("Fallo de red al conectar con YouTube.");
-          
-          const html = await response.text();
-
-          // Buscamos los metadatos oficiales de subtítulos dentro del código de YouTube
-          let captionsData;
-          const captionsMatch = html.match(/"captions":\s*({.*?})/);
-          
-          if (captionsMatch) {
-              try { captionsData = JSON.parse(captionsMatch[1]); } catch(e) {}
-          } else {
-              const playerResMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.+?})\s*;/);
-              if (playerResMatch) {
-                  try { captionsData = JSON.parse(playerResMatch[1])?.captions; } catch(e) {}
-              }
-          }
-
-          if (!captionsData || !captionsData.playerCaptionsTracklistRenderer || !captionsData.playerCaptionsTracklistRenderer.captionTracks) {
-              throw new Error("El vídeo no tiene subtítulos disponibles o están desactivados.");
-          }
-
-          // Seleccionamos la pista en Español o Inglés por defecto
-          const tracks = captionsData.playerCaptionsTracklistRenderer.captionTracks;
-          const track = tracks.find((t: any) => t.languageCode.startsWith('es')) || 
-                        tracks.find((t: any) => t.languageCode.startsWith('en')) || 
-                        tracks[0];
-
-          // Descargamos el archivo XML puro de los subtítulos de Google usando el mismo proxy
-          const xmlRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(track.baseUrl)}`);
-          const xml = await xmlRes.text();
-
-          // Parseamos el XML
-          const textRegex = /<text[^>]*>(.*?)<\/text>/g;
-          let transcript = '';
-          let m;
-          while ((m = textRegex.exec(xml)) !== null) {
-              let clean = m[1]
-                  .replace(/<[^>]+>/g, '')
-                  .replace(/&amp;/g, '&')
-                  .replace(/&lt;/g, '<')
-                  .replace(/&gt;/g, '>')
-                  .replace(/&#39;/g, "'")
-                  .replace(/&quot;/g, '"');
-              transcript += clean + ' ';
-          }
-
-          if (transcript.length < 50) {
-              throw new Error("Se descargaron los subtítulos pero el archivo estaba casi vacío.");
-          }
-
-          setYoutubeTranscript(transcript.trim());
-          setIsReady(true);
-          toast({ title: "Vídeo procesado", description: "Transcripción nativa extraída con éxito." });
-
-      } catch (e: any) {
-          toast({ title: "Error extrayendo vídeo", description: e.message, variant: "destructive" });
-      } finally {
-          setIsProcessingYoutube(false);
-      }
-  };
-
   const handleSendMessage = async () => {
       if (!chatInput.trim()) return;
       
@@ -173,8 +91,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
               body: JSON.stringify({
                   action: "chat",
                   messages: newMessages,
-                  pdfBase64,
-                  youtubeTranscript
+                  pdfBase64
               })
           });
           const data = await res.json();
@@ -198,8 +115,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                   action: "generate_test",
                   questionCount,
                   language,
-                  pdfBase64,
-                  youtubeTranscript
+                  pdfBase64
               })
           });
           const result = await res.json();
@@ -257,81 +173,39 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
 
   if (!isReady) {
       return (
-          <div className="max-w-2xl mx-auto mt-12 animate-in fade-in slide-in-from-bottom-4 w-full">
+          <div className="max-w-xl mx-auto mt-12 animate-in fade-in slide-in-from-bottom-4 w-full">
               <Card className="border-muted shadow-xl">
                   <CardHeader className="text-center">
                       <div className="mx-auto bg-primary/10 p-4 rounded-full w-fit mb-4">
                           <BookOpen className="h-8 w-8 text-primary" />
                       </div>
                       <CardTitle className="text-3xl font-bold">Turbo Study</CardTitle>
-                      <CardDescription className="text-lg">Upload a document or paste a link to start studying with AI.</CardDescription>
+                      <CardDescription className="text-lg">Upload a document to start studying with AI.</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
-                          <div 
-                              className={`cursor-pointer border-2 rounded-xl p-6 flex flex-col items-center gap-3 transition-all ${sourceType === "pdf" ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
-                              onClick={() => setSourceType("pdf")}
-                          >
-                              <FileText className={`h-8 w-8 ${sourceType === "pdf" ? "text-primary" : "text-muted-foreground"}`} />
-                              <span className="font-semibold">PDF Document</span>
-                          </div>
-                          <div 
-                              className={`cursor-pointer border-2 rounded-xl p-6 flex flex-col items-center gap-3 transition-all ${sourceType === "youtube" ? "border-red-500 bg-red-500/5" : "hover:border-red-500/50"}`}
-                              onClick={() => setSourceType("youtube")}
-                          >
-                              <Youtube className={`h-8 w-8 ${sourceType === "youtube" ? "text-red-500" : "text-muted-foreground"}`} />
-                              <span className="font-semibold">YouTube Video</span>
-                          </div>
+                  <CardContent className="pt-4 pb-8">
+                      <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-xl bg-muted/20 hover:bg-muted/40 transition-colors">
+                          {isProcessingFile ? (
+                              <div className="flex flex-col items-center text-primary">
+                                  <Loader2 className="h-10 w-10 animate-spin mb-4" />
+                                  <p className="font-medium text-lg">Reading document...</p>
+                              </div>
+                          ) : (
+                              <>
+                                  <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                                  <Label htmlFor="pdf-upload" className="cursor-pointer bg-primary text-primary-foreground px-8 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors text-lg">
+                                      Select PDF File
+                                  </Label>
+                                  <Input 
+                                      id="pdf-upload"
+                                      type="file" 
+                                      accept=".pdf" 
+                                      onChange={handleFileUpload} 
+                                      className="hidden" 
+                                  />
+                                  <p className="text-sm text-muted-foreground mt-4">Max size: 4MB</p>
+                              </>
+                          )}
                       </div>
-
-                      {sourceType === "pdf" && (
-                          <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl bg-muted/20">
-                              {isProcessingFile ? (
-                                  <div className="flex flex-col items-center text-primary">
-                                      <Loader2 className="h-10 w-10 animate-spin mb-4" />
-                                      <p className="font-medium">Reading document...</p>
-                                  </div>
-                              ) : (
-                                  <>
-                                      <Upload className="h-10 w-10 text-muted-foreground mb-4" />
-                                      <Label htmlFor="pdf-upload" className="cursor-pointer bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors">
-                                          Select PDF File
-                                      </Label>
-                                      <Input 
-                                          id="pdf-upload"
-                                          type="file" 
-                                          accept=".pdf" 
-                                          onChange={handleFileUpload} 
-                                          className="hidden" 
-                                      />
-                                      <p className="text-xs text-muted-foreground mt-4">Max size: 4MB</p>
-                                  </>
-                              )}
-                          </div>
-                      )}
-
-                      {sourceType === "youtube" && (
-                          <div className="space-y-4">
-                              <Input 
-                                  placeholder="https://www.youtube.com/watch?v=..." 
-                                  value={youtubeUrl} 
-                                  onChange={e => setYoutubeUrl(e.target.value)}
-                                  className="h-12 text-base"
-                                  disabled={isProcessingYoutube}
-                              />
-                              <Button 
-                                className="w-full h-12 text-base" 
-                                onClick={handleStartWithYoutube} 
-                                disabled={!youtubeUrl || isProcessingYoutube}
-                              >
-                                  {isProcessingYoutube ? (
-                                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Descargando subtítulos...</>
-                                  ) : (
-                                      "Load Video Transcript"
-                                  )}
-                              </Button>
-                          </div>
-                      )}
                   </CardContent>
               </Card>
           </div>
@@ -342,19 +216,18 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       <div className="max-w-5xl mx-auto h-[80vh] flex flex-col mt-4 border rounded-xl shadow-lg overflow-hidden bg-background w-full">
           <div className="bg-muted/30 p-4 border-b flex justify-between items-center">
               <div className="flex items-center gap-2 overflow-hidden">
-                  <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                  <FileText className="h-5 w-5 text-primary shrink-0" />
                   <span className="font-semibold truncate max-w-[200px] sm:max-w-[400px]">
-                      {sourceType === 'pdf' ? fileName : 'YouTube Material'}
+                      {fileName}
                   </span>
               </div>
               <Button variant="ghost" size="sm" onClick={() => {
                   setIsReady(false);
                   setPdfBase64(null);
-                  setYoutubeTranscript(null);
-                  setMessages([{ role: "model", content: "Hi! I have analyzed your material. What questions do you have or what concepts would you like me to explain?" }]);
+                  setMessages([{ role: "model", content: "Hi! I have analyzed your document. What questions do you have or what concepts would you like me to explain?" }]);
                   setTestState("setup");
               }}>
-                  Change Material
+                  Change Document
               </Button>
           </div>
 
@@ -447,7 +320,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                       {testState === "generating" && (
                           <div className="flex flex-col items-center justify-center h-full gap-4">
                               <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                              <p className="text-lg font-medium">The AI is analyzing the material and creating questions...</p>
+                              <p className="text-lg font-medium">The AI is analyzing the document and creating questions...</p>
                           </div>
                       )}
 

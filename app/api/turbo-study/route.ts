@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { action, messages, pdfBase64, youtubeTranscript, questionCount, language } = body;
+    const { action, messages, pdfBase64, questionCount, language } = body;
 
     let systemInstruction = "You are an expert and friendly AI tutor. Your goal is to help the user study the provided material. Focus on explaining the main themes and core concepts. You may use your general knowledge to complement the explanations, but do not hallucinate information unrelated to the subjects of the document.";
     let promptText = messages?.[messages.length - 1]?.content || "";
@@ -51,16 +51,10 @@ export async function POST(request: Request) {
 
     const parts: any[] = [];
     
-    // El texto del PDF si existe
     if (pdfBase64) {
         parts.push({
             inlineData: { data: pdfBase64, mimeType: "application/pdf" }
         });
-    }
-    
-    // El texto del vídeo, que ahora viene directamente YA EXTRAÍDO desde el frontend
-    if (youtubeTranscript) {
-        parts.push({ text: `Study Material (YouTube Video Transcript):\n\n${youtubeTranscript}\n\n---\nPlease use the main topics from the transcript above as the primary basis for your response.` });
     }
     
     if (action === 'chat' && messages && messages.length > 1) {
