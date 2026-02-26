@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,11 +18,23 @@ import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 
 import { createClient } from "@/lib/supabase/client";
-import { Document, Page, pdfjs } from 'react-pdf';
+
+// 🚀 FIX: Importar CSS nativos de react-pdf
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// 🚀 FIX: Forzar la carga dinámica para evitar "DOMMatrix is not defined" en SSR (Vercel)
+const Document = dynamic(() => import('react-pdf').then(mod => mod.Document), { 
+    ssr: false,
+    loading: () => (
+        <div className="flex flex-col items-center mt-32 text-muted-foreground">
+            <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
+            <p>Initializing PDF Engine...</p>
+        </div>
+    )
+});
+
+const Page = dynamic(() => import('react-pdf').then(mod => mod.Page), { ssr: false });
 
 const supabase = createClient();
 
@@ -45,6 +58,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
   const [fileName, setFileName] = useState("");
   const [isReady, setIsReady] = useState(false);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Custom PDF Viewer State
   const [numPages, setNumPages] = useState<number>(0);
@@ -82,6 +96,15 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
   const [isGeneratingGuide, setIsGeneratingGuide] = useState(false);
 
   const { toast } = useToast();
+
+  // 🚀 FIX: Inicializar el Worker de PDF de forma segura solo en cliente
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+        import('react-pdf').then(({ pdfjs }) => {
+            pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+        });
+    }
+  }, []);
 
   // --- PERSISTENCE: INITIAL LOAD ---
   useEffect(() => {
@@ -207,10 +230,17 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
       }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeNotebook) return;
-    if (file.size > 10 * 1024 * 1024) return toast({ title: "File too large", variant: "destructive" });
+  // 🚀 MEJORA: Centralizamos la lógica de subida para usarla con Clicks y con Drag & Drop
+  const processPdfFile = async (file: File) => {
+    if (!activeNotebook) return;
+    
+    // Validación estricta
+    if (file.type !== "application/pdf") {
+        return toast({ title: "Invalid File Type", description: "Please upload a valid PDF document.", variant: "destructive" });
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        return toast({ title: "File too large", description: "Maximum file size allowed is 10MB.", variant: "destructive" });
+    }
 
     setIsProcessingFile(true);
 
@@ -244,6 +274,30 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
     };
     reader.readAsDataURL(file);
   };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processPdfFile(file);
+  };
+
+  // 🚀 MEJORA: Eventos para Drag & Drop
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) processPdfFile(file);
+  }, [activeNotebook]);
+
 
   const handleSendMessage = async (customPrompt?: string, excerptData?: string, actionType: string = "chat") => {
       const finalInput = customPrompt || chatInput;
@@ -473,7 +527,14 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                   </div>
                   <Card className="border-muted shadow-2xl bg-card/40 backdrop-blur-xl ring-1 ring-border/50">
                       <CardContent className="pt-8 pb-8">
-                          <div className="flex flex-col items-center justify-center p-14 border-2 border-dashed border-primary/20 rounded-2xl bg-muted/10 hover:bg-muted/30 transition-all duration-300 group cursor-pointer relative overflow-hidden" onClick={() => !isProcessingFile && document.getElementById('pdf-upload')?.click()}>
+                          {/* 🚀 MEJORA: Incorporación de Eventos Drag & Drop */}
+                          <div 
+                              className={`flex flex-col items-center justify-center p-14 border-2 border-dashed rounded-2xl transition-all duration-300 group cursor-pointer relative overflow-hidden ${isDragging ? 'border-primary bg-primary/10 scale-[1.02]' : 'border-primary/20 bg-muted/10 hover:bg-muted/30'}`} 
+                              onClick={() => !isProcessingFile && document.getElementById('pdf-upload')?.click()}
+                              onDragOver={handleDragOver}
+                              onDragLeave={handleDragLeave}
+                              onDrop={handleDrop}
+                          >
                               {isProcessingFile ? (
                                   <div className="flex flex-col items-center text-primary z-10">
                                       <Loader2 className="h-12 w-12 animate-spin mb-4" />
@@ -481,9 +542,13 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                                   </div>
                               ) : (
                                   <div className="flex flex-col items-center z-10 pointer-events-none">
-                                      <div className="p-4 bg-background rounded-full shadow-sm mb-6 group-hover:scale-110 transition-transform duration-300"><Upload className="h-10 w-10 text-primary" /></div>
-                                      <h3 className="text-2xl font-bold mb-2">Add Source Document</h3>
-                                      <p className="text-muted-foreground text-center mb-6 max-w-sm">Drop your PDF here to persist it in this workspace.</p>
+                                      <div className={`p-4 bg-background rounded-full shadow-sm mb-6 transition-transform duration-300 ${isDragging ? 'scale-125' : 'group-hover:scale-110'}`}>
+                                          <Upload className={`h-10 w-10 ${isDragging ? 'text-primary' : 'text-primary/70'}`} />
+                                      </div>
+                                      <h3 className="text-2xl font-bold mb-2">{isDragging ? 'Drop it here!' : 'Add Source Document'}</h3>
+                                      <p className="text-muted-foreground text-center mb-6 max-w-sm">
+                                          Drag & Drop your PDF here or click to browse. Max size 10MB.
+                                      </p>
                                       <Button className="pointer-events-auto shadow-lg shadow-primary/20 h-12 px-8 text-md rounded-full" onClick={(e) => e.stopPropagation()}>
                                           <Label htmlFor="pdf-upload" className="cursor-pointer w-full h-full flex items-center">Select File</Label>
                                       </Button>
@@ -595,7 +660,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                   <div className="flex-1 overflow-auto relative" onMouseUp={handleTextSelection} onScroll={() => { if(selection) setSelection(null); }}>
                       <div className="flex justify-center p-8 min-h-full min-w-max">
                           {pdfFile && (
-                              <Document file={pdfFile} onLoadSuccess={({ numPages }) => setNumPages(numPages)} loading={<div className="flex flex-col items-center mt-32 text-muted-foreground"><Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" /><p>Rendering document...</p></div>}>
+                              <Document file={pdfFile} onLoadSuccess={({ numPages }) => setNumPages(numPages)}>
                                   <div className="shadow-2xl border border-border/50 rounded-sm bg-white ring-1 ring-black/5">
                                       <Page pageNumber={pageNumber} scale={scale} renderTextLayer={true} renderAnnotationLayer={true} className="pdf-page-container" />
                                   </div>
