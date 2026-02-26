@@ -9,11 +9,11 @@ export const maxDuration = 60; // Prevent timeout
 const apiKey = process.env.GOOGLE_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
-// Tu sistema de fallback
+// Modelos nativos estables para respaldo
 const MODELS = [
   "gemini-2.5-flash",
-  "gemma-3-27b",
-  "gemma-3-12b"
+  "gemini-1.5-pro",
+  "gemini-1.5-flash"
 ];
 
 function cleanAndParseJSON(text: string) {
@@ -39,13 +39,31 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { action, messages, pdfBase64, youtubeUrl, questionCount, language } = body;
+    const { action, messages, pdfBase64, youtubeUrl, youtubeTranscript, questionCount, language } = body;
     
-    // 1. PROMPT DEL CHAT MEJORADO
+    // ==========================================
+    // NUEVA ACCIÓN: OBTENER TRANSCRIPCIÓN (1 SOLA VEZ)
+    // ==========================================
+    if (action === "fetch_youtube") {
+        const videoId = extractYoutubeId(youtubeUrl);
+        if (!videoId) return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
+        
+        try {
+            const transcript = await YoutubeTranscript.fetchTranscript(videoId);
+            const fullText = transcript.map(t => t.text).join(' ');
+            return NextResponse.json({ data: fullText });
+        } catch (error: any) {
+            console.error("Transcript fetch error:", error);
+            return NextResponse.json({ 
+                error: "Could not fetch YouTube subtitles. The video might not have captions enabled, or YouTube is blocking the request." 
+            }, { status: 400 });
+        }
+    }
+    // ==========================================
+
     let systemInstruction = "You are an expert and friendly AI tutor. Your goal is to help the user study the provided material. Focus on explaining the main themes and core concepts. You may use your general knowledge to complement the explanations, but do not hallucinate information unrelated to the subjects of the document.";
     let promptText = messages?.[messages.length - 1]?.content || "";
     
-    // 2. PROMPT DEL TEST ALTAMENTE ESTRICTO (Conceptos generales + Info externa)
     if (action === "generate_test") {
          systemInstruction = `You are an expert university professor creating a multiple-choice test. 
          Generate exactly ${questionCount} questions in ${language} about the MAIN TOPICS discussed in the provided material.
@@ -71,25 +89,9 @@ export async function POST(request: Request) {
         });
     }
     
-    // PROCESAMIENTO DE YOUTUBE (Anti-Alucinaciones)
-    if (youtubeUrl) {
-        try {
-            const videoId = extractYoutubeId(youtubeUrl);
-            if (!videoId) throw new Error("Invalid YouTube URL");
-            
-            // Intentamos sacar los subtítulos sí o sí
-            const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-            const fullText = transcript.map(t => t.text).join(' ');
-            
-            parts.push({ text: `Study Material (YouTube Video Transcript):\n\n${fullText}\n\n---\nPlease use the main topics from the transcript above as the primary basis for your response.` });
-        } catch (error: any) {
-            console.error("Transcript fetch error:", error);
-            // IMPORTANTE: Si falla, devolvemos un ERROR 400. 
-            // Esto evita que la IA reciba solo un link y se invente la historia.
-            return NextResponse.json({ 
-                error: "Could not fetch YouTube subtitles. The video might not have captions enabled, or YouTube is blocking the request. Please try another video or upload a PDF." 
-            }, { status: 400 });
-        }
+    // PROCESAMIENTO DE YOUTUBE (Evita volver a descargar)
+    if (youtubeTranscript) {
+        parts.push({ text: `Study Material (YouTube Video Transcript):\n\n${youtubeTranscript}\n\n---\nPlease use the main topics from the transcript above as the primary basis for your response.` });
     }
     
     // Añadir historial de chat

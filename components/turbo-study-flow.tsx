@@ -21,10 +21,12 @@ type WrongAnswer = Question & { userAnswer: string };
 export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: string }[] }) {
   const [sourceType, setSourceType] = useState<"pdf" | "youtube" | null>(null);
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [youtubeTranscript, setYoutubeTranscript] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isReady, setIsReady] = useState(false);
-  const [isProcessingFile, setIsProcessingFile] = useState(false); // NUEVO ESTADO
+  const [isProcessingFile, setIsProcessingFile] = useState(false); 
+  const [isProcessingYoutube, setIsProcessingYoutube] = useState(false);
 
   // Chat State
   const [messages, setMessages] = useState<Message[]>([{ role: "model", content: "Hi! I have analyzed your material. What questions do you have or what concepts would you like me to explain?" }]);
@@ -53,12 +55,10 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     }
   }, [messages]);
 
-  // Handle File Upload (Convert to Base64) with improvements
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (limit to ~4MB to avoid serverless payload limits)
     if (file.size > 4 * 1024 * 1024) {
         return toast({ 
             title: "File too large", 
@@ -84,11 +84,29 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     reader.readAsDataURL(file);
   };
 
-  const handleStartWithYoutube = () => {
+  const handleStartWithYoutube = async () => {
       if (!youtubeUrl.includes("youtube.com") && !youtubeUrl.includes("youtu.be")) {
           return toast({ title: "Invalid URL", description: "Please enter a valid YouTube link.", variant: "destructive" });
       }
-      setIsReady(true);
+      
+      setIsProcessingYoutube(true);
+      try {
+          const res = await fetch("/api/turbo-study", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "fetch_youtube", youtubeUrl })
+          });
+          const data = await res.json();
+          
+          if (data.error) throw new Error(data.error);
+          
+          setYoutubeTranscript(data.data);
+          setIsReady(true);
+      } catch (e: any) {
+          toast({ title: "Error loading video", description: e.message, variant: "destructive" });
+      } finally {
+          setIsProcessingYoutube(false);
+      }
   };
 
   const handleSendMessage = async () => {
@@ -107,7 +125,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                   action: "chat",
                   messages: newMessages,
                   pdfBase64,
-                  youtubeUrl: sourceType === 'youtube' ? youtubeUrl : null
+                  youtubeTranscript
               })
           });
           const data = await res.json();
@@ -132,7 +150,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                   questionCount,
                   language,
                   pdfBase64,
-                  youtubeUrl: sourceType === 'youtube' ? youtubeUrl : null
+                  youtubeTranscript
               })
           });
           const result = await res.json();
@@ -250,9 +268,18 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                   value={youtubeUrl} 
                                   onChange={e => setYoutubeUrl(e.target.value)}
                                   className="h-12 text-base"
+                                  disabled={isProcessingYoutube}
                               />
-                              <Button className="w-full h-12 text-base" onClick={handleStartWithYoutube} disabled={!youtubeUrl}>
-                                  Load Video Transcript
+                              <Button 
+                                className="w-full h-12 text-base" 
+                                onClick={handleStartWithYoutube} 
+                                disabled={!youtubeUrl || isProcessingYoutube}
+                              >
+                                  {isProcessingYoutube ? (
+                                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Extracting transcript...</>
+                                  ) : (
+                                      "Load Video Transcript"
+                                  )}
                               </Button>
                           </div>
                       )}
@@ -273,6 +300,8 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
               </div>
               <Button variant="ghost" size="sm" onClick={() => {
                   setIsReady(false);
+                  setPdfBase64(null);
+                  setYoutubeTranscript(null);
                   setMessages([{ role: "model", content: "Hi! I have analyzed your material. What questions do you have or what concepts would you like me to explain?" }]);
                   setTestState("setup");
               }}>
