@@ -11,11 +11,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, BookOpen, Upload, AlignLeft, MessageSquare, ListTodo, ClipboardPaste, Lightbulb, Languages, Zap } from "lucide-react";
+import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, BookOpen, Upload, AlignLeft, MessageSquare, ListTodo, ClipboardPaste, Lightbulb, Languages, Zap, Quote } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 
-type Message = { role: "user" | "model"; content: string };
+// Added 'excerpt' to hold the raw copied text cleanly
+type Message = { role: "user" | "model"; content: string; excerpt?: string };
 type Question = { question: string; options: { [key: string]: string }; answer: string; explanation?: string };
 type WrongAnswer = Question & { userAnswer: string };
 
@@ -96,20 +97,27 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     setTestState("setup");
   };
 
-  const handleSendMessage = async (customPrompt?: string) => {
+  const handleSendMessage = async (customPrompt?: string, excerptData?: string) => {
       const finalInput = customPrompt || chatInput;
       if (!finalInput.trim()) return;
       
-      const newMessages = [...messages, { role: "user", content: finalInput } as Message];
+      const newMessage: Message = { role: "user", content: finalInput, excerpt: excerptData };
+      const newMessages = [...messages, newMessage];
       setMessages(newMessages);
       if(!customPrompt) setChatInput("");
       setIsChatting(true);
+
+      // Format messages for the AI, injecting the excerpt cleanly so it has the context
+      const apiMessages = newMessages.map(msg => ({
+          role: msg.role,
+          content: msg.excerpt ? `${msg.content}\n\n[USER SELECTED EXCERPT]:\n"""\n${msg.excerpt}\n"""` : msg.content
+      }));
 
       try {
           const res = await fetch("/api/turbo-study", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "chat", messages: newMessages, pdfBase64 })
+              body: JSON.stringify({ action: "chat", messages: apiMessages, pdfBase64 })
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error);
@@ -131,13 +139,14 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           }
 
           let prompt = "";
-          if (actionType === "explain") prompt = `Please explain this excerpt from the document in simple terms:\n\n> "${text}"`;
-          if (actionType === "summarize") prompt = `Please provide a brief, easy-to-understand summary of this excerpt:\n\n> "${text}"`;
-          if (actionType === "translate") prompt = `Please translate this excerpt to my native language and briefly explain its context:\n\n> "${text}"`;
+          if (actionType === "explain") prompt = `Please explain the selected excerpt in simple terms.`;
+          if (actionType === "summarize") prompt = `Please provide a brief, easy-to-understand summary of the selected excerpt.`;
+          if (actionType === "translate") prompt = `Please translate the selected excerpt to my native language and briefly explain its context.`;
 
-          handleSendMessage(prompt);
+          // Pass both the command and the raw text
+          handleSendMessage(prompt, text);
       } catch (err) {
-          toast({ title: "Clipboard access denied", description: "Please paste the text manually or allow clipboard permissions.", variant: "destructive" });
+          toast({ title: "Clipboard access denied", description: "Please allow clipboard permissions in your browser.", variant: "destructive" });
       }
   };
 
@@ -195,7 +204,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     if (!selectedDeckId) return toast({ title: "Select a deck", variant: "destructive" });
     setIsSaving(true);
     
-    // Choose which cards to save based on user's selection
     const cardsToProcess = saveOption === "all" ? questions : wrongAnswers;
     
     const formattedCards = cardsToProcess.map((q: any) => ({
@@ -308,8 +316,21 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                   {messages.map((msg, i) => (
                                       <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
                                           {msg.role === 'model' && <div className="bg-primary/10 border border-primary/20 p-2.5 rounded-xl h-fit shadow-sm"><Bot className="h-5 w-5 text-primary" /></div>}
-                                          <div className={`p-4 rounded-2xl max-w-[85%] text-[15px] leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-card border rounded-tl-sm prose dark:prose-invert prose-p:leading-relaxed prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800'}`}>
+                                          <div className={`p-4 rounded-2xl max-w-[85%] text-[15px] leading-relaxed shadow-sm flex flex-col gap-3 ${msg.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-card border rounded-tl-sm prose dark:prose-invert prose-p:leading-relaxed prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800'}`}>
+                                              {/* Main text content */}
                                               {msg.role === 'user' ? msg.content : <ReactMarkdown>{msg.content}</ReactMarkdown>}
+                                              
+                                              {/* Beautiful Smart Attachment for Excerpts */}
+                                              {msg.excerpt && (
+                                                  <div className="bg-primary-foreground/10 border border-primary-foreground/20 rounded-xl p-3 text-sm mt-1">
+                                                      <div className="flex items-center gap-2 font-semibold text-primary-foreground/90 mb-2 text-xs uppercase tracking-wider">
+                                                          <Quote className="h-3 w-3" /> Attached Excerpt
+                                                      </div>
+                                                      <div className="text-primary-foreground/80 italic line-clamp-3 overflow-hidden text-ellipsis text-[13px] leading-relaxed border-l-2 border-primary-foreground/30 pl-3">
+                                                          {msg.excerpt}
+                                                      </div>
+                                                  </div>
+                                              )}
                                           </div>
                                           {msg.role === 'user' && <div className="bg-muted border p-2.5 rounded-xl h-fit shadow-sm"><User className="h-5 w-5 text-muted-foreground" /></div>}
                                       </div>
@@ -351,7 +372,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                           <Textarea 
                                               value={chatInput} 
                                               onChange={e => setChatInput(e.target.value)}
-                                              placeholder="Ask a question or paste text from the document..." 
+                                              placeholder="Ask a question or type a custom prompt..." 
                                               className="min-h-[52px] max-h-[200px] border-0 focus-visible:ring-0 resize-y bg-transparent py-3 px-4 text-[15px]"
                                               onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
                                           />
@@ -523,7 +544,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                               </ScrollArea>
                                           </CardContent>
                                           <CardFooter className="bg-card border-t flex-col gap-6 pt-8 pb-8">
-                                              {/* Advanced Save Options */}
                                               <div className="w-full space-y-4">
                                                   <h4 className="font-semibold text-lg border-b pb-2">Export to Flashcards</h4>
                                                   
