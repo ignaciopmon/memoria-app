@@ -33,29 +33,28 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { action, messages, pdfBase64, questionCount, language } = body;
 
-    let systemInstruction = "You are an expert and friendly AI tutor. Your goal is to help the user study the provided material. Focus on explaining the main themes and core concepts. You may use your general knowledge to complement the explanations, but do not hallucinate information unrelated to the subjects of the document.";
+    let systemInstruction = "You are an expert, premium AI tutor. Your goal is to help the user master the provided material. Focus on explaining concepts with absolute clarity, using markdown for structure (bolding, lists). If the user asks about a specific quote or excerpt, analyze it deeply in the context of the document. Do not hallucinate external information unless providing an analogy.";
     let promptText = messages?.[messages.length - 1]?.content || "";
     
     if (action === "generate_test") {
-         systemInstruction = `You are an expert university professor creating a multiple-choice test. 
-         Generate exactly ${questionCount} questions in ${language} about the MAIN TOPICS discussed in the provided material.
+         systemInstruction = `You are an elite academic assessor designing a high-quality multiple-choice exam. 
+         Generate exactly ${questionCount} questions in ${language} based on the CORE CONCEPTS of the provided material.
          
          CRITICAL RULES:
-         1. DO NOT ask about specific anecdotes, trivial examples, or overly specific numbers/names mentioned in the text.
-         2. Focus exclusively on the CORE CONCEPTS, theories, and the general framework of the document.
-         3. You MUST use your extensive external knowledge to enrich the questions and provide deeper context.
+         1. Focus on deep understanding, not just rote memorization.
+         2. Plausible distractors (incorrect options) must be logically sound but factually incorrect based on the text.
+         3. Provide a clear, insightful 'explanation' for the correct answer.
          
-         Return ONLY a raw JSON array. Exact format: [{"question": "...", "options": {"A": "...", "B": "...", "C": "...", "D": "..."}, "answer": "A", "explanation": "Brief explanation of why this is correct based on the concept"}]`;
-         promptText = "Analyze the core themes of the provided material and generate the conceptual test now.";
+         Return ONLY a raw JSON array. Exact format: [{"question": "...", "options": {"A": "...", "B": "...", "C": "...", "D": "..."}, "answer": "A", "explanation": "Brief, insightful explanation"}]`;
+         promptText = "Analyze the entire document and generate the exam now.";
     } else if (action === "summarize") {
-         systemInstruction = "You are an expert academic summarizer. Your task is to provide a comprehensive, well-structured executive summary of the provided document. Use Markdown formatting. Include a main title, a brief overview paragraph, and a bulleted list of the core concepts, theories, and key takeaways. Do not invent information.";
-         promptText = "Please generate a detailed and structured summary of this document.";
+         systemInstruction = "You are an elite academic summarizer. Provide a master-level, perfectly structured executive summary of the document using Markdown. Include: 1. A catchy Title. 2. A 'TL;DR' paragraph. 3. Bullet points of 'Core Concepts'. 4. A 'Key Takeaways' conclusion. Make it look beautiful and easy to read.";
+         promptText = "Generate the Executive Summary.";
     }
 
     const parts: any[] = [];
     
     if (pdfBase64) {
-        // Enviar el base64 a Gemini para que lea el documento
         parts.push({
             inlineData: { data: pdfBase64, mimeType: "application/pdf" }
         });
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
         const historyText = messages.slice(0, -1).map((msg: any) => 
             `${msg.role === 'user' ? 'Student' : 'AI Tutor'}: ${msg.content}`
         ).join('\n\n');
-        parts.push({ text: `Conversation history:\n${historyText}\n\nNew student question:` });
+        parts.push({ text: `Conversation history:\n${historyText}\n\nNew student prompt:` });
     }
 
     parts.push({ text: promptText });
