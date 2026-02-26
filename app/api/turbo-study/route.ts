@@ -30,37 +30,62 @@ function extractYoutubeId(url: string) {
     return match ? match[1] : null;
 }
 
-// Extractor personalizado (anti-bloqueos)
+// Extractor robusto usando la API interna de YouTube (evita el bloqueo por página de cookies)
 async function getYouTubeTranscript(videoId: string) {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    try {
+        const response = await fetch(`https://www.youtube.com/youtubei/v1/player`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            body: JSON.stringify({
+                context: {
+                    client: {
+                        hl: "es",
+                        gl: "ES",
+                        clientName: "WEB",
+                        clientVersion: "2.20231025.00.00" // Versión de cliente que suele funcionar sin cookies
+                    }
+                },
+                videoId: videoId
+            })
+        });
+
+        const data = await response.json();
+        const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        
+        if (!tracks || tracks.length === 0) {
+            throw new Error("El vídeo no tiene subtítulos disponibles o están desactivados por el creador.");
         }
-    });
-    const html = await response.text();
-    const captionsMatch = html.match(/"captions":\s*({.*?})/);
-    
-    if (!captionsMatch) throw new Error("El vídeo no tiene subtítulos o YouTube bloqueó la petición.");
-    
-    const captionsData = JSON.parse(captionsMatch[1]);
-    const tracks = captionsData?.playerCaptionsTracklistRenderer?.captionTracks;
-    
-    if (!tracks || tracks.length === 0) throw new Error("No se encontraron pistas de subtítulos en el vídeo.");
-    
-    // Obtenemos el XML de la primera pista disponible
-    const xmlRes = await fetch(tracks[0].baseUrl);
-    const xml = await xmlRes.text();
-    
-    // Parseamos el XML a texto limpio
-    const textRegex = /<text[^>]*>(.*?)<\/text>/g;
-    let transcript = '';
-    let m;
-    while ((m = textRegex.exec(xml)) !== null) {
-        transcript += m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"') + ' ';
+        
+        // Cogemos la primera pista (normalmente el idioma principal o el autogenerado)
+        const trackUrl = tracks[0].baseUrl;
+        const xmlRes = await fetch(trackUrl);
+        const xml = await xmlRes.text();
+        
+        // Parseamos el XML a texto limpio
+        const textRegex = /<text[^>]*>(.*?)<\/text>/g;
+        let transcript = '';
+        let m;
+        while ((m = textRegex.exec(xml)) !== null) {
+            transcript += m[1]
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&#39;/g, "'")
+                .replace(/&quot;/g, '"') + ' ';
+        }
+        
+        if (!transcript.trim()) {
+            throw new Error("Se encontraron subtítulos, pero estaban vacíos.");
+        }
+
+        return transcript;
+    } catch (error: any) {
+        console.error("Error detallado al extraer YouTube:", error);
+        throw new Error(`Fallo al obtener subtítulos: ${error.message}`);
     }
-    
-    return transcript;
 }
 
 export async function POST(request: Request) {
