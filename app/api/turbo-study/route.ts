@@ -30,91 +30,107 @@ function extractYoutubeId(url: string) {
     return match ? match[1] : null;
 }
 
-// Extractor "Hacker" definitivo (Múltiples métodos de evasión)
-async function getYouTubeTranscript(videoId: string) {
-    let transcript = "";
+// Enmascara las peticiones usando servidores Proxy públicos gratuitos
+async function fetchViaProxy(url: string) {
+    const proxies = [
+        // Proxy 1: AllOrigins (Suele usar IPs de Cloudflare)
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        // Proxy 2: CodeTabs (Otro servicio de enmascaramiento CORS)
+        `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+        // Proxy 3: Directo como último recurso milagroso
+        url
+    ];
 
-    // MÉTODO 1: Spoofing de Aplicación Android (Engaña a YouTube fingiendo ser un móvil real, no un bot web)
-    try {
-        console.log(`[TurboStudy] Método 1: Spoofing App Android`);
-        const res = await fetch(`https://www.youtube.com/youtubei/v1/player`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                // Simulamos ser un dispositivo Android legítimo
-                'User-Agent': 'com.google.android.youtube/19.30.36 (Linux; U; Android 11) gzip'
-            },
-            body: JSON.stringify({
-                context: {
-                    client: {
-                        clientName: "ANDROID",
-                        clientVersion: "19.30.36",
-                        androidSdkVersion: 30,
-                        hl: "es",
-                        gl: "ES",
-                    }
+    let lastErr = "";
+    for (const proxy of proxies) {
+        try {
+            console.log(`[TurboStudy] Enmascarando petición por: ${proxy.split('?')[0]}`);
+            const res = await fetch(proxy, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 },
-                videoId: videoId
-            })
-        });
-
-        const data = await res.json();
-        const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-        
-        if (tracks && tracks.length > 0) {
-            // Pillamos español si existe, si no la autogenerada en inglés o la que sea
-            const track = tracks.find((t: any) => t.languageCode === 'es') || tracks[0];
-            const xmlRes = await fetch(track.baseUrl);
-            const xml = await xmlRes.text();
+                cache: 'no-store'
+            });
             
-            const textRegex = /<text[^>]*>(.*?)<\/text>/g;
-            transcript = '';
-            let m;
-            while ((m = textRegex.exec(xml)) !== null) {
-                let clean = m[1]
-                    .replace(/<[^>]+>/g, '')
-                    .replace(/&amp;/g, '&')
-                    .replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>')
-                    .replace(/&#39;/g, "'")
-                    .replace(/&quot;/g, '"');
-                transcript += clean + ' ';
+            if (!res.ok) continue;
+            const text = await res.text();
+            
+            // Si el texto incluye la página de consentimiento, la IP del proxy también fue detectada. Pasamos al siguiente.
+            if (text.includes('consent.youtube.com') || text.includes('Sign in to YouTube')) {
+                continue;
             }
-            if (transcript.trim().length > 20) {
-                console.log("[TurboStudy] Método Android Exitoso.");
-                return transcript.trim();
+            
+            if (text.length > 1000) {
+                return text; // Respuesta HTML válida conseguida
             }
+        } catch (e: any) {
+            lastErr = e.message;
+            continue;
         }
-    } catch (e) { console.log("[TurboStudy] Método 1 falló"); }
+    }
+    throw new Error(`Imposible evadir el bloqueo de YouTube. Proxies rechazados. Detalle: ${lastErr}`);
+}
 
-    // MÉTODO 2: API de youtubetranscript.com (Servicio de terceros especializado en saltar bloqueos)
-    try {
-        console.log(`[TurboStudy] Método 2: API de Terceros`);
-        const res = await fetch(`https://youtubetranscript.com/?server_vid2=${videoId}`);
-        const xml = await res.text();
-        
-        if (xml && xml.includes('<transcript>')) {
-            const textRegex = /<text[^>]*>(.*?)<\/text>/g;
-            let m;
-            transcript = '';
-            while ((m = textRegex.exec(xml)) !== null) {
-                let clean = m[1]
-                    .replace(/<[^>]+>/g, '')
-                    .replace(/&amp;/g, '&')
-                    .replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>')
-                    .replace(/&#39;/g, "'")
-                    .replace(/&quot;/g, '"');
-                transcript += clean + ' ';
-            }
-            if (transcript.trim().length > 20) {
-                console.log("[TurboStudy] Método de Terceros Exitoso.");
-                return transcript.trim();
-            }
+// Extractor a través de Proxy
+async function getYouTubeTranscript(videoId: string) {
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const html = await fetchViaProxy(videoUrl);
+
+    let captionsData;
+    
+    // Método 1 para buscar los subtítulos en el HTML
+    const captionsMatch = html.match(/"captions":\s*({.*?})/);
+    if (captionsMatch) {
+        try { captionsData = JSON.parse(captionsMatch[1]); } catch(e) {}
+    }
+    
+    // Método 2 (Formato alternativo de YouTube)
+    if (!captionsData) {
+        const playerResMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.+?})\s*;/);
+        if (playerResMatch) {
+            try {
+                const parsed = JSON.parse(playerResMatch[1]);
+                captionsData = parsed?.captions;
+            } catch(e) {}
         }
-    } catch (e) { console.log("[TurboStudy] Método 2 falló"); }
+    }
 
-    throw new Error("Extracción bloqueada. YouTube ha endurecido el firewall para este vídeo o realmente no tiene subtítulos. Prueba otro vídeo.");
+    if (!captionsData || !captionsData.playerCaptionsTracklistRenderer) {
+        throw new Error("No se detectó información de subtítulos en el vídeo.");
+    }
+
+    const tracks = captionsData.playerCaptionsTracklistRenderer.captionTracks;
+    if (!tracks || tracks.length === 0) {
+        throw new Error("Este vídeo no tiene ninguna pista de subtítulos.");
+    }
+
+    // Prioridad: Español -> Inglés -> El primero que haya
+    const track = tracks.find((t: any) => t.languageCode.startsWith('es')) || 
+                  tracks.find((t: any) => t.languageCode.startsWith('en')) || 
+                  tracks[0];
+
+    // Descargamos el XML de los subtítulos también a través del proxy
+    const xml = await fetchViaProxy(track.baseUrl);
+    
+    const textRegex = /<text[^>]*>(.*?)<\/text>/g;
+    let transcript = '';
+    let m;
+    while ((m = textRegex.exec(xml)) !== null) {
+        transcript += m[1]
+            .replace(/<[^>]+>/g, '')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&#39;/g, "'")
+            .replace(/&quot;/g, '"') + ' ';
+    }
+
+    if (transcript.trim().length > 50) {
+        console.log("[TurboStudy] ¡Transcripción extraída exitosamente con proxy!");
+        return transcript.trim();
+    }
+
+    throw new Error("Se descargaron los subtítulos, pero el archivo estaba vacío.");
 }
 
 export async function POST(request: Request) {
@@ -127,7 +143,7 @@ export async function POST(request: Request) {
     const { action, messages, pdfBase64, youtubeUrl, youtubeTranscript, questionCount, language } = body;
     
     // ==========================================
-    // EXTRACCIÓN ÚNICA DE SUBTÍTULOS
+    // EXTRACCIÓN ÚNICA DE SUBTÍTULOS MEDIANTE PROXY
     // ==========================================
     if (action === "fetch_youtube") {
         const videoId = extractYoutubeId(youtubeUrl);
