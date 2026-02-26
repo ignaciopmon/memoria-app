@@ -3,12 +3,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // Prevent timeout
+export const maxDuration = 60; 
 
 const apiKey = process.env.GOOGLE_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
-// Usamos modelos Gemini porque tienen soporte NATIVO para URLs de YouTube
 const MODELS = [
   "gemini-2.5-flash",
   "gemini-1.5-pro",
@@ -25,11 +24,43 @@ function cleanAndParseJSON(text: string) {
     return JSON.parse(cleanText);
 }
 
-// Convertimos cualquier enlace de YouTube a la estructura estándar para la API de Google
-function formatYoutubeUrl(url: string) {
+function extractYoutubeId(url: string) {
     const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
     const match = url.match(regex);
-    return match ? `https://www.youtube.com/watch?v=${match[1]}` : null;
+    return match ? match[1] : null;
+}
+
+// Extractor personalizado (anti-bloqueos)
+async function getYouTubeTranscript(videoId: string) {
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+        }
+    });
+    const html = await response.text();
+    const captionsMatch = html.match(/"captions":\s*({.*?})/);
+    
+    if (!captionsMatch) throw new Error("El vídeo no tiene subtítulos o YouTube bloqueó la petición.");
+    
+    const captionsData = JSON.parse(captionsMatch[1]);
+    const tracks = captionsData?.playerCaptionsTracklistRenderer?.captionTracks;
+    
+    if (!tracks || tracks.length === 0) throw new Error("No se encontraron pistas de subtítulos en el vídeo.");
+    
+    // Obtenemos el XML de la primera pista disponible
+    const xmlRes = await fetch(tracks[0].baseUrl);
+    const xml = await xmlRes.text();
+    
+    // Parseamos el XML a texto limpio
+    const textRegex = /<text[^>]*>(.*?)<\/text>/g;
+    let transcript = '';
+    let m;
+    while ((m = textRegex.exec(xml)) !== null) {
+        transcript += m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"') + ' ';
+    }
+    
+    return transcript;
 }
 
 export async function POST(request: Request) {
@@ -39,8 +70,24 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { action, messages, pdfBase64, youtubeUrl, questionCount, language } = body;
+    const { action, messages, pdfBase64, youtubeUrl, youtubeTranscript, questionCount, language } = body;
     
+    // ==========================================
+    // EXTRACCIÓN ÚNICA DE SUBTÍTULOS
+    // ==========================================
+    if (action === "fetch_youtube") {
+        const videoId = extractYoutubeId(youtubeUrl);
+        if (!videoId) return NextResponse.json({ error: "URL de YouTube inválida" }, { status: 400 });
+        
+        try {
+            const transcript = await getYouTubeTranscript(videoId);
+            return NextResponse.json({ data: transcript });
+        } catch (error: any) {
+            console.error("Transcript fetch error:", error);
+            return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+    }
+
     let systemInstruction = "You are an expert and friendly AI tutor. Your goal is to help the user study the provided material. Focus on explaining the main themes and core concepts. You may use your general knowledge to complement the explanations, but do not hallucinate information unrelated to the subjects of the document.";
     let promptText = messages?.[messages.length - 1]?.content || "";
     
@@ -59,38 +106,16 @@ export async function POST(request: Request) {
 
     const parts: any[] = [];
     
-    // PROCESAMIENTO DE PDF
     if (pdfBase64) {
         parts.push({
-            inlineData: {
-                data: pdfBase64,
-                mimeType: "application/pdf"
-            }
+            inlineData: { data: pdfBase64, mimeType: "application/pdf" }
         });
     }
     
-    // ==========================================
-    // NUEVO: PROCESAMIENTO NATIVO DE YOUTUBE CON GEMINI
-    // ==========================================
-    if (youtubeUrl) {
-        const formattedUrl = formatYoutubeUrl(youtubeUrl);
-        if (!formattedUrl) {
-            return NextResponse.json({ error: "Invalid YouTube URL format" }, { status: 400 });
-        }
-        
-        // Le pasamos la URL directamente a Gemini. Él se encarga de analizar el vídeo.
-        parts.push({
-            fileData: {
-                mimeType: "video/mp4",
-                fileUri: formattedUrl
-            }
-        });
-        parts.push({ 
-            text: "Please use the attached YouTube video as your primary source of truth. Pay close attention to its main topics and spoken content to assist the student." 
-        });
+    if (youtubeTranscript) {
+        parts.push({ text: `Study Material (YouTube Video Transcript):\n\n${youtubeTranscript}\n\n---\nPlease use the main topics from the transcript above as the primary basis for your response.` });
     }
     
-    // Añadir historial de chat
     if (action === 'chat' && messages && messages.length > 1) {
         const historyText = messages.slice(0, -1).map((msg: any) => 
             `${msg.role === 'user' ? 'Student' : 'AI Tutor'}: ${msg.content}`
@@ -104,23 +129,28 @@ export async function POST(request: Request) {
     let resultData;
     let lastError: any;
 
-    // SISTEMA DE FALLBACK ITERATIVO
     for (const modelName of MODELS) {
         try {
             console.log(`[TurboStudy] Attempting '${action}' with model: ${modelName}`);
             
-            const generationConfig = (action === "generate_test")
+            const isGemini = modelName.includes("gemini");
+            const generationConfig = (action === "generate_test" && isGemini)
                 ? { responseMimeType: "application/json" } 
                 : undefined;
 
             const model = genAI.getGenerativeModel({
                 model: modelName,
                 generationConfig,
-                systemInstruction: systemInstruction,
+                systemInstruction: isGemini ? systemInstruction : undefined,
             });
+            
+            let finalParts = [...parts];
+            if (!isGemini) {
+                finalParts = [{ text: `System instructions: ${systemInstruction}\n\n` }, ...parts];
+            }
 
             const result = await model.generateContent({
-                contents: [{ role: "user", parts: parts }]
+                contents: [{ role: "user", parts: finalParts }]
             });
             
             const textResponse = result.response.text();
@@ -141,7 +171,7 @@ export async function POST(request: Request) {
     }
 
     if (!success) {
-        return NextResponse.json({ error: `Failed processing request. Last error: ${lastError?.message}` }, { status: 500 });
+        return NextResponse.json({ error: `Failed after trying all AI models. Last error: ${lastError?.message}` }, { status: 500 });
     }
 
     return NextResponse.json({ data: resultData });
