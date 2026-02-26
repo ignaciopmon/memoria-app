@@ -47,11 +47,15 @@ export async function POST(request: Request) {
          
          Return ONLY a raw JSON array. Exact format: [{"question": "...", "options": {"A": "...", "B": "...", "C": "...", "D": "..."}, "answer": "A", "explanation": "Brief explanation of why this is correct based on the concept"}]`;
          promptText = "Analyze the core themes of the provided material and generate the conceptual test now.";
+    } else if (action === "summarize") {
+         systemInstruction = "You are an expert academic summarizer. Your task is to provide a comprehensive, well-structured executive summary of the provided document. Use Markdown formatting. Include a main title, a brief overview paragraph, and a bulleted list of the core concepts, theories, and key takeaways. Do not invent information.";
+         promptText = "Please generate a detailed and structured summary of this document.";
     }
 
     const parts: any[] = [];
     
     if (pdfBase64) {
+        // Enviar el base64 a Gemini para que lea el documento
         parts.push({
             inlineData: { data: pdfBase64, mimeType: "application/pdf" }
         });
