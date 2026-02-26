@@ -13,21 +13,24 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, Upload, AlignLeft, MessageSquare, ListTodo, Lightbulb, Languages, Zap, Quote, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, GraduationCap, PlusCircle, Baby, Book, Plus, FolderOpen } from "lucide-react";
+import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, Upload, AlignLeft, MessageSquare, ListTodo, Lightbulb, Baby, Book, Plus, FolderOpen, Quote, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, GraduationCap, PlusCircle, Zap } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
 
 import { createClient } from "@/lib/supabase/client";
 
-// 🚀 FIX: Importar CSS nativos de react-pdf
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// 🚀 FIX: Forzar la carga dinámica para evitar "DOMMatrix is not defined" en SSR (Vercel)
-const Document = dynamic(() => import('react-pdf').then(mod => mod.Document), { 
+// 🚀 FIX: Inicializamos el Worker estrictamente en el momento en el que el cliente carga react-pdf
+const Document = dynamic(() => import('react-pdf').then(mod => {
+    // Usar la misma versión exacta para evitar el error de DOMMatrix o fallos de renderizado
+    mod.pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${mod.pdfjs.version}/build/pdf.worker.min.mjs`;
+    return mod.Document;
+}), { 
     ssr: false,
     loading: () => (
-        <div className="flex flex-col items-center mt-32 text-muted-foreground">
+        <div className="flex flex-col items-center justify-center p-20 text-muted-foreground h-full w-full">
             <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
             <p>Initializing PDF Engine...</p>
         </div>
@@ -41,18 +44,15 @@ const supabase = createClient();
 type Message = { role: "user" | "model"; content: string; excerpt?: string };
 type Question = { question: string; options: { [key: string]: string }; answer: string; explanation?: string };
 type WrongAnswer = Question & { userAnswer: string };
-
 type Notebook = { id: string; name: string; created_at: string; file_path?: string; file_name?: string };
 
 export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string, name: string }[], userId: string }) {
-  // Notebook System State
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [activeNotebook, setActiveNotebook] = useState<Notebook | null>(null);
   const [isCreatingNotebook, setIsCreatingNotebook] = useState(false);
   const [newNotebookName, setNewNotebookName] = useState("");
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(true);
 
-  // Document State
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
@@ -60,20 +60,17 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Custom PDF Viewer State
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.2);
   const [selection, setSelection] = useState<{ text: string; x: number; y: number } | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  // Direct Flashcard Modal State
   const [isFlashcardModalOpen, setIsFlashcardModalOpen] = useState(false);
   const [isGeneratingFlashcard, setIsGeneratingFlashcard] = useState(false);
   const [flashcardDraft, setFlashcardDraft] = useState({ front: "", back: "" });
   const [flashcardDeckId, setFlashcardDeckId] = useState("");
 
-  // AI Workspace State
   const [messages, setMessages] = useState<Message[]>([{ role: "model", content: "Hi! I'm your AI tutor. \n\n**✨ Magic Canvas:** Select any text on the document to instantly translate, explain, or create flashcards!" }]);
   const [chatInput, setChatInput] = useState("");
   const [isChatting, setIsChatting] = useState(false);
@@ -97,16 +94,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
 
   const { toast } = useToast();
 
-  // 🚀 FIX: Inicializar el Worker de PDF de forma segura solo en cliente
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-        import('react-pdf').then(({ pdfjs }) => {
-            pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-        });
-    }
-  }, []);
-
-  // --- PERSISTENCE: INITIAL LOAD ---
   useEffect(() => {
     const fetchNotebooks = async () => {
         setIsLoadingNotebooks(true);
@@ -117,32 +104,24 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
     fetchNotebooks();
   }, [userId]);
 
-  // --- PERSISTENCE: AUTO-SAVE ASSETS ---
   useEffect(() => {
     if (activeNotebook && messages.length > 1) {
-        supabase.from('notebook_assets')
-            .upsert({ notebook_id: activeNotebook.id, type: 'chat', content: messages }, { onConflict: 'notebook_id, type' })
-            .then();
+        supabase.from('notebook_assets').upsert({ notebook_id: activeNotebook.id, type: 'chat', content: messages }, { onConflict: 'notebook_id, type' }).then();
     }
   }, [messages, activeNotebook]);
 
   useEffect(() => {
     if (activeNotebook && summary) {
-        supabase.from('notebook_assets')
-            .upsert({ notebook_id: activeNotebook.id, type: 'summary', content: summary }, { onConflict: 'notebook_id, type' })
-            .then();
+        supabase.from('notebook_assets').upsert({ notebook_id: activeNotebook.id, type: 'summary', content: summary }, { onConflict: 'notebook_id, type' }).then();
     }
   }, [summary, activeNotebook]);
 
   useEffect(() => {
     if (activeNotebook && studyGuide) {
-        supabase.from('notebook_assets')
-            .upsert({ notebook_id: activeNotebook.id, type: 'guide', content: studyGuide }, { onConflict: 'notebook_id, type' })
-            .then();
+        supabase.from('notebook_assets').upsert({ notebook_id: activeNotebook.id, type: 'guide', content: studyGuide }, { onConflict: 'notebook_id, type' }).then();
     }
   }, [studyGuide, activeNotebook]);
 
-  // UI Effects
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages, summary, studyGuide]);
@@ -167,16 +146,11 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
       setActiveNotebook(null);
   };
 
-  // --- ACTIONS ---
   const handleCreateNotebook = async (e: React.FormEvent) => {
       e.preventDefault();
       if(!newNotebookName.trim()) return;
       
-      const { data, error } = await supabase
-          .from('notebooks')
-          .insert({ user_id: userId, name: newNotebookName })
-          .select()
-          .single();
+      const { data, error } = await supabase.from('notebooks').insert({ user_id: userId, name: newNotebookName }).select().single();
 
       if (error || !data) {
           toast({ title: "Error creating notebook", variant: "destructive" });
@@ -197,7 +171,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
           setIsProcessingFile(true);
           setFileName(nb.file_name || "Document.pdf");
 
-          // 1. Download File
           const { data, error } = await supabase.storage.from('notebook_files').download(nb.file_path);
           if (!error && data) {
               const file = new File([data], nb.file_name || "Document.pdf", { type: 'application/pdf' });
@@ -212,10 +185,9 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
               reader.readAsDataURL(file);
           } else {
               setIsProcessingFile(false);
-              toast({ title: "Error loading document from cloud", variant: "destructive" });
+              toast({ title: "Error loading document", description: "File might not exist in cloud storage.", variant: "destructive" });
           }
 
-          // 2. Load Assets (Chats, Guides, etc)
           const { data: assets } = await supabase.from('notebook_assets').select('*').eq('notebook_id', nb.id);
           if (assets && assets.length > 0) {
               const chatAsset = assets.find(a => a.type === 'chat');
@@ -230,11 +202,9 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
       }
   };
 
-  // 🚀 MEJORA: Centralizamos la lógica de subida para usarla con Clicks y con Drag & Drop
   const processPdfFile = async (file: File) => {
     if (!activeNotebook) return;
     
-    // Validación estricta
     if (file.type !== "application/pdf") {
         return toast({ title: "Invalid File Type", description: "Please upload a valid PDF document.", variant: "destructive" });
     }
@@ -244,23 +214,24 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
 
     setIsProcessingFile(true);
 
-    // 1. Upload to Supabase Storage
+    // 🚀 FIX: Intentamos subir a la nube, pero si falla NO DETENEMOS el proceso. 
+    // Así puedes seguir usando la app aunque falle el bucket o las RLS de Supabase.
     const filePath = `${userId}/${activeNotebook.id}/${file.name}`;
     const { error: uploadError } = await supabase.storage.from('notebook_files').upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-        toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" });
-        setIsProcessingFile(false);
-        return;
+        console.warn("Storage Error (continuing in local mode):", uploadError);
+        toast({ 
+            title: "Local Mode Active", 
+            description: "Could not save to cloud storage. Document will only be available for this session.", 
+            variant: "destructive" 
+        });
+    } else {
+        await supabase.from('notebooks').update({ file_path: filePath, file_name: file.name }).eq('id', activeNotebook.id);
+        const updatedNb = { ...activeNotebook, file_path: filePath, file_name: file.name };
+        setActiveNotebook(updatedNb);
+        setNotebooks(notebooks.map(n => n.id === activeNotebook.id ? updatedNb : n));
     }
-
-    // 2. Update DB Notebook Record
-    await supabase.from('notebooks').update({ file_path: filePath, file_name: file.name }).eq('id', activeNotebook.id);
-
-    // Update Local State
-    const updatedNb = { ...activeNotebook, file_path: filePath, file_name: file.name };
-    setActiveNotebook(updatedNb);
-    setNotebooks(notebooks.map(n => n.id === activeNotebook.id ? updatedNb : n));
     
     setFileName(file.name);
     setPdfFile(file);
@@ -280,7 +251,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
     if (file) processPdfFile(file);
   };
 
-  // 🚀 MEJORA: Eventos para Drag & Drop
   const handleDragOver = useCallback((e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(true);
@@ -447,7 +417,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
     } catch (e) { toast({ title: "Error saving cards", variant: "destructive" }); } finally { setIsSaving(false); }
   };
 
-  // --- RENDER VIEW: DASHBOARD ---
   if (!activeNotebook) {
       return (
           <div className="flex-1 flex overflow-hidden bg-muted/20 relative">
@@ -514,7 +483,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
       );
   }
 
-  // --- RENDER VIEW: UPLOAD DOCUMENT INTO NOTEBOOK ---
   if (!isReady) {
       return (
           <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
@@ -527,7 +495,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                   </div>
                   <Card className="border-muted shadow-2xl bg-card/40 backdrop-blur-xl ring-1 ring-border/50">
                       <CardContent className="pt-8 pb-8">
-                          {/* 🚀 MEJORA: Incorporación de Eventos Drag & Drop */}
                           <div 
                               className={`flex flex-col items-center justify-center p-14 border-2 border-dashed rounded-2xl transition-all duration-300 group cursor-pointer relative overflow-hidden ${isDragging ? 'border-primary bg-primary/10 scale-[1.02]' : 'border-primary/20 bg-muted/10 hover:bg-muted/30'}`} 
                               onClick={() => !isProcessingFile && document.getElementById('pdf-upload')?.click()}
@@ -538,7 +505,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                               {isProcessingFile ? (
                                   <div className="flex flex-col items-center text-primary z-10">
                                       <Loader2 className="h-12 w-12 animate-spin mb-4" />
-                                      <p className="font-semibold text-lg tracking-wide">Syncing to Cloud Canvas...</p>
+                                      <p className="font-semibold text-lg tracking-wide">Processing Document...</p>
                                   </div>
                               ) : (
                                   <div className="flex flex-col items-center z-10 pointer-events-none">
@@ -563,11 +530,9 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
       );
   }
 
-  // --- RENDER VIEW: ACTIVE WORKSPACE ---
   return (
       <div className="flex flex-col h-full w-full bg-background/95 relative">
           
-          {/* FLOATING ACTION MENU */}
           {selection && (
               <div ref={popupRef} className="fixed z-[100] flex gap-1.5 items-center bg-background/95 backdrop-blur-xl border border-border/60 shadow-2xl p-1.5 rounded-xl animate-in fade-in zoom-in-95 pointer-events-auto" style={{ top: Math.max(10, selection.y - 60), left: selection.x, transform: 'translateX(-50%)' }}>
                   <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-600 transition-colors" onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('explain'); }}><Lightbulb className="w-4 h-4 mr-2 text-yellow-500" /> Explain</Button>
@@ -577,7 +542,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
               </div>
           )}
 
-          {/* FLASHCARD DIRECT MODAL */}
           <Dialog open={isFlashcardModalOpen} onOpenChange={setIsFlashcardModalOpen}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
@@ -621,7 +585,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
             </DialogContent>
           </Dialog>
 
-          {/* Top Navbar */}
           <div className="h-14 bg-background/80 backdrop-blur-md border-b flex justify-between items-center px-4 shrink-0 shadow-sm z-20">
               <div className="flex items-center gap-4 overflow-hidden">
                   <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleExitNotebook}>
@@ -639,10 +602,8 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
               </div>
           </div>
 
-          {/* Main Workspace */}
           <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
               
-              {/* Left Panel: PDF VIEWER */}
               <ResizablePanel defaultSize={50} minSize={30} className="bg-zinc-100 dark:bg-zinc-900/50 hidden md:flex flex-col border-r relative z-10">
                   <div className="h-12 bg-background/80 border-b flex items-center justify-between px-4 shrink-0 backdrop-blur-md z-20">
                       <div className="flex items-center gap-2">
@@ -660,7 +621,21 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                   <div className="flex-1 overflow-auto relative" onMouseUp={handleTextSelection} onScroll={() => { if(selection) setSelection(null); }}>
                       <div className="flex justify-center p-8 min-h-full min-w-max">
                           {pdfFile && (
-                              <Document file={pdfFile} onLoadSuccess={({ numPages }) => setNumPages(numPages)}>
+                              <Document 
+                                  file={pdfFile} 
+                                  onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                                  // 🚀 FIX: Si el PDF o el worker falla, lo verás visualmente.
+                                  onLoadError={(error) => {
+                                      console.error("PDF Load Error:", error);
+                                      toast({ title: "PDF Engine Error", description: error.message, variant: "destructive" });
+                                  }}
+                                  loading={
+                                      <div className="flex flex-col items-center justify-center p-20 mt-20 text-muted-foreground">
+                                          <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
+                                          <p className="animate-pulse">Rendering Document...</p>
+                                      </div>
+                                  }
+                              >
                                   <div className="shadow-2xl border border-border/50 rounded-sm bg-white ring-1 ring-black/5">
                                       <Page pageNumber={pageNumber} scale={scale} renderTextLayer={true} renderAnnotationLayer={true} className="pdf-page-container" />
                                   </div>
@@ -672,7 +647,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
 
               <ResizableHandle withHandle className="bg-border/50 hover:bg-primary/50 transition-colors" />
 
-              {/* Right Panel: AI Tools */}
               <ResizablePanel defaultSize={50} minSize={30} className="flex flex-col bg-background/50 relative">
                   <Tabs defaultValue="chat" className="flex-1 flex flex-col h-full overflow-hidden">
                       <TabsList className="grid w-full grid-cols-4 rounded-none h-14 border-b bg-muted/10 p-1 gap-1">
@@ -682,7 +656,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                           <TabsTrigger value="summary" className="text-xs sm:text-sm rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"><AlignLeft className="w-4 h-4 sm:mr-2"/><span className="hidden sm:inline">Summary</span></TabsTrigger>
                       </TabsList>
 
-                      {/* CHAT TAB */}
                       <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0 h-full overflow-hidden data-[state=inactive]:hidden relative">
                           <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-h-0 space-y-6">
                               <div className="max-w-3xl mx-auto space-y-6 pb-4 w-full">
@@ -734,7 +707,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                           </div>
                       </TabsContent>
 
-                      {/* GUIDE TAB */}
                       <TabsContent value="guide" className="flex-1 overflow-auto p-4 sm:p-8 m-0 bg-background data-[state=inactive]:hidden">
                           <div className="max-w-3xl mx-auto h-full flex flex-col">
                               {!studyGuide && !isGeneratingGuide && (
@@ -765,7 +737,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                           </div>
                       </TabsContent>
 
-                      {/* TEST TAB */}
                       <TabsContent value="test" className="flex-1 overflow-auto p-4 sm:p-8 m-0 bg-background data-[state=inactive]:hidden">
                           <div className="max-w-2xl mx-auto h-full flex flex-col">
                               {testState === "setup" && (
@@ -833,7 +804,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                           </div>
                       </TabsContent>
 
-                      {/* SUMMARY TAB */}
                       <TabsContent value="summary" className="flex-1 overflow-auto p-4 sm:p-8 m-0 bg-background data-[state=inactive]:hidden">
                           <div className="max-w-3xl mx-auto h-full flex flex-col">
                               {!summary && !isGeneratingSummary && (
