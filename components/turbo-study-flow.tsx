@@ -21,12 +21,10 @@ type WrongAnswer = Question & { userAnswer: string };
 export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: string }[] }) {
   const [sourceType, setSourceType] = useState<"pdf" | "youtube" | null>(null);
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
-  const [youtubeTranscript, setYoutubeTranscript] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isReady, setIsReady] = useState(false);
-  const [isProcessingFile, setIsProcessingFile] = useState(false); 
-  const [isProcessingYoutube, setIsProcessingYoutube] = useState(false);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
 
   // Chat State
   const [messages, setMessages] = useState<Message[]>([{ role: "model", content: "Hi! I have analyzed your material. What questions do you have or what concepts would you like me to explain?" }]);
@@ -84,29 +82,12 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     reader.readAsDataURL(file);
   };
 
-  const handleStartWithYoutube = async () => {
+  const handleStartWithYoutube = () => {
       if (!youtubeUrl.includes("youtube.com") && !youtubeUrl.includes("youtu.be")) {
           return toast({ title: "Invalid URL", description: "Please enter a valid YouTube link.", variant: "destructive" });
       }
-      
-      setIsProcessingYoutube(true);
-      try {
-          const res = await fetch("/api/turbo-study", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "fetch_youtube", youtubeUrl })
-          });
-          const data = await res.json();
-          
-          if (data.error) throw new Error(data.error);
-          
-          setYoutubeTranscript(data.data);
-          setIsReady(true);
-      } catch (e: any) {
-          toast({ title: "Error loading video", description: e.message, variant: "destructive" });
-      } finally {
-          setIsProcessingYoutube(false);
-      }
+      // Ahora la integración es nativa, pasamos directamente a "Ready" sin descargar nada aquí.
+      setIsReady(true);
   };
 
   const handleSendMessage = async () => {
@@ -125,7 +106,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                   action: "chat",
                   messages: newMessages,
                   pdfBase64,
-                  youtubeTranscript
+                  youtubeUrl: sourceType === 'youtube' ? youtubeUrl : null
               })
           });
           const data = await res.json();
@@ -150,7 +131,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                   questionCount,
                   language,
                   pdfBase64,
-                  youtubeTranscript
+                  youtubeUrl: sourceType === 'youtube' ? youtubeUrl : null
               })
           });
           const result = await res.json();
@@ -268,18 +249,13 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                   value={youtubeUrl} 
                                   onChange={e => setYoutubeUrl(e.target.value)}
                                   className="h-12 text-base"
-                                  disabled={isProcessingYoutube}
                               />
                               <Button 
                                 className="w-full h-12 text-base" 
                                 onClick={handleStartWithYoutube} 
-                                disabled={!youtubeUrl || isProcessingYoutube}
+                                disabled={!youtubeUrl}
                               >
-                                  {isProcessingYoutube ? (
-                                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Extracting transcript...</>
-                                  ) : (
-                                      "Load Video Transcript"
-                                  )}
+                                  Load Video
                               </Button>
                           </div>
                       )}
@@ -301,7 +277,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
               <Button variant="ghost" size="sm" onClick={() => {
                   setIsReady(false);
                   setPdfBase64(null);
-                  setYoutubeTranscript(null);
                   setMessages([{ role: "model", content: "Hi! I have analyzed your material. What questions do you have or what concepts would you like me to explain?" }]);
                   setTestState("setup");
               }}>
@@ -400,7 +375,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                       {testState === "generating" && (
                           <div className="flex flex-col items-center justify-center h-full gap-4">
                               <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                              <p className="text-lg font-medium">The AI is reading the content and creating questions...</p>
+                              <p className="text-lg font-medium">The AI is watching the video and creating questions...</p>
                           </div>
                       )}
 

@@ -1,7 +1,6 @@
 // app/api/turbo-study/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-import { YoutubeTranscript } from 'youtube-transcript';
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Prevent timeout
@@ -9,7 +8,7 @@ export const maxDuration = 60; // Prevent timeout
 const apiKey = process.env.GOOGLE_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
-// Modelos nativos estables para respaldo
+// Usamos modelos Gemini porque tienen soporte NATIVO para URLs de YouTube
 const MODELS = [
   "gemini-2.5-flash",
   "gemini-1.5-pro",
@@ -26,10 +25,11 @@ function cleanAndParseJSON(text: string) {
     return JSON.parse(cleanText);
 }
 
-function extractYoutubeId(url: string) {
+// Convertimos cualquier enlace de YouTube a la estructura estándar para la API de Google
+function formatYoutubeUrl(url: string) {
     const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
     const match = url.match(regex);
-    return match ? match[1] : null;
+    return match ? `https://www.youtube.com/watch?v=${match[1]}` : null;
 }
 
 export async function POST(request: Request) {
@@ -39,28 +39,8 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { action, messages, pdfBase64, youtubeUrl, youtubeTranscript, questionCount, language } = body;
+    const { action, messages, pdfBase64, youtubeUrl, questionCount, language } = body;
     
-    // ==========================================
-    // NUEVA ACCIÓN: OBTENER TRANSCRIPCIÓN (1 SOLA VEZ)
-    // ==========================================
-    if (action === "fetch_youtube") {
-        const videoId = extractYoutubeId(youtubeUrl);
-        if (!videoId) return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
-        
-        try {
-            const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-            const fullText = transcript.map(t => t.text).join(' ');
-            return NextResponse.json({ data: fullText });
-        } catch (error: any) {
-            console.error("Transcript fetch error:", error);
-            return NextResponse.json({ 
-                error: "Could not fetch YouTube subtitles. The video might not have captions enabled, or YouTube is blocking the request." 
-            }, { status: 400 });
-        }
-    }
-    // ==========================================
-
     let systemInstruction = "You are an expert and friendly AI tutor. Your goal is to help the user study the provided material. Focus on explaining the main themes and core concepts. You may use your general knowledge to complement the explanations, but do not hallucinate information unrelated to the subjects of the document.";
     let promptText = messages?.[messages.length - 1]?.content || "";
     
@@ -89,9 +69,25 @@ export async function POST(request: Request) {
         });
     }
     
-    // PROCESAMIENTO DE YOUTUBE (Evita volver a descargar)
-    if (youtubeTranscript) {
-        parts.push({ text: `Study Material (YouTube Video Transcript):\n\n${youtubeTranscript}\n\n---\nPlease use the main topics from the transcript above as the primary basis for your response.` });
+    // ==========================================
+    // NUEVO: PROCESAMIENTO NATIVO DE YOUTUBE CON GEMINI
+    // ==========================================
+    if (youtubeUrl) {
+        const formattedUrl = formatYoutubeUrl(youtubeUrl);
+        if (!formattedUrl) {
+            return NextResponse.json({ error: "Invalid YouTube URL format" }, { status: 400 });
+        }
+        
+        // Le pasamos la URL directamente a Gemini. Él se encarga de analizar el vídeo.
+        parts.push({
+            fileData: {
+                mimeType: "video/mp4",
+                fileUri: formattedUrl
+            }
+        });
+        parts.push({ 
+            text: "Please use the attached YouTube video as your primary source of truth. Pay close attention to its main topics and spoken content to assist the student." 
+        });
     }
     
     // Añadir historial de chat
@@ -113,24 +109,18 @@ export async function POST(request: Request) {
         try {
             console.log(`[TurboStudy] Attempting '${action}' with model: ${modelName}`);
             
-            const isGemini = modelName.includes("gemini");
-            const generationConfig = (action === "generate_test" && isGemini)
+            const generationConfig = (action === "generate_test")
                 ? { responseMimeType: "application/json" } 
                 : undefined;
 
             const model = genAI.getGenerativeModel({
                 model: modelName,
                 generationConfig,
-                systemInstruction: isGemini ? systemInstruction : undefined,
+                systemInstruction: systemInstruction,
             });
-            
-            let finalParts = [...parts];
-            if (!isGemini) {
-                finalParts = [{ text: `System instructions: ${systemInstruction}\n\n` }, ...parts];
-            }
 
             const result = await model.generateContent({
-                contents: [{ role: "user", parts: finalParts }]
+                contents: [{ role: "user", parts: parts }]
             });
             
             const textResponse = result.response.text();
@@ -151,7 +141,7 @@ export async function POST(request: Request) {
     }
 
     if (!success) {
-        return NextResponse.json({ error: `Failed after trying all AI models. Last error: ${lastError?.message}` }, { status: 500 });
+        return NextResponse.json({ error: `Failed processing request. Last error: ${lastError?.message}` }, { status: 500 });
     }
 
     return NextResponse.json({ data: resultData });
