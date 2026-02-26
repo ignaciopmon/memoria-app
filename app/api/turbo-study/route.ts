@@ -1,14 +1,14 @@
 // app/api/turbo-study/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
+import { YoutubeTranscript } from 'youtube-transcript'; // Nuevo paquete importado
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // Prevent timeout
+export const maxDuration = 60;
 
 const apiKey = process.env.GOOGLE_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
-// Your model fallback system
 const MODELS = [
   "gemini-2.5-flash",
   "gemma-3-27b",
@@ -25,6 +25,13 @@ function cleanAndParseJSON(text: string) {
     return JSON.parse(cleanText);
 }
 
+// Función auxiliar para extraer ID de youtube
+function extractYoutubeId(url: string) {
+    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+}
+
 export async function POST(request: Request) {
   if (!apiKey) {
     return NextResponse.json({ error: "Missing API Key" }, { status: 500 });
@@ -34,7 +41,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { action, messages, pdfBase64, youtubeUrl, questionCount, language } = body;
     
-    let systemInstruction = "You are an expert and friendly Artificial Intelligence tutor designed to help the user study.";
+    let systemInstruction = "You are an expert and friendly Artificial Intelligence tutor designed to help the user study. Answer questions accurately based on the provided material.";
     let promptText = messages?.[messages.length - 1]?.content || "";
     
     if (action === "generate_test") {
@@ -43,10 +50,9 @@ export async function POST(request: Request) {
          promptText = "Generate the test now based on the provided document/video.";
     }
 
-    // Build prompt parts (context)
     const parts: any[] = [];
     
-    // If PDF exists, pass it as inlineData (natively supported by Gemini)
+    // PROCESAMIENTO DE PDF
     if (pdfBase64) {
         parts.push({
             inlineData: {
@@ -56,12 +62,25 @@ export async function POST(request: Request) {
         });
     }
     
-    // If YouTube URL exists, ask the model to extract context
+    // PROCESAMIENTO AVANZADO DE YOUTUBE (Extracción de Transcripción)
     if (youtubeUrl) {
-        parts.push({ text: `Study Material (YouTube Video): ${youtubeUrl}. Please use your knowledge about the content of this video to answer or generate the test.` });
+        try {
+            const videoId = extractYoutubeId(youtubeUrl);
+            if (!videoId) throw new Error("Invalid YouTube URL");
+            
+            // Extraemos los subtitulos/transcripción real del vídeo
+            const transcript = await YoutubeTranscript.fetchTranscript(videoId);
+            const fullText = transcript.map(t => t.text).join(' ');
+            
+            parts.push({ text: `Study Material (YouTube Video Transcript):\n\n${fullText}\n\n---\nPlease use the transcript above to answer or generate the test.` });
+        } catch (error: any) {
+            console.error("Transcript fetch error:", error);
+            // Fallback en caso de que el vídeo no tenga subtítulos
+            parts.push({ text: `Study Material (YouTube Video Link): ${youtubeUrl}. Please use your knowledge about the content of this video to assist the user.` });
+        }
     }
     
-    // Add chat history if it's a conversation
+    // Añadir historial de chat
     if (action === 'chat' && messages && messages.length > 1) {
         const historyText = messages.slice(0, -1).map((msg: any) => 
             `${msg.role === 'user' ? 'Student' : 'AI Tutor'}: ${msg.content}`
@@ -75,10 +94,9 @@ export async function POST(request: Request) {
     let resultData;
     let lastError: any;
 
-    // ITERATIVE FALLBACK SYSTEM
     for (const modelName of MODELS) {
         try {
-            console.log(`[TurboStudy] Attempting action '${action}' with model: ${modelName}`);
+            console.log(`[TurboStudy] Attempting '${action}' with model: ${modelName}`);
             
             const isGemini = modelName.includes("gemini");
             const generationConfig = (action === "generate_test" && isGemini)
@@ -93,7 +111,6 @@ export async function POST(request: Request) {
             
             let finalParts = [...parts];
             if (!isGemini) {
-                // For models that don't support systemInstruction as a separate parameter
                 finalParts = [{ text: `System instructions: ${systemInstruction}\n\n` }, ...parts];
             }
 
