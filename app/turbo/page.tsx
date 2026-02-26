@@ -4,14 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function TurboPage() {
-  const supabase = createClient();
+  const supabase = await createClient(); // FIX: Added await here
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     redirect("/auth/login");
   }
 
-  // Obtenemos los mazos para pasárselos al componente (para guardar las tarjetas)
+  // Fetch decks to pass to the component (for saving cards)
   const { data: decks } = await supabase
     .from("decks")
     .select("id, name")
@@ -22,10 +22,10 @@ export default async function TurboPage() {
     <div className="container mx-auto py-8 px-4 h-screen flex flex-col">
       <div className="mb-4">
         <h1 className="text-3xl font-bold">Turbo Study (Beta)</h1>
-        <p className="text-muted-foreground">Chatea con tus documentos y genera material de repaso instantáneo.</p>
+        <p className="text-muted-foreground">Chat with your documents and generate instant review materials.</p>
       </div>
       
-      {/* Pasamos los mazos como prop */}
+      {/* Pass decks as prop */}
       <TurboStudyFlow userDecks={decks || []} />
     </div>
   );
