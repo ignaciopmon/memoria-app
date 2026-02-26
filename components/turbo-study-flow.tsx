@@ -43,7 +43,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
   const [userAnswers, setUserAnswers] = useState<string[]>([]);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   
-  // Save State
   const [selectedDeckId, setSelectedDeckId] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   
@@ -81,7 +80,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
   };
 
   // ==========================================
-  // EXTRACCIÓN CLIENT-SIDE (Bypass total de Vercel)
+  // EXTRACCIÓN CLIENT-SIDE NATIVA (Sin webs de terceros)
   // ==========================================
   const handleStartWithYoutube = async () => {
       const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
@@ -94,20 +93,42 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       
       setIsProcessingYoutube(true);
       try {
-          // Usamos la API pública de AllOrigins para saltarnos la protección CORS del navegador
-          // Y apuntamos a una herramienta especializada en saltarse bloqueos de transcripción
-          const targetUrl = `https://youtubetranscript.com/?server_vid2=${videoId}`;
-          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-
+          // El navegador se conecta directamente a la página de YouTube usando un proxy neutral para evitar el bloqueo CORS del navegador
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}`;
           const response = await fetch(proxyUrl);
-          const data = await response.json();
-          const xml = data.contents; // AllOrigins mete el resultado en 'contents'
+          
+          if (!response.ok) throw new Error("Fallo de red al conectar con YouTube.");
+          
+          const html = await response.text();
 
-          if (!xml || !xml.includes('<transcript>')) {
-              throw new Error("No se pudo obtener la transcripción. El vídeo no tiene subtítulos o están desactivados.");
+          // Buscamos los metadatos oficiales de subtítulos dentro del código de YouTube
+          let captionsData;
+          const captionsMatch = html.match(/"captions":\s*({.*?})/);
+          
+          if (captionsMatch) {
+              try { captionsData = JSON.parse(captionsMatch[1]); } catch(e) {}
+          } else {
+              const playerResMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.+?})\s*;/);
+              if (playerResMatch) {
+                  try { captionsData = JSON.parse(playerResMatch[1])?.captions; } catch(e) {}
+              }
           }
 
-          // Parseamos el XML devuelto a texto plano
+          if (!captionsData || !captionsData.playerCaptionsTracklistRenderer || !captionsData.playerCaptionsTracklistRenderer.captionTracks) {
+              throw new Error("El vídeo no tiene subtítulos disponibles o están desactivados.");
+          }
+
+          // Seleccionamos la pista en Español o Inglés por defecto
+          const tracks = captionsData.playerCaptionsTracklistRenderer.captionTracks;
+          const track = tracks.find((t: any) => t.languageCode.startsWith('es')) || 
+                        tracks.find((t: any) => t.languageCode.startsWith('en')) || 
+                        tracks[0];
+
+          // Descargamos el archivo XML puro de los subtítulos de Google usando el mismo proxy
+          const xmlRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(track.baseUrl)}`);
+          const xml = await xmlRes.text();
+
+          // Parseamos el XML
           const textRegex = /<text[^>]*>(.*?)<\/text>/g;
           let transcript = '';
           let m;
@@ -123,12 +144,13 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           }
 
           if (transcript.length < 50) {
-              throw new Error("Se descargaron los subtítulos pero estaban vacíos.");
+              throw new Error("Se descargaron los subtítulos pero el archivo estaba casi vacío.");
           }
 
           setYoutubeTranscript(transcript.trim());
           setIsReady(true);
-          toast({ title: "Vídeo cargado con éxito", description: "La transcripción se ha extraído correctamente." });
+          toast({ title: "Vídeo procesado", description: "Transcripción nativa extraída con éxito." });
+
       } catch (e: any) {
           toast({ title: "Error extrayendo vídeo", description: e.message, variant: "destructive" });
       } finally {
@@ -342,7 +364,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                   <TabsTrigger value="test" className="text-base">📝 Generate Test</TabsTrigger>
               </TabsList>
 
-              {/* CHAT TAB - SCROLL FIJO CON NATIVE DIV */}
               <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0 h-full overflow-hidden data-[state=inactive]:hidden">
                   <div className="flex-1 overflow-y-auto p-4 min-h-0 bg-background">
                       <div className="space-y-6 max-w-3xl mx-auto pb-4 w-full">
@@ -384,7 +405,6 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                   </div>
               </TabsContent>
 
-              {/* TEST TAB */}
               <TabsContent value="test" className="flex-1 overflow-auto p-4 sm:p-6 m-0 bg-muted/10 data-[state=inactive]:hidden">
                   <div className="max-w-3xl mx-auto h-full flex flex-col">
                       {testState === "setup" && (
