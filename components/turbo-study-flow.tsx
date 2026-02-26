@@ -60,11 +60,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     if (!file) return;
 
     if (file.size > 4 * 1024 * 1024) {
-        return toast({ 
-            title: "File too large", 
-            description: "Please upload a PDF smaller than 4MB.", 
-            variant: "destructive" 
-        });
+        return toast({ title: "File too large", description: "Please upload a PDF smaller than 4MB.", variant: "destructive" });
     }
 
     setIsProcessingFile(true);
@@ -84,26 +80,57 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     reader.readAsDataURL(file);
   };
 
+  // ==========================================
+  // EXTRACCIÓN CLIENT-SIDE (Bypass total de Vercel)
+  // ==========================================
   const handleStartWithYoutube = async () => {
-      if (!youtubeUrl.includes("youtube.com") && !youtubeUrl.includes("youtu.be")) {
-          return toast({ title: "Invalid URL", description: "Please enter a valid YouTube link.", variant: "destructive" });
+      const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+      const match = youtubeUrl.match(regex);
+      const videoId = match ? match[1] : null;
+
+      if (!videoId) {
+          return toast({ title: "URL Inválida", description: "Por favor introduce un enlace válido de YouTube.", variant: "destructive" });
       }
       
       setIsProcessingYoutube(true);
       try {
-          const res = await fetch("/api/turbo-study", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "fetch_youtube", youtubeUrl })
-          });
-          const data = await res.json();
-          
-          if (data.error) throw new Error(data.error);
-          
-          setYoutubeTranscript(data.data);
+          // Usamos la API pública de AllOrigins para saltarnos la protección CORS del navegador
+          // Y apuntamos a una herramienta especializada en saltarse bloqueos de transcripción
+          const targetUrl = `https://youtubetranscript.com/?server_vid2=${videoId}`;
+          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+
+          const response = await fetch(proxyUrl);
+          const data = await response.json();
+          const xml = data.contents; // AllOrigins mete el resultado en 'contents'
+
+          if (!xml || !xml.includes('<transcript>')) {
+              throw new Error("No se pudo obtener la transcripción. El vídeo no tiene subtítulos o están desactivados.");
+          }
+
+          // Parseamos el XML devuelto a texto plano
+          const textRegex = /<text[^>]*>(.*?)<\/text>/g;
+          let transcript = '';
+          let m;
+          while ((m = textRegex.exec(xml)) !== null) {
+              let clean = m[1]
+                  .replace(/<[^>]+>/g, '')
+                  .replace(/&amp;/g, '&')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .replace(/&#39;/g, "'")
+                  .replace(/&quot;/g, '"');
+              transcript += clean + ' ';
+          }
+
+          if (transcript.length < 50) {
+              throw new Error("Se descargaron los subtítulos pero estaban vacíos.");
+          }
+
+          setYoutubeTranscript(transcript.trim());
           setIsReady(true);
+          toast({ title: "Vídeo cargado con éxito", description: "La transcripción se ha extraído correctamente." });
       } catch (e: any) {
-          toast({ title: "Error loading video", description: e.message, variant: "destructive" });
+          toast({ title: "Error extrayendo vídeo", description: e.message, variant: "destructive" });
       } finally {
           setIsProcessingYoutube(false);
       }
@@ -276,7 +303,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                 disabled={!youtubeUrl || isProcessingYoutube}
                               >
                                   {isProcessingYoutube ? (
-                                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Extracting transcript...</>
+                                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Descargando subtítulos...</>
                                   ) : (
                                       "Load Video Transcript"
                                   )}
