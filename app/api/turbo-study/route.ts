@@ -1,14 +1,15 @@
 // app/api/turbo-study/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-import { YoutubeTranscript } from 'youtube-transcript'; // Nuevo paquete importado
+import { YoutubeTranscript } from 'youtube-transcript';
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 60; // Prevent timeout
 
 const apiKey = process.env.GOOGLE_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
+// Tu sistema de fallback
 const MODELS = [
   "gemini-2.5-flash",
   "gemma-3-27b",
@@ -25,7 +26,6 @@ function cleanAndParseJSON(text: string) {
     return JSON.parse(cleanText);
 }
 
-// Función auxiliar para extraer ID de youtube
 function extractYoutubeId(url: string) {
     const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
     const match = url.match(regex);
@@ -41,13 +41,22 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { action, messages, pdfBase64, youtubeUrl, questionCount, language } = body;
     
-    let systemInstruction = "You are an expert and friendly Artificial Intelligence tutor designed to help the user study. Answer questions accurately based on the provided material.";
+    // 1. PROMPT DEL CHAT MEJORADO
+    let systemInstruction = "You are an expert and friendly AI tutor. Your goal is to help the user study the provided material. Focus on explaining the main themes and core concepts. You may use your general knowledge to complement the explanations, but do not hallucinate information unrelated to the subjects of the document.";
     let promptText = messages?.[messages.length - 1]?.content || "";
     
+    // 2. PROMPT DEL TEST ALTAMENTE ESTRICTO (Conceptos generales + Info externa)
     if (action === "generate_test") {
-         systemInstruction = `You are an expert test creator. Your goal is to create a multiple-choice test of ${questionCount} questions in ${language} based ONLY on the provided material.
-         Return ONLY a raw JSON array. Exact format: [{"question": "...", "options": {"A": "...", "B": "...", "C": "...", "D": "..."}, "answer": "A", "explanation": "Brief explanation of why this is correct"}]`;
-         promptText = "Generate the test now based on the provided document/video.";
+         systemInstruction = `You are an expert university professor creating a multiple-choice test. 
+         Generate exactly ${questionCount} questions in ${language} about the MAIN TOPICS discussed in the provided material.
+         
+         CRITICAL RULES:
+         1. DO NOT ask about specific anecdotes, trivial examples, or overly specific numbers/names mentioned in the text.
+         2. Focus exclusively on the CORE CONCEPTS, theories, and the general framework of the document.
+         3. You MUST use your extensive external knowledge to enrich the questions and provide deeper context, as long as it directly relates to the main subjects covered in the provided material.
+         
+         Return ONLY a raw JSON array. Exact format: [{"question": "...", "options": {"A": "...", "B": "...", "C": "...", "D": "..."}, "answer": "A", "explanation": "Brief explanation of why this is correct based on the concept"}]`;
+         promptText = "Analyze the core themes of the provided material and generate the conceptual test now.";
     }
 
     const parts: any[] = [];
@@ -62,21 +71,24 @@ export async function POST(request: Request) {
         });
     }
     
-    // PROCESAMIENTO AVANZADO DE YOUTUBE (Extracción de Transcripción)
+    // PROCESAMIENTO DE YOUTUBE (Anti-Alucinaciones)
     if (youtubeUrl) {
         try {
             const videoId = extractYoutubeId(youtubeUrl);
             if (!videoId) throw new Error("Invalid YouTube URL");
             
-            // Extraemos los subtitulos/transcripción real del vídeo
+            // Intentamos sacar los subtítulos sí o sí
             const transcript = await YoutubeTranscript.fetchTranscript(videoId);
             const fullText = transcript.map(t => t.text).join(' ');
             
-            parts.push({ text: `Study Material (YouTube Video Transcript):\n\n${fullText}\n\n---\nPlease use the transcript above to answer or generate the test.` });
+            parts.push({ text: `Study Material (YouTube Video Transcript):\n\n${fullText}\n\n---\nPlease use the main topics from the transcript above as the primary basis for your response.` });
         } catch (error: any) {
             console.error("Transcript fetch error:", error);
-            // Fallback en caso de que el vídeo no tenga subtítulos
-            parts.push({ text: `Study Material (YouTube Video Link): ${youtubeUrl}. Please use your knowledge about the content of this video to assist the user.` });
+            // IMPORTANTE: Si falla, devolvemos un ERROR 400. 
+            // Esto evita que la IA reciba solo un link y se invente la historia.
+            return NextResponse.json({ 
+                error: "Could not fetch YouTube subtitles. The video might not have captions enabled, or YouTube is blocking the request. Please try another video or upload a PDF." 
+            }, { status: 400 });
         }
     }
     
@@ -94,6 +106,7 @@ export async function POST(request: Request) {
     let resultData;
     let lastError: any;
 
+    // SISTEMA DE FALLBACK ITERATIVO
     for (const modelName of MODELS) {
         try {
             console.log(`[TurboStudy] Attempting '${action}' with model: ${modelName}`);
