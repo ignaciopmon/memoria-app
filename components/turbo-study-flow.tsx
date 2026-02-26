@@ -16,15 +16,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Loader2, FileText, Send, Bot, User, ArrowRight, CheckCircle, XCircle, Save, Sparkles, Upload, AlignLeft, MessageSquare, ListTodo, Lightbulb, Baby, Book, Plus, FolderOpen, Quote, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, GraduationCap, PlusCircle, Zap } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm"; // 🚀 FIX: Plugin para renderizar tablas y markdown avanzado
 
 import { createClient } from "@/lib/supabase/client";
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// 🚀 FIX: Inicializamos el Worker estrictamente en el momento en el que el cliente carga react-pdf
 const Document = dynamic(() => import('react-pdf').then(mod => {
-    // Usar la misma versión exacta para evitar el error de DOMMatrix o fallos de renderizado
     mod.pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${mod.pdfjs.version}/build/pdf.worker.min.mjs`;
     return mod.Document;
 }), { 
@@ -32,7 +31,7 @@ const Document = dynamic(() => import('react-pdf').then(mod => {
     loading: () => (
         <div className="flex flex-col items-center justify-center p-20 text-muted-foreground h-full w-full">
             <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
-            <p>Initializing PDF Engine...</p>
+            <p className="font-medium animate-pulse">Initializing PDF Engine...</p>
         </div>
     )
 });
@@ -129,11 +128,13 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
   useEffect(() => {
       const handleGlobalMouseDown = (e: MouseEvent) => {
           if (popupRef.current && popupRef.current.contains(e.target as Node)) return;
+          // 🚀 MEJORA: Limpiamos la selección nativa si hacemos clic fuera para no confundir al usuario
+          if (selection) window.getSelection()?.removeAllRanges();
           setSelection(null);
       };
       document.addEventListener("mousedown", handleGlobalMouseDown);
       return () => document.removeEventListener("mousedown", handleGlobalMouseDown);
-  }, []);
+  }, [selection]);
 
   const resetWorkspace = () => {
     setIsReady(false); setPdfBase64(null); setPdfFile(null); setSummary(null); setStudyGuide(null);
@@ -214,8 +215,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
 
     setIsProcessingFile(true);
 
-    // 🚀 FIX: Intentamos subir a la nube, pero si falla NO DETENEMOS el proceso. 
-    // Así puedes seguir usando la app aunque falle el bucket o las RLS de Supabase.
     const filePath = `${userId}/${activeNotebook.id}/${file.name}`;
     const { error: uploadError } = await supabase.storage.from('notebook_files').upload(filePath, file, { upsert: true });
 
@@ -624,7 +623,6 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                               <Document 
                                   file={pdfFile} 
                                   onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                                  // 🚀 FIX: Si el PDF o el worker falla, lo verás visualmente.
                                   onLoadError={(error) => {
                                       console.error("PDF Load Error:", error);
                                       toast({ title: "PDF Engine Error", description: error.message, variant: "destructive" });
@@ -632,7 +630,7 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                                   loading={
                                       <div className="flex flex-col items-center justify-center p-20 mt-20 text-muted-foreground">
                                           <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
-                                          <p className="animate-pulse">Rendering Document...</p>
+                                          <p className="animate-pulse font-medium">Rendering Document...</p>
                                       </div>
                                   }
                               >
@@ -663,7 +661,10 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                                       <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
                                           {msg.role === 'model' && <div className="bg-primary/10 border border-primary/20 p-2.5 rounded-xl h-fit shadow-sm"><Bot className="h-5 w-5 text-primary" /></div>}
                                           <div className={`p-4 rounded-2xl max-w-[85%] text-[15px] leading-relaxed shadow-sm flex flex-col gap-3 ${msg.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-card border rounded-tl-sm prose dark:prose-invert prose-p:leading-relaxed prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800'}`}>
-                                              {msg.role === 'user' ? msg.content : <ReactMarkdown>{msg.content}</ReactMarkdown>}
+                                              {/* 🚀 FIX: Añadido remarkGfm y overflow oculto para el Chat */}
+                                              <div className="overflow-x-auto w-full">
+                                                {msg.role === 'user' ? msg.content : <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>}
+                                              </div>
                                               
                                               {msg.excerpt && (
                                                   <div className="bg-primary-foreground/10 border border-primary-foreground/20 rounded-xl p-3 text-sm mt-1">
@@ -731,7 +732,14 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                                           <h2 className="text-xl font-bold flex items-center gap-2"><GraduationCap className="h-5 w-5 text-primary"/> Study Guide</h2>
                                           <Button variant="outline" size="sm" onClick={handleGenerateGuide}>Regenerate</Button>
                                       </div>
-                                      <Card className="border-border shadow-xl"><CardContent className="p-8"><div className="prose prose-lg dark:prose-invert max-w-none"><ReactMarkdown>{studyGuide}</ReactMarkdown></div></CardContent></Card>
+                                      <Card className="border-border shadow-xl">
+                                          <CardContent className="p-8">
+                                              {/* 🚀 FIX: Añadido overflow-x-auto, w-full y remarkGfm */}
+                                              <div className="prose prose-lg dark:prose-invert max-w-none w-full overflow-x-auto">
+                                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{studyGuide}</ReactMarkdown>
+                                              </div>
+                                          </CardContent>
+                                      </Card>
                                   </div>
                               )}
                           </div>
@@ -818,7 +826,14 @@ export function TurboStudyFlow({ userDecks, userId }: { userDecks: { id: string,
                               {summary && (
                                   <div className="space-y-6 pb-12 mt-4">
                                       <div className="flex justify-between items-center bg-muted/30 p-4 rounded-xl border"><h2 className="text-xl font-bold flex items-center gap-2"><AlignLeft className="h-5 w-5 text-primary"/> Summary</h2><Button variant="outline" size="sm" onClick={handleGenerateSummary}>Regenerate</Button></div>
-                                      <Card className="border-border shadow-xl"><CardContent className="p-8"><div className="prose prose-lg dark:prose-invert max-w-none"><ReactMarkdown>{summary}</ReactMarkdown></div></CardContent></Card>
+                                      <Card className="border-border shadow-xl">
+                                          <CardContent className="p-8">
+                                              {/* 🚀 FIX: Añadido overflow-x-auto, w-full y remarkGfm */}
+                                              <div className="prose prose-lg dark:prose-invert max-w-none w-full overflow-x-auto">
+                                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
+                                              </div>
+                                          </CardContent>
+                                      </Card>
                                   </div>
                               )}
                           </div>
