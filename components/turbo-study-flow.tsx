@@ -38,6 +38,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.2);
   const [selection, setSelection] = useState<{ text: string; x: number; y: number } | null>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
 
   // Chat State
   const [messages, setMessages] = useState<Message[]>([{ role: "model", content: "Hi! I'm your AI tutor. \n\n**✨ Magic Feature:** Select any text directly on the document to instantly translate, summarize or explain it!" }]);
@@ -71,14 +72,20 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
     }
   }, [messages, summary]);
 
-  // Cerrar el menú flotante si hacemos clic fuera
+  // Robust click-outside detection for the floating menu
   useEffect(() => {
-      const handleMouseDown = () => {
-          if (selection) setSelection(null);
+      const handleGlobalMouseDown = (e: MouseEvent) => {
+          // If we click inside the popup, do nothing (let the button handlers run)
+          if (popupRef.current && popupRef.current.contains(e.target as Node)) {
+              return;
+          }
+          // Otherwise, clear the selection UI
+          setSelection(null);
       };
-      document.addEventListener("mousedown", handleMouseDown);
-      return () => document.removeEventListener("mousedown", handleMouseDown);
-  }, [selection]);
+      
+      document.addEventListener("mousedown", handleGlobalMouseDown);
+      return () => document.removeEventListener("mousedown", handleGlobalMouseDown);
+  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,7 +133,10 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       setMessages(newMessages);
       if(!customPrompt) setChatInput("");
       setIsChatting(true);
-      setSelection(null); // Hide popup
+      
+      // Clean up selection after sending
+      setSelection(null);
+      window.getSelection()?.removeAllRanges();
 
       const apiMessages = newMessages.map(msg => ({
           role: msg.role,
@@ -150,9 +160,9 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       }
   };
 
-  // --- FLOATING MENU HIGHLIGHT DETECTOR ---
-  const handleTextSelection = (e: React.MouseEvent) => {
-      // Small delay to allow double-click selection to register
+  // --- IMPROVED FLOATING MENU HIGHLIGHT DETECTOR ---
+  const handleTextSelection = () => {
+      // Small timeout to let the browser finish its native selection process
       setTimeout(() => {
           const sel = window.getSelection();
           if (!sel || sel.isCollapsed) return;
@@ -163,12 +173,13 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           const range = sel.getRangeAt(0);
           const rect = range.getBoundingClientRect();
 
+          // Calculate middle top position of the selection
           setSelection({
               text,
               x: rect.left + rect.width / 2,
               y: rect.top - 10
           });
-      }, 10);
+      }, 50);
   };
 
   const executeActionOnSelection = (actionType: "explain" | "summarize" | "translate") => {
@@ -182,7 +193,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       handleSendMessage(prompt, selection.text);
   };
 
-  const handleGenerateTest = async () => { /* ... (Same logic as before) ... */ 
+  const handleGenerateTest = async () => { 
       setTestState("generating");
       try {
           const res = await fetch("/api/turbo-study", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate_test", questionCount, language, pdfBase64 }) });
@@ -194,7 +205,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       }
   };
 
-  const handleGenerateSummary = async () => { /* ... (Same logic as before) ... */ 
+  const handleGenerateSummary = async () => { 
       setIsGeneratingSummary(true);
       try {
           const res = await fetch("/api/turbo-study", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "summarize", pdfBase64 }) });
@@ -208,13 +219,13 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
       }
   };
 
-  const finishTest = () => { /* ... (Same logic as before) ... */ 
+  const finishTest = () => { 
       const wrongs: WrongAnswer[] = [];
       questions.forEach((q, idx) => { if (userAnswers[idx] !== q.answer) { wrongs.push({ ...q, userAnswer: userAnswers[idx] }); } });
       setWrongAnswers(wrongs); setTestState("results");
   };
 
-  const handleSaveToDeck = async () => { /* ... (Same logic as before) ... */ 
+  const handleSaveToDeck = async () => { 
     if (!selectedDeckId) return toast({ title: "Select a deck", variant: "destructive" });
     setIsSaving(true);
     const cardsToProcess = saveOption === "all" ? questions : wrongAnswers;
@@ -276,19 +287,35 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           {/* FLOATING ACTION MENU (Magic Highlight popup) */}
           {selection && (
               <div 
+                  ref={popupRef}
                   className="fixed z-[100] flex gap-1.5 items-center bg-background/95 backdrop-blur-xl border shadow-2xl p-1.5 rounded-xl animate-in fade-in zoom-in-95 pointer-events-auto"
                   style={{ top: Math.max(10, selection.y - 60), left: selection.x, transform: 'translateX(-50%)' }}
-                  onMouseDown={(e) => e.stopPropagation()} // Prevent clicking the menu from hiding it
               >
-                  <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-600 transition-colors" onClick={() => executeActionOnSelection('explain')}>
+                  {/* Notice the onMouseDown with e.preventDefault() -> This is the magic trick to not lose selection */}
+                  <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="h-9 px-3 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-600 transition-colors" 
+                      onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('explain'); }}
+                  >
                       <Lightbulb className="w-4 h-4 mr-2 text-yellow-500" /> Explain
                   </Button>
                   <div className="w-[1px] h-6 bg-border mx-1"></div>
-                  <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-blue-500/10 hover:text-blue-600 transition-colors" onClick={() => executeActionOnSelection('summarize')}>
+                  <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="h-9 px-3 rounded-lg hover:bg-blue-500/10 hover:text-blue-600 transition-colors" 
+                      onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('summarize'); }}
+                  >
                       <AlignLeft className="w-4 h-4 mr-2 text-blue-500" /> Summarize
                   </Button>
                   <div className="w-[1px] h-6 bg-border mx-1"></div>
-                  <Button size="sm" variant="ghost" className="h-9 px-3 rounded-lg hover:bg-green-500/10 hover:text-green-600 transition-colors" onClick={() => executeActionOnSelection('translate')}>
+                  <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="h-9 px-3 rounded-lg hover:bg-green-500/10 hover:text-green-600 transition-colors" 
+                      onMouseDown={(e) => { e.preventDefault(); executeActionOnSelection('translate'); }}
+                  >
                       <Languages className="w-4 h-4 mr-2 text-green-500" /> Translate
                   </Button>
               </div>
@@ -312,10 +339,10 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
           {/* Main Workspace */}
           <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
               
-              {/* Left Panel: CUSTOM PDF VIEWER */}
-              <ResizablePanel defaultSize={50} minSize={30} className="bg-zinc-100 dark:bg-zinc-950 hidden md:flex flex-col border-r relative z-10">
+              {/* Left Panel: CUSTOM PDF VIEWER WITH NATIVE SCROLL */}
+              <ResizablePanel defaultSize={50} minSize={30} className="bg-zinc-100 dark:bg-zinc-900/50 hidden md:flex flex-col border-r relative z-10">
                   {/* PDF Toolbar */}
-                  <div className="h-12 bg-background/50 border-b flex items-center justify-between px-4 shrink-0 backdrop-blur-md">
+                  <div className="h-12 bg-background/80 border-b flex items-center justify-between px-4 shrink-0 backdrop-blur-md z-20">
                       <div className="flex items-center gap-2">
                           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPageNumber(p => Math.max(1, p - 1))} disabled={pageNumber <= 1}>
                               <ChevronLeft className="h-4 w-4" />
@@ -338,22 +365,26 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                       </div>
                   </div>
 
-                  {/* PDF Content Area */}
-                  <ScrollArea className="flex-1 w-full" onMouseUp={handleTextSelection}>
-                      <div className="flex justify-center p-8 min-h-full">
+                  {/* PROPER PDF CONTAINER: Native overflow for smooth scrolling and zooming */}
+                  <div 
+                      className="flex-1 overflow-auto relative" 
+                      onMouseUp={handleTextSelection}
+                      onScroll={() => { if(selection) setSelection(null); }} // Hide popup gracefully on scroll
+                  >
+                      {/* min-w-max ensures the container grows if the PDF is zoomed out of bounds */}
+                      <div className="flex justify-center p-8 min-h-full min-w-max">
                           {pdfFile && (
                               <Document 
                                   file={pdfFile} 
                                   onLoadSuccess={({ numPages }) => setNumPages(numPages)}
                                   loading={
-                                      <div className="flex flex-col items-center justify-center mt-20 text-muted-foreground">
-                                          <Loader2 className="h-8 w-8 animate-spin mb-4" />
-                                          <p>Rendering native PDF...</p>
+                                      <div className="flex flex-col items-center justify-center mt-32 text-muted-foreground">
+                                          <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
+                                          <p className="font-medium text-lg">Rendering high-res document...</p>
                                       </div>
                                   }
-                                  className="flex flex-col items-center"
                               >
-                                  <div className="shadow-2xl border border-border/50 rounded-sm overflow-hidden bg-white">
+                                  <div className="shadow-2xl border border-border/50 rounded-sm bg-white ring-1 ring-black/5">
                                       <Page 
                                           pageNumber={pageNumber} 
                                           scale={scale} 
@@ -365,7 +396,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                               </Document>
                           )}
                       </div>
-                  </ScrollArea>
+                  </div>
               </ResizablePanel>
 
               <ResizableHandle withHandle className="bg-border/50 hover:bg-primary/50 transition-colors" />
@@ -440,9 +471,8 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                           </div>
                       </TabsContent>
 
-                      {/* TEST TAB (Igual que antes) */}
+                      {/* TEST TAB */}
                       <TabsContent value="test" className="flex-1 overflow-auto p-4 sm:p-8 m-0 bg-background data-[state=inactive]:hidden">
-                          {/* ... contenido del tab de test previo (no modificado para no alargar el código) ... */}
                           <div className="max-w-2xl mx-auto h-full flex flex-col">
                               {testState === "setup" && (
                                   <div className="space-y-8 mt-4 animate-in fade-in slide-in-from-bottom-4">
@@ -462,6 +492,7 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                                               <SelectItem value="5">5 Questions</SelectItem>
                                                               <SelectItem value="10">10 Questions</SelectItem>
                                                               <SelectItem value="15">15 Questions</SelectItem>
+                                                              <SelectItem value="20">20 Questions</SelectItem>
                                                           </SelectContent>
                                                       </Select>
                                                   </div>
@@ -472,6 +503,8 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                                           <SelectContent>
                                                               <SelectItem value="English">English</SelectItem>
                                                               <SelectItem value="Spanish">Spanish</SelectItem>
+                                                              <SelectItem value="French">French</SelectItem>
+                                                              <SelectItem value="German">German</SelectItem>
                                                           </SelectContent>
                                                       </Select>
                                                   </div>
@@ -483,13 +516,222 @@ export function TurboStudyFlow({ userDecks }: { userDecks: { id: string, name: s
                                       </Card>
                                   </div>
                               )}
-                              {/* ... el resto del test/resultados es exactamente igual ... */}
+
+                              {testState === "generating" && (
+                                  <div className="flex flex-col items-center justify-center h-full gap-6">
+                                      <div className="relative">
+                                          <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse"></div>
+                                          <Loader2 className="h-16 w-16 animate-spin text-primary relative z-10" />
+                                      </div>
+                                      <div className="text-center space-y-2">
+                                          <p className="text-2xl font-bold">Synthesizing material...</p>
+                                          <p className="text-muted-foreground">Crafting deep-thinking questions from your document.</p>
+                                      </div>
+                                  </div>
+                              )}
+
+                              {testState === "taking" && questions.length > 0 && (
+                                  <div className="mt-4 flex flex-col h-full pb-4">
+                                      <div className="flex items-center gap-4 mb-6">
+                                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                              <div className="h-full bg-primary transition-all duration-500 ease-out" style={{ width: `${((currentQIndex) / questions.length) * 100}%` }} />
+                                          </div>
+                                          <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider shrink-0">
+                                              Q {currentQIndex + 1} / {questions.length}
+                                          </span>
+                                      </div>
+
+                                      <Card className="shadow-xl border-primary/20 flex-1 animate-in fade-in slide-in-from-right-8 bg-card/80 backdrop-blur-md">
+                                          <CardHeader className="pb-6">
+                                              <CardTitle className="text-2xl leading-relaxed">{questions[currentQIndex].question}</CardTitle>
+                                          </CardHeader>
+                                          <CardContent>
+                                              <RadioGroup 
+                                                  value={userAnswers[currentQIndex]} 
+                                                  onValueChange={(val) => {
+                                                      const newAns = [...userAnswers];
+                                                      newAns[currentQIndex] = val;
+                                                      setUserAnswers(newAns);
+                                                  }}
+                                                  className="space-y-3"
+                                              >
+                                                  {Object.entries(questions[currentQIndex].options).map(([key, value]) => (
+                                                      <Label 
+                                                          key={key}
+                                                          htmlFor={`opt-${key}`}
+                                                          className={`flex items-start space-x-4 p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 ${userAnswers[currentQIndex] === key ? 'border-primary bg-primary/5 shadow-md scale-[1.01]' : 'border-muted hover:border-primary/40 hover:bg-muted/50'}`}
+                                                      >
+                                                          <RadioGroupItem value={key} id={`opt-${key}`} className="mt-1 shrink-0" />
+                                                          <span className="text-base font-medium leading-relaxed">{value}</span>
+                                                      </Label>
+                                                  ))}
+                                              </RadioGroup>
+                                          </CardContent>
+                                      </Card>
+                                      
+                                      <div className="mt-6 flex justify-end">
+                                          <Button size="lg" className="h-14 px-10 text-lg rounded-xl shadow-lg" disabled={!userAnswers[currentQIndex]} onClick={() => {
+                                              if (currentQIndex < questions.length - 1) setCurrentQIndex(p => p + 1);
+                                              else finishTest();
+                                          }}>
+                                              {currentQIndex === questions.length - 1 ? "Complete Exam" : "Next Question"} <ArrowRight className="ml-2 h-5 w-5" />
+                                          </Button>
+                                      </div>
+                                  </div>
+                              )}
+
+                              {testState === "results" && (
+                                  <div className="space-y-8 pb-10 animate-in fade-in slide-in-from-bottom-8 mt-4">
+                                      <div className="text-center p-10 bg-gradient-to-br from-muted/50 to-muted border rounded-3xl shadow-inner relative overflow-hidden">
+                                          <div className="absolute top-0 right-0 p-8 opacity-10"><CheckCircle className="w-32 h-32"/></div>
+                                          <h2 className="text-6xl font-black text-primary mb-4 drop-shadow-sm">
+                                              {questions.length - wrongAnswers.length} <span className="text-4xl text-muted-foreground">/ {questions.length}</span>
+                                          </h2>
+                                          <p className="text-xl font-medium text-muted-foreground">Score Finalized.</p>
+                                      </div>
+
+                                      <Card className="border-border shadow-xl overflow-hidden rounded-2xl">
+                                          <CardHeader className="bg-muted/30 pb-6 border-b">
+                                              <CardTitle className="text-2xl flex items-center justify-between">
+                                                  <span className="flex items-center gap-2"><ListTodo className="h-6 w-6 text-primary" /> Test Review</span>
+                                                  <span className="text-sm font-normal text-muted-foreground">{wrongAnswers.length} mistakes</span>
+                                              </CardTitle>
+                                          </CardHeader>
+                                          <CardContent className="p-0">
+                                              <ScrollArea className="h-[400px]">
+                                                  <div className="p-6 space-y-6">
+                                                      {questions.map((q, i) => {
+                                                          const isCorrect = userAnswers[i] === q.answer;
+                                                          return (
+                                                              <div key={i} className={`p-6 border rounded-xl shadow-sm ${isCorrect ? 'bg-green-50/50 dark:bg-green-950/20 border-green-200 dark:border-green-900/50' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50'}`}>
+                                                                  <p className="font-bold text-lg mb-4 flex items-start gap-3">
+                                                                      <span className="mt-1">{isCorrect ? <CheckCircle className="w-5 h-5 text-green-600 shrink-0"/> : <XCircle className="w-5 h-5 text-destructive shrink-0"/>}</span>
+                                                                      {q.question}
+                                                                  </p>
+                                                                  <div className="space-y-3 ml-8 text-[15px]">
+                                                                      {!isCorrect && (
+                                                                          <div className="flex items-center gap-2 text-destructive font-medium bg-background/50 p-2 rounded border border-red-100 dark:border-red-900">
+                                                                              <span>Your Answer:</span> <span className="line-through opacity-80">{q.options[userAnswers[i] as keyof typeof q.options]}</span>
+                                                                          </div>
+                                                                      )}
+                                                                      <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-bold bg-background/50 p-2 rounded border border-green-100 dark:border-green-900">
+                                                                          <span>Correct Answer:</span> <span>{q.options[q.answer as keyof typeof q.options]}</span>
+                                                                      </div>
+                                                                      {q.explanation && (
+                                                                          <div className="mt-4 pt-4 border-t border-border/50">
+                                                                              <p className="text-muted-foreground leading-relaxed"><span className="font-semibold text-foreground">AI Explanation:</span> {q.explanation}</p>
+                                                                          </div>
+                                                                      )}
+                                                                  </div>
+                                                              </div>
+                                                          );
+                                                      })}
+                                                  </div>
+                                              </ScrollArea>
+                                          </CardContent>
+                                          <CardFooter className="bg-card border-t flex-col gap-6 pt-8 pb-8">
+                                              <div className="w-full space-y-4">
+                                                  <h4 className="font-semibold text-lg border-b pb-2">Export to Flashcards</h4>
+                                                  
+                                                  <RadioGroup value={saveOption} onValueChange={(val: any) => setSaveOption(val)} className="flex flex-col sm:flex-row gap-4 mb-4">
+                                                      <Label htmlFor="save-mistakes" className={`flex-1 flex items-center justify-between border-2 p-4 rounded-xl cursor-pointer transition-all ${saveOption === 'mistakes' ? 'border-primary bg-primary/5 shadow-sm' : 'border-muted hover:bg-muted/50'}`}>
+                                                          <div className="flex items-center gap-3">
+                                                              <RadioGroupItem value="mistakes" id="save-mistakes" />
+                                                              <div>
+                                                                  <p className="font-semibold text-base">Save Mistakes Only</p>
+                                                                  <p className="text-sm text-muted-foreground">Focus on weak spots ({wrongAnswers.length} cards)</p>
+                                                              </div>
+                                                          </div>
+                                                      </Label>
+                                                      <Label htmlFor="save-all" className={`flex-1 flex items-center justify-between border-2 p-4 rounded-xl cursor-pointer transition-all ${saveOption === 'all' ? 'border-primary bg-primary/5 shadow-sm' : 'border-muted hover:bg-muted/50'}`}>
+                                                          <div className="flex items-center gap-3">
+                                                              <RadioGroupItem value="all" id="save-all" />
+                                                              <div>
+                                                                  <p className="font-semibold text-base">Save All Questions</p>
+                                                                  <p className="text-sm text-muted-foreground">Full comprehensive review ({questions.length} cards)</p>
+                                                              </div>
+                                                          </div>
+                                                      </Label>
+                                                  </RadioGroup>
+
+                                                  <div className="flex flex-col sm:flex-row gap-4 items-end">
+                                                      <div className="flex-1 w-full space-y-2">
+                                                          <Label className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Destination Deck</Label>
+                                                          <Select value={selectedDeckId} onValueChange={setSelectedDeckId}>
+                                                              <SelectTrigger className="h-12 bg-background text-base"><SelectValue placeholder="Select a deck..." /></SelectTrigger>
+                                                              <SelectContent>
+                                                                  {userDecks.map(deck => (
+                                                                      <SelectItem key={deck.id} value={deck.id}>{deck.name}</SelectItem>
+                                                                  ))}
+                                                              </SelectContent>
+                                                          </Select>
+                                                      </div>
+                                                      <Button onClick={handleSaveToDeck} disabled={isSaving || !selectedDeckId || (saveOption === 'mistakes' && wrongAnswers.length === 0)} className="w-full sm:w-auto h-12 px-8 font-semibold shadow-md">
+                                                          {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5" />} Export Cards
+                                                      </Button>
+                                                  </div>
+                                              </div>
+                                          </CardFooter>
+                                      </Card>
+                                      
+                                      <Button variant="ghost" className="w-full h-14 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl" onClick={() => setTestState("setup")}>
+                                          Start a New Session
+                                      </Button>
+                                  </div>
+                              )}
                           </div>
                       </TabsContent>
 
-                      {/* SUMMARY TAB (Igual que antes) */}
+                      {/* SUMMARY TAB */}
                       <TabsContent value="summary" className="flex-1 overflow-auto p-4 sm:p-8 m-0 bg-background data-[state=inactive]:hidden">
-                          {/* ... contenido del tab de summary previo ... */}
+                          <div className="max-w-3xl mx-auto h-full flex flex-col">
+                              {!summary && !isGeneratingSummary && (
+                                  <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                                      <div className="bg-primary/10 p-5 rounded-3xl shadow-inner border border-primary/10">
+                                          <AlignLeft className="h-10 w-10 text-primary" />
+                                      </div>
+                                      <div className="space-y-2">
+                                          <h2 className="text-3xl font-bold">Executive Intelligence</h2>
+                                          <p className="text-muted-foreground text-lg max-w-md mx-auto">Generate a high-level, perfectly structured summary of the entire document instantly.</p>
+                                      </div>
+                                      <Button size="lg" onClick={handleGenerateSummary} className="mt-4 h-14 px-10 text-lg rounded-xl shadow-lg shadow-primary/20">
+                                          Generate Analysis <Sparkles className="ml-2 h-5 w-5" />
+                                      </Button>
+                                  </div>
+                              )}
+
+                              {isGeneratingSummary && (
+                                  <div className="flex flex-col items-center justify-center h-full gap-6">
+                                      <div className="relative">
+                                          <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse"></div>
+                                          <Loader2 className="h-16 w-16 animate-spin text-primary relative z-10" />
+                                      </div>
+                                      <div className="text-center space-y-2">
+                                          <p className="text-2xl font-bold">Extracting key insights...</p>
+                                          <p className="text-muted-foreground">Reading the full context of the document.</p>
+                                      </div>
+                                  </div>
+                              )}
+
+                              {summary && (
+                                  <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-8 mt-4">
+                                      <div className="flex justify-between items-center bg-muted/30 p-4 rounded-xl border">
+                                          <div className="flex items-center gap-3">
+                                              <div className="bg-primary/20 p-2 rounded-lg"><AlignLeft className="h-5 w-5 text-primary"/></div>
+                                              <h2 className="text-xl font-bold">Executive Summary</h2>
+                                          </div>
+                                          <Button variant="outline" size="sm" onClick={handleGenerateSummary} className="h-9">Regenerate</Button>
+                                      </div>
+                                      <Card className="border-border shadow-xl">
+                                          <CardContent className="p-8 sm:p-10">
+                                              <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-bold prose-h1:text-3xl prose-h2:text-2xl prose-a:text-primary prose-li:marker:text-primary">
+                                                  <ReactMarkdown>{summary}</ReactMarkdown>
+                                              </div>
+                                          </CardContent>
+                                      </Card>
+                                  </div>
+                              )}
+                          </div>
                       </TabsContent>
                   </Tabs>
               </ResizablePanel>
