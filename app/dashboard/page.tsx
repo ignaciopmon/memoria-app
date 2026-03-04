@@ -69,6 +69,7 @@ export default async function DashboardPage() {
 
           <div className="hidden items-center gap-2 md:flex">
             <Button variant="ghost" size="sm" asChild><Link href="/upcoming">Upcoming</Link></Button>
+            <Button variant="ghost" size="sm" asChild><Link href="/simulations">Simulations</Link></Button>
             <Button variant="ghost" size="sm" asChild><Link href="/trash">Trash</Link></Button>
             <span className="h-6 border-l mx-1"></span>
             <Button variant="ghost" size="sm" asChild><Link href="/settings">Settings</Link></Button>
@@ -84,6 +85,7 @@ export default async function DashboardPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild><Link href="/upcoming">Upcoming</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/simulations">Simulations</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/trash">Trash</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
