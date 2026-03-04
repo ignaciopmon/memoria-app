@@ -107,14 +107,19 @@ export default function SimulationsPage() {
         return;
     }
 
-    // Formatear, mezclar y limitar (ej. máximo 30 tarjetas por simulación para no saturar)
-    const formattedCards: Flashcard[] = fetchedCards.map(c => ({
-        id: c.id,
-        deck_id: c.deck_id,
-        deck_name: c.decks?.name || 'Unknown',
-        front: c.front,
-        back: c.back
-    })).sort(() => Math.random() - 0.5).slice(0, 30);
+// Formatear, mezclar y limitar (ej. máximo 30 tarjetas por simulación para no saturar)
+    const formattedCards: Flashcard[] = fetchedCards.map((c: any) => {
+        // Supabase a veces devuelve la relación como objeto y otras como array según los tipos generados
+        const deckName = Array.isArray(c.decks) ? c.decks[0]?.name : c.decks?.name;
+
+        return {
+            id: c.id,
+            deck_id: c.deck_id,
+            deck_name: deckName || 'Unknown',
+            front: c.front,
+            back: c.back
+        };
+    }).sort(() => Math.random() - 0.5).slice(0, 30);
 
     setCards(formattedCards);
     setCurrentIndex(0);
