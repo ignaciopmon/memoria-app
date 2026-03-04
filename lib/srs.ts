@@ -14,15 +14,15 @@ export interface UserSettings {
   hard_interval_days: number;
   good_interval_days: number;
   easy_interval_days: number;
-  enable_max_interval?: boolean;
-  max_interval_days?: number;
+  enable_max_interval?: boolean; // NUEVO: Switch para activar
+  max_interval_days?: number;    // NUEVO: Límite de días
   zen_mode?: boolean;
   sound_enabled?: boolean;
 }
 
 export type Rating = 1 | 2 | 3 | 4;
 
-const ABSOLUTE_MAX_INTERVAL = 3650; // Límite de seguridad de 10 años
+const ABSOLUTE_MAX_INTERVAL = 3650; // Límite de seguridad de 10 años para evitar errores en BD
 
 export const calculateNextReview = (card: CardSRS, rating: Rating, settings: UserSettings) => {
   let { ease_factor, interval, repetitions } = card;
@@ -39,37 +39,37 @@ export const calculateNextReview = (card: CardSRS, rating: Rating, settings: Use
   const now = new Date();
   let nextReviewDate = now;
 
-  // LÓGICA DE FRENO DE MANO Y REGLA DEL DOBLE
   if (rating < 3) {
-    // Si falla (1 o 2), se reinicia la tarjeta
     repetitions = 0;
     if (rating === 1) {
       interval = 0;
       nextReviewDate = addMinutes(now, safeSettings.again);
     } else {
-      interval = safeSettings.hard; // Hard te da un pequeño margen de 1 día
+      if (card.last_rating === 2) {
+        interval = Math.max(1, Math.round(interval * 0.5));
+      } else {
+        interval = safeSettings.hard;
+      }
     }
   } else {
-    // Si acierta (3 o 4)
     repetitions += 1;
     if (repetitions === 1) {
       interval = safeSettings.good;
     } else if (repetitions === 2) {
       interval = safeSettings.easy;
     } else {
-      // REGLA DEL DOBLE: R30 -> R60 -> R120
-      interval = interval === 0 ? safeSettings.good : interval * 2;
+      interval = Math.round(interval * ease_factor);
     }
   }
 
-  // Mantenemos el ease_factor por compatibilidad con la base de datos
+  // Ajuste del Ease Factor
   ease_factor = ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02));
   ease_factor = Math.max(1.3, Number(ease_factor.toFixed(2)));
 
-  // Límite absoluto
+  // 1. Aplicamos el límite absoluto de seguridad siempre
   interval = Math.min(interval, ABSOLUTE_MAX_INTERVAL);
 
-  // Límite de usuario (Modo Examen)
+  // 2. Si el "Modo Examen" está activado, aplicamos tu límite personalizado
   if (safeSettings.enable_max) {
     interval = Math.min(interval, safeSettings.max_days);
   }
