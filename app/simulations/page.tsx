@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   EXPANSION_HAND_BRAKE_INTERVAL,
   EXPANSION_INITIAL_INTERVAL,
+  EXPANSION_MASTERED_FROM,
   EXPANSION_PASS_THRESHOLD,
   toReviewLevel,
   type ExpansionStatus,
@@ -71,7 +73,7 @@ type DeckOutcome = {
 };
 
 type AppState = "hub" | "loading_cards" | "studying" | "results";
-type SimulationMode = "due" | "all" | "single";
+type SimulationMode = "due" | "all";
 
 const MIN_CARDS_PER_DECK = 2;
 const MAX_CARDS_PER_DECK = 8;
@@ -145,6 +147,7 @@ const statusBadge = (status: ExpansionStatus) => {
 };
 
 export default function SimulationsPage() {
+  const router = useRouter();
   const [state, setState] = useState<AppState>("hub");
   const [masteryData, setMasteryData] = useState<DeckMastery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,6 +178,37 @@ export default function SimulationsPage() {
   const focusDecksCount = masteryData.filter((d) => d.status === "Needs Focus").length;
   const masteredDecksCount = masteryData.filter((d) => d.status === "Mastered").length;
   const totalCards = masteryData.reduce((sum, d) => sum + d.card_count, 0);
+  const liveDeckRows = useMemo(() => {
+    return Object.entries(sessionResults)
+      .filter(([, result]) => result.total > 0)
+      .map(([deckId, result]) => {
+        const accuracy = Math.round((result.score / result.total) * 100);
+        const passed = accuracy >= EXPANSION_PASS_THRESHOLD;
+        const projectedInterval = passed
+          ? result.previousInterval === 0
+            ? EXPANSION_INITIAL_INTERVAL
+            : result.previousInterval * 2
+          : EXPANSION_HAND_BRAKE_INTERVAL;
+        const projectedStatus: ExpansionStatus = passed
+          ? projectedInterval >= EXPANSION_MASTERED_FROM
+            ? "Mastered"
+            : "Reviewing"
+          : "Needs Focus";
+
+        return {
+          deckId,
+          ...result,
+          accuracy,
+          passed,
+          projectedInterval,
+          projectedStatus,
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [sessionResults]);
+  const liveReviewedCards = liveDeckRows.reduce((sum, row) => sum + row.total, 0);
+  const liveCorrectCards = liveDeckRows.reduce((sum, row) => sum + row.score, 0);
+  const liveAccuracy = liveReviewedCards > 0 ? Math.round((liveCorrectCards / liveReviewedCards) * 100) : 0;
 
   const fetchHubData = async () => {
     setLoading(true);
@@ -242,13 +276,10 @@ export default function SimulationsPage() {
     setLoading(false);
   };
 
-  const startSimulation = async (mode: SimulationMode, deckId?: string) => {
+  const startSimulation = async (mode: SimulationMode) => {
     setState("loading_cards");
 
     const candidates = masteryData.filter((deck) => {
-      if (mode === "single") {
-        return deck.deck_id === deckId;
-      }
       if (mode === "all") {
         return deck.card_count > 0;
       }
@@ -495,7 +526,7 @@ export default function SimulationsPage() {
           <Card className="shadow-sm border-muted">
             <CardHeader>
               <CardTitle className="text-xl">Deck Expansion Status</CardTitle>
-              <CardDescription>Run per-deck simulation anytime, even if it is not due.</CardDescription>
+              <CardDescription>Use Study Deck to open the original study flow for that deck.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-hidden rounded-xl border">
@@ -546,9 +577,9 @@ export default function SimulationsPage() {
                               size="sm"
                               className="rounded-lg"
                               disabled={deck.card_count === 0}
-                              onClick={() => startSimulation("single", deck.deck_id)}
+                              onClick={() => router.push(`/study/${deck.deck_id}`)}
                             >
-                              Run Deck
+                              Study Deck
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -618,6 +649,62 @@ export default function SimulationsPage() {
               <span className="font-semibold">Easy</span>
             </Button>
           </div>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-lg">Live Session Data</CardTitle>
+              <CardDescription>
+                Progress updates instantly while you answer cards.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Cards Reviewed</p>
+                  <p className="text-2xl font-bold">{liveReviewedCards}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Current Accuracy</p>
+                  <p className="text-2xl font-bold">{liveAccuracy}%</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Pass Target</p>
+                  <p className="text-2xl font-bold">{EXPANSION_PASS_THRESHOLD}%</p>
+                </div>
+              </div>
+
+              {liveDeckRows.length === 0 ? (
+                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  Rate at least one card to see per-deck projections.
+                </p>
+              ) : (
+                <div className="overflow-hidden rounded-lg border">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead>Deck</TableHead>
+                        <TableHead>Accuracy</TableHead>
+                        <TableHead>Projected Transition</TableHead>
+                        <TableHead>Status Forecast</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {liveDeckRows.map((row) => (
+                        <TableRow key={row.deckId}>
+                          <TableCell className="font-medium">{row.name}</TableCell>
+                          <TableCell>{row.accuracy}% ({row.score}/{row.total})</TableCell>
+                          <TableCell className="font-mono">
+                            {toReviewLevel(row.previousInterval)} {String.fromCharCode(8594)} {toReviewLevel(row.projectedInterval)}
+                          </TableCell>
+                          <TableCell>{statusBadge(row.projectedStatus)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
