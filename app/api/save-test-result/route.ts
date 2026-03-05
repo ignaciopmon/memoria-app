@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { calculateExpansionCycleUpdate } from "@/lib/expansion-cycle";
 
 export async function POST(request: Request) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    // 2. Update Topic Mastery (Expansion Cycle / Double Rule)
+    // 2. Update Topic Mastery (Expansion Cycle)
     if (body.topic) {
         const { data: masteryData } = await supabase
             .from('topic_mastery')
@@ -30,46 +31,28 @@ export async function POST(request: Request) {
             .eq('topic', body.topic)
             .single();
 
-        const score = body.score || 0;
-        const total = body.total_questions || 1;
-        const percentage = (score / total) * 100;
-        const isSuccess = percentage >= 80; 
+        const update = calculateExpansionCycleUpdate({
+          score: body.score,
+          total: body.total_questions,
+          currentInterval: masteryData?.current_interval,
+          currentStatus: masteryData?.status,
+        });
 
-        let newInterval = 0;
-        let newStatus = 'Learning';
-
-        if (masteryData) {
-            if (isSuccess) {
-                // Rule of double: Success moves interval forward (30 -> 60 -> 120)
-                newInterval = masteryData.current_interval === 0 ? 30 : masteryData.current_interval * 2;
-                newStatus = newInterval >= 60 ? 'Mastered' : 'Reviewing';
-            } else {
-                // Handbrake: User failed, reset to a short focus review
-                newInterval = 3; 
-                newStatus = 'Needs Focus';
-            }
-        } else {
-            // First time taking a test on this topic
-            if (isSuccess) {
-                newInterval = 30; // Success -> R30
-                newStatus = 'Reviewing';
-            } else {
-                newInterval = 3; // Initial fail -> Handbrake
-                newStatus = 'Needs Focus';
-            }
+        if (!update) {
+          return NextResponse.json({ success: true, testId: data.id });
         }
 
         const nextReviewDate = new Date();
-        nextReviewDate.setDate(nextReviewDate.getDate() + newInterval);
+        nextReviewDate.setDate(nextReviewDate.getDate() + update.newInterval);
 
         const { error: upsertError } = await supabase
             .from('topic_mastery')
             .upsert({
                 user_id: user.id,
                 topic: body.topic,
-                current_interval: newInterval,
-                status: newStatus,
-                last_score: percentage,
+                current_interval: update.newInterval,
+                status: update.newStatus,
+                last_score: update.percentage,
                 last_reviewed_at: new Date().toISOString(),
                 next_review_date: nextReviewDate.toISOString(),
                 updated_at: new Date().toISOString()
