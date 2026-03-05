@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import {
   EXPANSION_HAND_BRAKE_INTERVAL,
   EXPANSION_INITIAL_INTERVAL,
@@ -18,16 +19,29 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   AlertTriangle,
   BookOpenCheck,
+  Bot,
+  BrainCircuit,
   Check,
   ChevronsRight,
+  Flame,
   Infinity as InfinityIcon,
   Layers,
   Loader2,
+  Palette,
   Play,
+  Rocket,
   RotateCcw,
+  ShieldAlert,
+  Sparkles,
   Target,
   X,
 } from "lucide-react";
@@ -74,10 +88,86 @@ type DeckOutcome = {
 
 type AppState = "hub" | "loading_cards" | "studying" | "results";
 type SimulationMode = "due" | "all";
+type AccentTheme = "ocean" | "forest" | "sunset";
+type SimulationProfile = "focus" | "balanced" | "sprint";
+type DeckInsightTier = "critical" | "watch" | "strong";
+type DeckInsight = {
+  deckId: string;
+  tier: DeckInsightTier;
+  headline: string;
+  reason: string;
+  nextAction: string;
+  priority: number;
+};
+type SamplingSettings = {
+  minPerDeck: number;
+  maxPerDeck: number;
+  sessionCap: number;
+};
 
-const MIN_CARDS_PER_DECK = 2;
-const MAX_CARDS_PER_DECK = 8;
-const SESSION_CARD_CAP = 48;
+const PREFERENCES_KEY = "simulations-page-preferences-v2";
+
+const PROFILE_PRESETS: Record<
+  SimulationProfile,
+  {
+    label: string;
+    hint: string;
+    settings: SamplingSettings;
+    icon: ComponentType<{ className?: string }>;
+  }
+> = {
+  focus: {
+    label: "Focus Recovery",
+    hint: "Smaller session, quick signal for weaker decks.",
+    settings: { minPerDeck: 2, maxPerDeck: 5, sessionCap: 24 },
+    icon: ShieldAlert,
+  },
+  balanced: {
+    label: "Balanced Study",
+    hint: "Recommended baseline for consistent progress.",
+    settings: { minPerDeck: 2, maxPerDeck: 8, sessionCap: 48 },
+    icon: BrainCircuit,
+  },
+  sprint: {
+    label: "Exam Sprint",
+    hint: "Large mixed session with higher pressure.",
+    settings: { minPerDeck: 3, maxPerDeck: 12, sessionCap: 72 },
+    icon: Rocket,
+  },
+};
+
+const ACCENT_STYLES: Record<
+  AccentTheme,
+  {
+    label: string;
+    heroGradient: string;
+    heroGlow: string;
+    chip: string;
+    primaryButton: string;
+  }
+> = {
+  ocean: {
+    label: "Ocean",
+    heroGradient: "from-cyan-500/20 via-blue-500/15 to-indigo-500/20",
+    heroGlow: "bg-cyan-500/30",
+    chip: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+    primaryButton: "from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600",
+  },
+  forest: {
+    label: "Forest",
+    heroGradient: "from-emerald-500/20 via-green-500/15 to-lime-500/20",
+    heroGlow: "bg-emerald-500/30",
+    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    primaryButton: "from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600",
+  },
+  sunset: {
+    label: "Sunset",
+    heroGradient: "from-orange-500/20 via-rose-500/15 to-amber-500/20",
+    heroGlow: "bg-orange-500/30",
+    chip: "bg-orange-500/10 text-orange-700 dark:text-orange-300",
+    primaryButton: "from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600",
+  },
+};
 
 const shuffleArray = <T,>(items: T[]): T[] => {
   const next = [...items];
@@ -88,7 +178,15 @@ const shuffleArray = <T,>(items: T[]): T[] => {
   return next;
 };
 
-const buildBalancedCards = (deckIds: string[], cardsByDeck: Record<string, Flashcard[]>) => {
+const buildBalancedCards = (
+  deckIds: string[],
+  cardsByDeck: Record<string, Flashcard[]>,
+  settings: SamplingSettings,
+) => {
+  const minPerDeck = Math.max(1, Math.min(settings.minPerDeck, settings.maxPerDeck));
+  const maxPerDeck = Math.max(minPerDeck, settings.maxPerDeck);
+  const sessionCap = Math.max(maxPerDeck, settings.sessionCap);
+
   const selected: Flashcard[] = [];
   const usedByDeck = new Map<string, number>();
   const queue = shuffleArray(deckIds);
@@ -100,26 +198,26 @@ const buildBalancedCards = (deckIds: string[], cardsByDeck: Record<string, Flash
 
   for (const deckId of queue) {
     const deckCards = cardsByDeck[deckId] || [];
-    const seedCount = Math.min(deckCards.length, MIN_CARDS_PER_DECK);
-    for (let i = 0; i < seedCount && selected.length < SESSION_CARD_CAP; i += 1) {
+    const seedCount = Math.min(deckCards.length, minPerDeck);
+    for (let i = 0; i < seedCount && selected.length < sessionCap; i += 1) {
       selected.push(deckCards[i]);
       usedByDeck.set(deckId, i + 1);
     }
   }
 
   let added = true;
-  while (selected.length < SESSION_CARD_CAP && added) {
+  while (selected.length < sessionCap && added) {
     added = false;
     for (const deckId of queue) {
       const deckCards = cardsByDeck[deckId] || [];
       const used = usedByDeck.get(deckId) ?? 0;
-      if (used >= deckCards.length || used >= MAX_CARDS_PER_DECK) {
+      if (used >= deckCards.length || used >= maxPerDeck) {
         continue;
       }
       selected.push(deckCards[used]);
       usedByDeck.set(deckId, used + 1);
       added = true;
-      if (selected.length >= SESSION_CARD_CAP) {
+      if (selected.length >= sessionCap) {
         break;
       }
     }
@@ -146,6 +244,16 @@ const statusBadge = (status: ExpansionStatus) => {
   return <Badge variant="secondary" className="border-none shadow-none">Learning</Badge>;
 };
 
+const getInsightBadge = (tier: DeckInsightTier) => {
+  if (tier === "critical") {
+    return <Badge className="bg-red-500/10 text-red-700 dark:text-red-300 border-none">Critical</Badge>;
+  }
+  if (tier === "watch") {
+    return <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-none">Watch</Badge>;
+  }
+  return <Badge className="bg-green-500/10 text-green-700 dark:text-green-300 border-none">Strong</Badge>;
+};
+
 export default function SimulationsPage() {
   const router = useRouter();
   const [state, setState] = useState<AppState>("hub");
@@ -159,6 +267,19 @@ export default function SimulationsPage() {
   const [savingResults, setSavingResults] = useState(false);
   const [outcomes, setOutcomes] = useState<DeckOutcome[]>([]);
 
+  const [controlTab, setControlTab] = useState<"mission" | "style" | "ai">("mission");
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>("ocean");
+  const [profile, setProfile] = useState<SimulationProfile>("balanced");
+  const [sampling, setSampling] = useState<SamplingSettings>(PROFILE_PRESETS.balanced.settings);
+  const [includeMastered, setIncludeMastered] = useState(true);
+  const [showLivePanel, setShowLivePanel] = useState(true);
+  const [selectedDeckIds, setSelectedDeckIds] = useState<string[]>([]);
+  const [preferencesReady, setPreferencesReady] = useState(false);
+
+  const [aiInsights, setAiInsights] = useState<Record<string, DeckInsight>>({});
+  const [aiSummary, setAiSummary] = useState("");
+  const [isAiRunning, setIsAiRunning] = useState(false);
+
   const supabase = createClient();
   const { toast } = useToast();
 
@@ -166,6 +287,84 @@ export default function SimulationsPage() {
     fetchHubData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const raw = localStorage.getItem(PREFERENCES_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as Partial<{
+          accentTheme: AccentTheme;
+          profile: SimulationProfile;
+          sampling: SamplingSettings;
+          includeMastered: boolean;
+          showLivePanel: boolean;
+          selectedDeckIds: string[];
+        }>;
+        if (parsed.accentTheme && ACCENT_STYLES[parsed.accentTheme]) {
+          setAccentTheme(parsed.accentTheme);
+        }
+        if (parsed.profile && PROFILE_PRESETS[parsed.profile]) {
+          setProfile(parsed.profile);
+        }
+        if (parsed.sampling) {
+          setSampling({
+            minPerDeck: Math.max(1, parsed.sampling.minPerDeck ?? PROFILE_PRESETS.balanced.settings.minPerDeck),
+            maxPerDeck: Math.max(1, parsed.sampling.maxPerDeck ?? PROFILE_PRESETS.balanced.settings.maxPerDeck),
+            sessionCap: Math.max(8, parsed.sampling.sessionCap ?? PROFILE_PRESETS.balanced.settings.sessionCap),
+          });
+        }
+        if (typeof parsed.includeMastered === "boolean") {
+          setIncludeMastered(parsed.includeMastered);
+        }
+        if (typeof parsed.showLivePanel === "boolean") {
+          setShowLivePanel(parsed.showLivePanel);
+        }
+        if (Array.isArray(parsed.selectedDeckIds)) {
+          setSelectedDeckIds(parsed.selectedDeckIds);
+        }
+      } catch {
+        // ignore invalid local state
+      }
+    }
+
+    setPreferencesReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesReady || typeof window === "undefined") {
+      return;
+    }
+
+    localStorage.setItem(
+      PREFERENCES_KEY,
+      JSON.stringify({
+        accentTheme,
+        profile,
+        sampling,
+        includeMastered,
+        showLivePanel,
+        selectedDeckIds,
+      }),
+    );
+  }, [accentTheme, includeMastered, preferencesReady, profile, sampling, selectedDeckIds, showLivePanel]);
+
+  useEffect(() => {
+    if (masteryData.length === 0) {
+      return;
+    }
+
+    setSelectedDeckIds((prev) => {
+      const valid = prev.filter((deckId) => masteryData.some((deck) => deck.deck_id === deckId && deck.card_count > 0));
+      if (valid.length > 0) {
+        return valid;
+      }
+      return masteryData.filter((deck) => deck.card_count > 0).map((deck) => deck.deck_id);
+    });
+  }, [masteryData]);
 
   const outcomeByDeck = useMemo(() => {
     return outcomes.reduce((acc, item) => {
@@ -177,7 +376,12 @@ export default function SimulationsPage() {
   const dueDecksCount = masteryData.filter((d) => d.isDue).length;
   const focusDecksCount = masteryData.filter((d) => d.status === "Needs Focus").length;
   const masteredDecksCount = masteryData.filter((d) => d.status === "Mastered").length;
-  const totalCards = masteryData.reduce((sum, d) => sum + d.card_count, 0);
+  const selectedDeckCount = selectedDeckIds.length;
+  const selectedDeckCards = masteryData
+    .filter((deck) => selectedDeckIds.includes(deck.deck_id))
+    .reduce((sum, deck) => sum + deck.card_count, 0);
+  const accentStyle = ACCENT_STYLES[accentTheme];
+  const ProfileIcon = PROFILE_PRESETS[profile].icon;
   const liveDeckRows = useMemo(() => {
     return Object.entries(sessionResults)
       .filter(([, result]) => result.total > 0)
@@ -276,20 +480,104 @@ export default function SimulationsPage() {
     setLoading(false);
   };
 
+  const applyProfile = (nextProfile: SimulationProfile) => {
+    setProfile(nextProfile);
+    setSampling(PROFILE_PRESETS[nextProfile].settings);
+  };
+
+  const toggleDeckSelection = (deckId: string, checked: boolean) => {
+    setSelectedDeckIds((prev) => {
+      if (checked) {
+        if (prev.includes(deckId)) {
+          return prev;
+        }
+        return [...prev, deckId];
+      }
+      return prev.filter((id) => id !== deckId);
+    });
+  };
+
+  const selectDueDecks = () => {
+    setSelectedDeckIds(masteryData.filter((deck) => deck.isDue).map((deck) => deck.deck_id));
+  };
+
+  const selectAllDecksWithCards = () => {
+    setSelectedDeckIds(masteryData.filter((deck) => deck.card_count > 0).map((deck) => deck.deck_id));
+  };
+
+  const clearDeckSelection = () => {
+    setSelectedDeckIds([]);
+  };
+
+  const runAiCoach = async () => {
+    if (masteryData.length === 0) {
+      toast({ title: "No decks found", description: "Create decks first, then run AI Deck Coach." });
+      return;
+    }
+
+    setIsAiRunning(true);
+    try {
+      const response = await fetch("/api/qualify-decks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decks: masteryData.map((deck) => ({
+            deckId: deck.deck_id,
+            name: deck.deck_name,
+            status: deck.status,
+            currentInterval: deck.current_interval,
+            lastScore: deck.last_score,
+            nextReviewDate: deck.next_review_date,
+            isDue: deck.isDue,
+            cardCount: deck.card_count,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("AI Deck Coach failed");
+      }
+
+      const payload = (await response.json()) as {
+        summary?: string;
+        insights?: DeckInsight[];
+      };
+
+      const insightMap = (payload.insights || []).reduce((acc, insight) => {
+        acc[insight.deckId] = insight;
+        return acc;
+      }, {} as Record<string, DeckInsight>);
+
+      setAiInsights(insightMap);
+      setAiSummary(payload.summary || "AI coach updated.");
+      toast({ title: "AI Deck Coach updated", description: "Deck signals and actions are now available." });
+    } catch {
+      toast({ variant: "destructive", title: "AI Deck Coach unavailable" });
+    } finally {
+      setIsAiRunning(false);
+    }
+  };
+
   const startSimulation = async (mode: SimulationMode) => {
     setState("loading_cards");
 
+    const selectionSet = new Set(selectedDeckIds);
     const candidates = masteryData.filter((deck) => {
-      if (mode === "all") {
-        return deck.card_count > 0;
+      const isSelected = selectionSet.size === 0 || selectionSet.has(deck.deck_id);
+      if (!isSelected) {
+        return false;
       }
-      return deck.isDue;
+
+      if (mode === "all") {
+        return deck.card_count > 0 && (includeMastered || deck.status !== "Mastered");
+      }
+      return deck.isDue && (includeMastered || deck.status !== "Mastered");
     });
 
     if (candidates.length === 0) {
       toast({
         title: "No eligible decks",
-        description: mode === "due" ? "There are no due decks right now." : "Add cards to your decks to start a simulation.",
+        description: "Adjust selection or profile settings and try again.",
       });
       setState("hub");
       return;
@@ -355,6 +643,7 @@ export default function SimulationsPage() {
     const selectedCards = buildBalancedCards(
       decksWithCards.map((deck) => deck.deck_id),
       cardsByDeck,
+      sampling,
     );
 
     if (selectedCards.length === 0) {
@@ -446,150 +735,399 @@ export default function SimulationsPage() {
   return (
     <div className="container max-w-6xl py-8">
       {state === "hub" && (
-        <div className="space-y-8 animate-in fade-in duration-500">
-          <Card className="overflow-hidden border-primary/20">
-            <CardContent className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-2">
-                <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <Card className="relative overflow-hidden border-none shadow-xl">
+            <div className={cn("absolute inset-0 bg-gradient-to-br", accentStyle.heroGradient)} />
+            <div className={cn("absolute -top-20 right-16 h-56 w-56 rounded-full blur-3xl", accentStyle.heroGlow)} />
+            <CardContent className="relative z-10 flex flex-col gap-6 p-6 md:p-8 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-3">
+                <Badge className={cn("gap-1 border-none", accentStyle.chip)}>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Student Mission Control
+                </Badge>
+                <h1 className="flex items-center gap-2 text-3xl font-black tracking-tight md:text-4xl">
                   <InfinityIcon className="h-8 w-8 text-primary" />
-                  Expansion Cycle Simulator
+                  Simulations Studio
                 </h1>
-                <p className="max-w-2xl text-muted-foreground">
-                  Train with mixed cards across decks and move through review levels like {toReviewLevel(EXPANSION_INITIAL_INTERVAL)} and {toReviewLevel(60)}.
+                <p className="max-w-2xl text-base text-muted-foreground md:text-lg">
+                  Build your own simulation style, choose which decks to include, and track R-level progression with clearer live feedback.
                 </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-full border bg-background/80 px-3 py-1">Profile: {PROFILE_PRESETS[profile].label}</span>
+                  <span className="rounded-full border bg-background/80 px-3 py-1">
+                    Intensity: {sampling.minPerDeck}-{sampling.maxPerDeck} cards/deck
+                  </span>
+                  <span className="rounded-full border bg-background/80 px-3 py-1">Session cap: {sampling.sessionCap}</span>
+                </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button size="lg" className="gap-2" onClick={() => startSimulation("due")}>
+              <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto">
+                <Button
+                  size="lg"
+                  className={cn("gap-2 border-none bg-gradient-to-r text-white shadow-lg", accentStyle.primaryButton)}
+                  onClick={() => startSimulation("due")}
+                >
                   <Play className="h-5 w-5 fill-current" />
                   Run Due Decks
                 </Button>
-                <Button size="lg" variant="outline" className="gap-2" onClick={() => startSimulation("all")}>
+                <Button size="lg" variant="outline" className="gap-2 bg-background/90" onClick={() => startSimulation("all")}>
                   <Layers className="h-5 w-5" />
-                  Run All Decks
+                  Run Selected Decks
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Card className="border-muted/60">
               <CardHeader className="pb-2">
-                <CardDescription>Due Decks</CardDescription>
+                <CardDescription className="flex items-center gap-2">
+                  <Flame className="h-4 w-4 text-amber-500" />
+                  Due Decks
+                </CardDescription>
                 <CardTitle>{dueDecksCount}</CardTitle>
               </CardHeader>
             </Card>
-            <Card>
+            <Card className="border-muted/60">
               <CardHeader className="pb-2">
-                <CardDescription>Needs Focus</CardDescription>
+                <CardDescription className="flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 text-red-500" />
+                  Needs Focus
+                </CardDescription>
                 <CardTitle>{focusDecksCount}</CardTitle>
               </CardHeader>
             </Card>
-            <Card>
+            <Card className="border-muted/60">
               <CardHeader className="pb-2">
-                <CardDescription>Mastered</CardDescription>
+                <CardDescription className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-500" />
+                  Mastered
+                </CardDescription>
                 <CardTitle>{masteredDecksCount}</CardTitle>
               </CardHeader>
             </Card>
-            <Card>
+            <Card className="border-muted/60">
               <CardHeader className="pb-2">
-                <CardDescription>Total Cards</CardDescription>
-                <CardTitle>{totalCards}</CardTitle>
+                <CardDescription className="flex items-center gap-2">
+                  <BrainCircuit className="h-4 w-4 text-blue-500" />
+                  Cards in Selection
+                </CardDescription>
+                <CardTitle>{selectedDeckCards}</CardTitle>
               </CardHeader>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>How R-levels work</CardTitle>
-              <CardDescription>Simple expansion cycle used by the simulator.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-4">
-              <div className="rounded-lg border p-3">
-                <p className="font-semibold text-foreground">R means days</p>
-                <p>{toReviewLevel(30)} means next review in 30 days.</p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="font-semibold text-foreground">Pass threshold</p>
-                <p>Score {EXPANSION_PASS_THRESHOLD}% or higher to pass.</p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="font-semibold text-foreground">Pass result</p>
-                <p>{toReviewLevel(30)} {String.fromCharCode(8594)} {toReviewLevel(60)} {String.fromCharCode(8594)} {toReviewLevel(120)} (interval doubles).</p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="font-semibold text-foreground">Fail result</p>
-                <p>Handbrake to {toReviewLevel(EXPANSION_HAND_BRAKE_INTERVAL)} for focused recovery.</p>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>How R-levels work</CardTitle>
+                  <CardDescription>Simple expansion cycle used by the simulator.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-4">
+                  <div className="rounded-lg border p-3">
+                    <p className="font-semibold text-foreground">R means days</p>
+                    <p>{toReviewLevel(30)} means next review in 30 days.</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="font-semibold text-foreground">Pass threshold</p>
+                    <p>Score {EXPANSION_PASS_THRESHOLD}% or higher to pass.</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="font-semibold text-foreground">Pass result</p>
+                    <p>{toReviewLevel(30)} {String.fromCharCode(8594)} {toReviewLevel(60)} {String.fromCharCode(8594)} {toReviewLevel(120)} (interval doubles).</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="font-semibold text-foreground">Fail result</p>
+                    <p>Handbrake to {toReviewLevel(EXPANSION_HAND_BRAKE_INTERVAL)} for focused recovery.</p>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="shadow-sm border-muted">
-            <CardHeader>
-              <CardTitle className="text-xl">Deck Expansion Status</CardTitle>
-              <CardDescription>Use Study Deck to open the original study flow for that deck.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-hidden rounded-xl border">
-                <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead>Deck</TableHead>
-                      <TableHead>Cards</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Level</TableHead>
-                      <TableHead>Last Score</TableHead>
-                      <TableHead>Next Review</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {masteryData.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="py-8 text-center">
-                          No decks available yet.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      masteryData.map((deck) => (
-                        <TableRow key={deck.deck_id} className={deck.status === "Needs Focus" ? "bg-red-500/5 dark:bg-red-900/10" : ""}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <Layers className="h-4 w-4 text-muted-foreground" />
-                              {deck.deck_name}
-                            </div>
-                          </TableCell>
-                          <TableCell>{deck.card_count}</TableCell>
-                          <TableCell>{statusBadge(deck.status)}</TableCell>
-                          <TableCell className="font-mono font-bold text-primary">{toReviewLevel(deck.current_interval)}</TableCell>
-                          <TableCell>{deck.last_score > 0 ? `${deck.last_score}%` : "--"}</TableCell>
-                          <TableCell>
-                            {deck.card_count === 0 ? (
-                              <span className="text-muted-foreground text-sm">No cards</span>
-                            ) : deck.isDue ? (
-                              <span className="text-amber-500 font-semibold text-sm">Due now</span>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">{format(new Date(deck.next_review_date), "MMM dd, yyyy")}</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="rounded-lg"
-                              disabled={deck.card_count === 0}
-                              onClick={() => router.push(`/study/${deck.deck_id}`)}
-                            >
-                              Study Deck
-                            </Button>
-                          </TableCell>
+              <Card className="shadow-sm border-muted">
+                <CardHeader>
+                  <CardTitle className="text-xl">Deck Expansion Status</CardTitle>
+                  <CardDescription>Use Study Deck to open the original study flow for that deck.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-hidden rounded-xl border">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>Deck</TableHead>
+                          <TableHead>Cards</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Level</TableHead>
+                          <TableHead>Last Score</TableHead>
+                          <TableHead>AI Signal</TableHead>
+                          <TableHead>Next Review</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {masteryData.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="py-8 text-center">
+                              No decks available yet.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          masteryData.map((deck) => {
+                            const insight = aiInsights[deck.deck_id];
+                            return (
+                              <TableRow key={deck.deck_id} className={deck.status === "Needs Focus" ? "bg-red-500/5 dark:bg-red-900/10" : ""}>
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <Layers className="h-4 w-4 text-muted-foreground" />
+                                    {deck.deck_name}
+                                  </div>
+                                  {insight?.headline ? <p className="mt-1 text-xs text-muted-foreground">{insight.headline}</p> : null}
+                                </TableCell>
+                                <TableCell>{deck.card_count}</TableCell>
+                                <TableCell>{statusBadge(deck.status)}</TableCell>
+                                <TableCell className="font-mono font-bold text-primary">{toReviewLevel(deck.current_interval)}</TableCell>
+                                <TableCell>{deck.last_score > 0 ? `${deck.last_score}%` : "--"}</TableCell>
+                                <TableCell>{insight ? getInsightBadge(insight.tier) : <span className="text-xs text-muted-foreground">Not analyzed</span>}</TableCell>
+                                <TableCell>
+                                  {deck.card_count === 0 ? (
+                                    <span className="text-muted-foreground text-sm">No cards</span>
+                                  ) : deck.isDue ? (
+                                    <span className="text-amber-500 font-semibold text-sm">Due now</span>
+                                  ) : (
+                                    <span className="text-muted-foreground text-sm">{format(new Date(deck.next_review_date), "MMM dd, yyyy")}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="rounded-lg"
+                                    disabled={deck.card_count === 0}
+                                    onClick={() => router.push(`/study/${deck.deck_id}`)}
+                                  >
+                                    Study Deck
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="space-y-6">
+              <Card className="border-muted/60">
+                <CardHeader>
+                  <CardTitle className="text-lg">Control Console</CardTitle>
+                  <CardDescription>Tune simulation behavior and visual style.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Tabs value={controlTab} onValueChange={(value) => setControlTab(value as "mission" | "style" | "ai")}>
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="mission">Mission</TabsTrigger>
+                      <TabsTrigger value="style">Style</TabsTrigger>
+                      <TabsTrigger value="ai">AI Coach</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="mission" className="space-y-5 pt-4">
+                      <div className="space-y-2">
+                        <Label>Simulation Profile</Label>
+                        <Select value={profile} onValueChange={(value) => applyProfile(value as SimulationProfile)}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select profile" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="focus">Focus Recovery</SelectItem>
+                            <SelectItem value="balanced">Balanced Study</SelectItem>
+                            <SelectItem value="sprint">Exam Sprint</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground flex items-center gap-2">
+                          <ProfileIcon className="h-3.5 w-3.5" />
+                          {PROFILE_PRESETS[profile].hint}
+                        </p>
+                      </div>
+
+                      <div className="space-y-4 rounded-lg border p-3">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Min cards per deck</span>
+                            <span className="font-medium">{sampling.minPerDeck}</span>
+                          </div>
+                          <Slider
+                            min={1}
+                            max={6}
+                            step={1}
+                            value={[sampling.minPerDeck]}
+                            onValueChange={(value) =>
+                              setSampling((prev) => ({
+                                ...prev,
+                                minPerDeck: value[0],
+                                maxPerDeck: Math.max(value[0], prev.maxPerDeck),
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Max cards per deck</span>
+                            <span className="font-medium">{sampling.maxPerDeck}</span>
+                          </div>
+                          <Slider
+                            min={sampling.minPerDeck}
+                            max={16}
+                            step={1}
+                            value={[sampling.maxPerDeck]}
+                            onValueChange={(value) =>
+                              setSampling((prev) => ({
+                                ...prev,
+                                maxPerDeck: Math.max(prev.minPerDeck, value[0]),
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Session cap</span>
+                            <span className="font-medium">{sampling.sessionCap}</span>
+                          </div>
+                          <Slider
+                            min={12}
+                            max={96}
+                            step={4}
+                            value={[sampling.sessionCap]}
+                            onValueChange={(value) =>
+                              setSampling((prev) => ({
+                                ...prev,
+                                sessionCap: value[0],
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between rounded-lg border p-3">
+                          <div>
+                            <p className="text-sm font-medium">Include mastered decks</p>
+                            <p className="text-xs text-muted-foreground">Keep strong decks in mixed simulations.</p>
+                          </div>
+                          <Switch checked={includeMastered} onCheckedChange={setIncludeMastered} />
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border p-3">
+                          <div>
+                            <p className="text-sm font-medium">Live data panel</p>
+                            <p className="text-xs text-muted-foreground">Show live projections while answering cards.</p>
+                          </div>
+                          <Switch checked={showLivePanel} onCheckedChange={setShowLivePanel} />
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="style" className="space-y-4 pt-4">
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                          <Palette className="h-4 w-4" />
+                          Accent Theme
+                        </Label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(Object.keys(ACCENT_STYLES) as AccentTheme[]).map((accent) => (
+                            <button
+                              key={accent}
+                              type="button"
+                              onClick={() => setAccentTheme(accent)}
+                              className={cn(
+                                "rounded-lg border p-2 text-xs font-medium transition-all",
+                                accentTheme === accent ? "border-primary bg-primary/10" : "hover:bg-muted/60",
+                              )}
+                            >
+                              {ACCENT_STYLES[accent].label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+                        Theme and profile preferences are saved locally for this browser, so your simulation setup is always ready.
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="ai" className="space-y-4 pt-4">
+                      <Button className="w-full gap-2" onClick={runAiCoach} disabled={isAiRunning || masteryData.length === 0}>
+                        {isAiRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                        Run AI Deck Coach
+                      </Button>
+                      <div className="rounded-lg border p-3 text-sm">
+                        {aiSummary || "AI coach qualifies deck risk and recommends what to attack first. It does not generate tests."}
+                      </div>
+                      <div className="space-y-2">
+                        {Object.values(aiInsights)
+                          .sort((a, b) => a.priority - b.priority)
+                          .slice(0, 4)
+                          .map((insight) => (
+                            <div key={insight.deckId} className="rounded-lg border p-3">
+                              <div className="mb-2 flex items-center justify-between">
+                                {getInsightBadge(insight.tier)}
+                                <span className="text-xs text-muted-foreground">P{insight.priority}</span>
+                              </div>
+                              <p className="text-sm font-medium">{insight.nextAction}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{insight.reason}</p>
+                            </div>
+                          ))}
+                        {Object.keys(aiInsights).length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No AI insights yet.</p>
+                        ) : null}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+
+              <Card className="border-muted/60">
+                <CardHeader>
+                  <CardTitle className="text-lg">Deck Selection</CardTitle>
+                  <CardDescription>
+                    {selectedDeckCount > 0
+                      ? `${selectedDeckCount} deck(s) selected • ${selectedDeckCards} cards`
+                      : "No explicit selection: all eligible decks will be used."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={selectDueDecks}>Select Due</Button>
+                    <Button variant="outline" size="sm" onClick={selectAllDecksWithCards}>Select All With Cards</Button>
+                    <Button variant="ghost" size="sm" onClick={clearDeckSelection}>Clear</Button>
+                  </div>
+
+                  <div className="max-h-[280px] space-y-2 overflow-y-auto rounded-lg border p-2">
+                    {masteryData
+                      .filter((deck) => deck.card_count > 0)
+                      .map((deck) => (
+                        <label
+                          key={deck.deck_id}
+                          className="flex cursor-pointer items-center justify-between rounded-md border px-2 py-2 hover:bg-muted/40"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={selectedDeckIds.includes(deck.deck_id)}
+                              onCheckedChange={(checked) => toggleDeckSelection(deck.deck_id, checked === true)}
+                            />
+                            <div>
+                              <p className="text-sm font-medium">{deck.deck_name}</p>
+                              <p className="text-xs text-muted-foreground">{deck.card_count} cards · {toReviewLevel(deck.current_interval)}</p>
+                            </div>
+                          </div>
+                          {deck.isDue ? <Badge className="bg-amber-500/10 text-amber-700 border-none">Due</Badge> : null}
+                        </label>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       )}
 
@@ -602,109 +1140,113 @@ export default function SimulationsPage() {
       )}
 
       {state === "studying" && cards.length > 0 && (
-        <div className="mx-auto max-w-3xl animate-in slide-in-from-bottom-8 py-4 duration-500">
-          <div className="mb-8 space-y-4">
-            <div className="flex items-center justify-between text-sm font-medium">
-              <Badge variant="outline" className="rounded-full border-primary/30 bg-primary/5 px-3 py-1 text-primary">
-                Deck: {cards[currentIndex].deck_name}
-              </Badge>
-              <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
-                {currentIndex + 1} / {cards.length}
-              </span>
-            </div>
-            <Progress value={(currentIndex / cards.length) * 100} className="h-2 rounded-full" />
-          </div>
-
-          <div className="h-[380px] w-full cursor-pointer" onClick={() => !isFlipped && setIsFlipped(true)}>
-            {!isFlipped ? (
-              <Card className="flex h-full flex-col items-center justify-center border-primary/20 p-8 shadow-xl transition-colors hover:border-primary/50">
-                <p className="text-center text-3xl font-medium leading-relaxed">{cards[currentIndex].front}</p>
-                <p className="absolute bottom-8 text-sm text-muted-foreground">Click to reveal answer</p>
-              </Card>
-            ) : (
-              <Card className="flex h-full flex-col items-center justify-center border-primary/20 p-8 shadow-xl animate-in fade-in zoom-in-95 duration-300">
-                <div className="flex w-full flex-1 flex-col items-center justify-center">
-                  <p className="mb-6 w-full max-w-lg border-b pb-6 text-center text-xl text-muted-foreground">{cards[currentIndex].front}</p>
-                  <p className="text-center text-3xl font-bold leading-relaxed text-primary">{cards[currentIndex].back}</p>
+        <div className="mx-auto max-w-5xl animate-in slide-in-from-bottom-8 py-4 duration-500">
+          <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+            <div>
+              <div className="mb-8 space-y-4">
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <Badge variant="outline" className="rounded-full border-primary/30 bg-primary/5 px-3 py-1 text-primary">
+                    Deck: {cards[currentIndex].deck_name}
+                  </Badge>
+                  <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
+                    {currentIndex + 1} / {cards.length}
+                  </span>
                 </div>
-              </Card>
-            )}
-          </div>
-
-          <div className={`mt-8 grid grid-cols-4 gap-3 transition-opacity duration-300 ${isFlipped ? "opacity-100" : "pointer-events-none opacity-0"}`}>
-            <Button variant="outline" className="h-16 flex-col gap-1 border-red-200 hover:bg-red-50 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleRate(1); }}>
-              <X className="h-5 w-5" />
-              <span className="font-semibold">Again</span>
-            </Button>
-            <Button variant="outline" className="h-16 flex-col gap-1 border-orange-200 hover:bg-orange-50 hover:text-orange-600" onClick={(e) => { e.stopPropagation(); handleRate(2); }}>
-              <Target className="h-5 w-5" />
-              <span className="font-semibold">Hard</span>
-            </Button>
-            <Button variant="outline" className="h-16 flex-col gap-1 border-green-200 hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); handleRate(3); }}>
-              <Check className="h-5 w-5" />
-              <span className="font-semibold">Good</span>
-            </Button>
-            <Button variant="outline" className="h-16 flex-col gap-1 border-blue-200 hover:bg-blue-50 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); handleRate(4); }}>
-              <BookOpenCheck className="h-5 w-5" />
-              <span className="font-semibold">Easy</span>
-            </Button>
-          </div>
-
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="text-lg">Live Session Data</CardTitle>
-              <CardDescription>
-                Progress updates instantly while you answer cards.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Cards Reviewed</p>
-                  <p className="text-2xl font-bold">{liveReviewedCards}</p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Current Accuracy</p>
-                  <p className="text-2xl font-bold">{liveAccuracy}%</p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Pass Target</p>
-                  <p className="text-2xl font-bold">{EXPANSION_PASS_THRESHOLD}%</p>
-                </div>
+                <Progress value={(currentIndex / cards.length) * 100} className="h-2 rounded-full" />
               </div>
 
-              {liveDeckRows.length === 0 ? (
-                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  Rate at least one card to see per-deck projections.
-                </p>
-              ) : (
-                <div className="overflow-hidden rounded-lg border">
-                  <Table>
-                    <TableHeader className="bg-muted/50">
-                      <TableRow>
-                        <TableHead>Deck</TableHead>
-                        <TableHead>Accuracy</TableHead>
-                        <TableHead>Projected Transition</TableHead>
-                        <TableHead>Status Forecast</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {liveDeckRows.map((row) => (
-                        <TableRow key={row.deckId}>
-                          <TableCell className="font-medium">{row.name}</TableCell>
-                          <TableCell>{row.accuracy}% ({row.score}/{row.total})</TableCell>
-                          <TableCell className="font-mono">
-                            {toReviewLevel(row.previousInterval)} {String.fromCharCode(8594)} {toReviewLevel(row.projectedInterval)}
-                          </TableCell>
-                          <TableCell>{statusBadge(row.projectedStatus)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              <div className="h-[380px] w-full cursor-pointer" onClick={() => !isFlipped && setIsFlipped(true)}>
+                {!isFlipped ? (
+                  <Card className="flex h-full flex-col items-center justify-center border-primary/20 p-8 shadow-xl transition-colors hover:border-primary/50">
+                    <p className="text-center text-3xl font-medium leading-relaxed">{cards[currentIndex].front}</p>
+                    <p className="absolute bottom-8 text-sm text-muted-foreground">Click to reveal answer</p>
+                  </Card>
+                ) : (
+                  <Card className="flex h-full flex-col items-center justify-center border-primary/20 p-8 shadow-xl animate-in fade-in zoom-in-95 duration-300">
+                    <div className="flex w-full flex-1 flex-col items-center justify-center">
+                      <p className="mb-6 w-full max-w-lg border-b pb-6 text-center text-xl text-muted-foreground">{cards[currentIndex].front}</p>
+                      <p className="text-center text-3xl font-bold leading-relaxed text-primary">{cards[currentIndex].back}</p>
+                    </div>
+                  </Card>
+                )}
+              </div>
+
+              <div className={`mt-8 grid grid-cols-4 gap-3 transition-opacity duration-300 ${isFlipped ? "opacity-100" : "pointer-events-none opacity-0"}`}>
+                <Button variant="outline" className="h-16 flex-col gap-1 border-red-200 hover:bg-red-50 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleRate(1); }}>
+                  <X className="h-5 w-5" />
+                  <span className="font-semibold">Again</span>
+                </Button>
+                <Button variant="outline" className="h-16 flex-col gap-1 border-orange-200 hover:bg-orange-50 hover:text-orange-600" onClick={(e) => { e.stopPropagation(); handleRate(2); }}>
+                  <Target className="h-5 w-5" />
+                  <span className="font-semibold">Hard</span>
+                </Button>
+                <Button variant="outline" className="h-16 flex-col gap-1 border-green-200 hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); handleRate(3); }}>
+                  <Check className="h-5 w-5" />
+                  <span className="font-semibold">Good</span>
+                </Button>
+                <Button variant="outline" className="h-16 flex-col gap-1 border-blue-200 hover:bg-blue-50 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); handleRate(4); }}>
+                  <BookOpenCheck className="h-5 w-5" />
+                  <span className="font-semibold">Easy</span>
+                </Button>
+              </div>
+            </div>
+
+            {showLivePanel ? (
+              <Card className="h-fit">
+                <CardHeader>
+                  <CardTitle className="text-lg">Live Session Data</CardTitle>
+                  <CardDescription>
+                    Progress updates instantly while you answer cards.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Cards Reviewed</p>
+                      <p className="text-2xl font-bold">{liveReviewedCards}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Current Accuracy</p>
+                      <p className="text-2xl font-bold">{liveAccuracy}%</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Pass Target</p>
+                      <p className="text-2xl font-bold">{EXPANSION_PASS_THRESHOLD}%</p>
+                    </div>
+                  </div>
+
+                  {liveDeckRows.length === 0 ? (
+                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      Rate at least one card to see per-deck projections.
+                    </p>
+                  ) : (
+                    <div className="max-h-[300px] overflow-y-auto rounded-lg border">
+                      <Table>
+                        <TableHeader className="bg-muted/50">
+                          <TableRow>
+                            <TableHead>Deck</TableHead>
+                            <TableHead>Accuracy</TableHead>
+                            <TableHead>Projection</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {liveDeckRows.map((row) => (
+                            <TableRow key={row.deckId}>
+                              <TableCell className="font-medium">{row.name}</TableCell>
+                              <TableCell>{row.accuracy}%</TableCell>
+                              <TableCell className="font-mono">
+                                {toReviewLevel(row.previousInterval)} {String.fromCharCode(8594)} {toReviewLevel(row.projectedInterval)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
         </div>
       )}
 
