@@ -25,12 +25,14 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertTriangle,
   BookOpenCheck,
   Bot,
   BrainCircuit,
   Check,
+  CircleHelp,
   ChevronsRight,
   Flame,
   Infinity as InfinityIcon,
@@ -252,6 +254,30 @@ const getInsightBadge = (tier: DeckInsightTier) => {
     return <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-none">Watch</Badge>;
   }
   return <Badge className="bg-green-500/10 text-green-700 dark:text-green-300 border-none">Strong</Badge>;
+};
+
+const HelpHint = ({
+  text,
+  side = "top",
+}: {
+  text: string;
+  side?: "top" | "right" | "bottom" | "left";
+}) => {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label="Help"
+        >
+          <CircleHelp className="h-3.5 w-3.5" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side={side} sideOffset={6} className="max-w-[260px] leading-relaxed">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  );
 };
 
 export default function SimulationsPage() {
@@ -748,6 +774,7 @@ export default function SimulationsPage() {
                 <h1 className="flex items-center gap-2 text-3xl font-black tracking-tight md:text-4xl">
                   <InfinityIcon className="h-8 w-8 text-primary" />
                   Simulations Studio
+                  <HelpHint text="This page is your simulation control center: configure, run and review mixed-deck sessions." />
                 </h1>
                 <p className="max-w-2xl text-base text-muted-foreground md:text-lg">
                   Build your own simulation style, choose which decks to include, and track R-level progression with clearer live feedback.
@@ -768,10 +795,12 @@ export default function SimulationsPage() {
                 >
                   <Play className="h-5 w-5 fill-current" />
                   Run Due Decks
+                  <HelpHint text="Runs a simulation only with due decks (and your current deck filters)." />
                 </Button>
                 <Button size="lg" variant="outline" className="gap-2 bg-background/90" onClick={() => startSimulation("all")}>
                   <Layers className="h-5 w-5" />
                   Run Selected Decks
+                  <HelpHint text="Runs a simulation using your current deck selection, even if some are not due." />
                 </Button>
               </div>
             </CardContent>
@@ -783,6 +812,7 @@ export default function SimulationsPage() {
                 <CardDescription className="flex items-center gap-2">
                   <Flame className="h-4 w-4 text-amber-500" />
                   Due Decks
+                  <HelpHint text="Decks that should be reviewed now based on next review date or focus status." />
                 </CardDescription>
                 <CardTitle>{dueDecksCount}</CardTitle>
               </CardHeader>
@@ -792,6 +822,7 @@ export default function SimulationsPage() {
                 <CardDescription className="flex items-center gap-2">
                   <ShieldAlert className="h-4 w-4 text-red-500" />
                   Needs Focus
+                  <HelpHint text="Decks currently in recovery mode after recent low performance." />
                 </CardDescription>
                 <CardTitle>{focusDecksCount}</CardTitle>
               </CardHeader>
@@ -801,6 +832,7 @@ export default function SimulationsPage() {
                 <CardDescription className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-green-500" />
                   Mastered
+                  <HelpHint text="Decks that reached higher intervals and stable retention." />
                 </CardDescription>
                 <CardTitle>{masteredDecksCount}</CardTitle>
               </CardHeader>
@@ -810,6 +842,7 @@ export default function SimulationsPage() {
                 <CardDescription className="flex items-center gap-2">
                   <BrainCircuit className="h-4 w-4 text-blue-500" />
                   Cards in Selection
+                  <HelpHint text="Total cards currently included by your deck selection filter." />
                 </CardDescription>
                 <CardTitle>{selectedDeckCards}</CardTitle>
               </CardHeader>
@@ -820,24 +853,27 @@ export default function SimulationsPage() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>How R-levels work</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    How R-levels work
+                    <HelpHint text="R-level = days until next review. Passing doubles interval; failing sends deck to recovery." />
+                  </CardTitle>
                   <CardDescription>Simple expansion cycle used by the simulator.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-4">
                   <div className="rounded-lg border p-3">
-                    <p className="font-semibold text-foreground">R means days</p>
+                    <p className="font-semibold text-foreground flex items-center gap-2">R means days <HelpHint text="R30 means 30 days before next review." /></p>
                     <p>{toReviewLevel(30)} means next review in 30 days.</p>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="font-semibold text-foreground">Pass threshold</p>
+                    <p className="font-semibold text-foreground flex items-center gap-2">Pass threshold <HelpHint text="A deck passes when session accuracy reaches 80% or more." /></p>
                     <p>Score {EXPANSION_PASS_THRESHOLD}% or higher to pass.</p>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="font-semibold text-foreground">Pass result</p>
+                    <p className="font-semibold text-foreground flex items-center gap-2">Pass result <HelpHint text="Passing pushes interval to the next expansion step (x2)." /></p>
                     <p>{toReviewLevel(30)} {String.fromCharCode(8594)} {toReviewLevel(60)} {String.fromCharCode(8594)} {toReviewLevel(120)} (interval doubles).</p>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="font-semibold text-foreground">Fail result</p>
+                    <p className="font-semibold text-foreground flex items-center gap-2">Fail result <HelpHint text="Failing applies a short handbrake interval to recover quickly." /></p>
                     <p>Handbrake to {toReviewLevel(EXPANSION_HAND_BRAKE_INTERVAL)} for focused recovery.</p>
                   </div>
                 </CardContent>
@@ -845,7 +881,10 @@ export default function SimulationsPage() {
 
               <Card className="shadow-sm border-muted">
                 <CardHeader>
-                  <CardTitle className="text-xl">Deck Expansion Status</CardTitle>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    Deck Expansion Status
+                    <HelpHint text="Main table with current deck level, due status, AI signal and quick access to normal study mode." />
+                  </CardTitle>
                   <CardDescription>Use Study Deck to open the original study flow for that deck.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -858,7 +897,12 @@ export default function SimulationsPage() {
                           <TableHead>Status</TableHead>
                           <TableHead>Level</TableHead>
                           <TableHead>Last Score</TableHead>
-                          <TableHead>AI Signal</TableHead>
+                          <TableHead>
+                            <span className="inline-flex items-center gap-1">
+                              AI Signal
+                              <HelpHint text="Optional risk qualification generated by AI Deck Coach." />
+                            </span>
+                          </TableHead>
                           <TableHead>Next Review</TableHead>
                           <TableHead className="text-right">Action</TableHead>
                         </TableRow>
@@ -921,7 +965,10 @@ export default function SimulationsPage() {
             <div className="space-y-6">
               <Card className="border-muted/60">
                 <CardHeader>
-                  <CardTitle className="text-lg">Control Console</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Control Console
+                    <HelpHint text="Customize simulation behavior, style and AI assistance before running." />
+                  </CardTitle>
                   <CardDescription>Tune simulation behavior and visual style.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -934,7 +981,10 @@ export default function SimulationsPage() {
 
                     <TabsContent value="mission" className="space-y-5 pt-4">
                       <div className="space-y-2">
-                        <Label>Simulation Profile</Label>
+                        <Label className="flex items-center gap-2">
+                          Simulation Profile
+                          <HelpHint text="Preset behavior for card sampling intensity and overall session size." />
+                        </Label>
                         <Select value={profile} onValueChange={(value) => applyProfile(value as SimulationProfile)}>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select profile" />
@@ -954,7 +1004,7 @@ export default function SimulationsPage() {
                       <div className="space-y-4 rounded-lg border p-3">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
-                            <span>Min cards per deck</span>
+                            <span className="inline-flex items-center gap-1">Min cards per deck <HelpHint text="Minimum number of cards each selected deck contributes." /></span>
                             <span className="font-medium">{sampling.minPerDeck}</span>
                           </div>
                           <Slider
@@ -973,7 +1023,7 @@ export default function SimulationsPage() {
                         </div>
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
-                            <span>Max cards per deck</span>
+                            <span className="inline-flex items-center gap-1">Max cards per deck <HelpHint text="Maximum cards taken from each deck in the simulation." /></span>
                             <span className="font-medium">{sampling.maxPerDeck}</span>
                           </div>
                           <Slider
@@ -991,7 +1041,7 @@ export default function SimulationsPage() {
                         </div>
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
-                            <span>Session cap</span>
+                            <span className="inline-flex items-center gap-1">Session cap <HelpHint text="Global maximum number of cards for the simulation session." /></span>
                             <span className="font-medium">{sampling.sessionCap}</span>
                           </div>
                           <Slider
@@ -1012,14 +1062,14 @@ export default function SimulationsPage() {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between rounded-lg border p-3">
                           <div>
-                            <p className="text-sm font-medium">Include mastered decks</p>
+                            <p className="text-sm font-medium inline-flex items-center gap-1">Include mastered decks <HelpHint text="When enabled, mastered decks can still appear in mixed simulations." /></p>
                             <p className="text-xs text-muted-foreground">Keep strong decks in mixed simulations.</p>
                           </div>
                           <Switch checked={includeMastered} onCheckedChange={setIncludeMastered} />
                         </div>
                         <div className="flex items-center justify-between rounded-lg border p-3">
                           <div>
-                            <p className="text-sm font-medium">Live data panel</p>
+                            <p className="text-sm font-medium inline-flex items-center gap-1">Live data panel <HelpHint text="Shows running accuracy and projected transitions while studying." /></p>
                             <p className="text-xs text-muted-foreground">Show live projections while answering cards.</p>
                           </div>
                           <Switch checked={showLivePanel} onCheckedChange={setShowLivePanel} />
@@ -1032,6 +1082,7 @@ export default function SimulationsPage() {
                         <Label className="flex items-center gap-2">
                           <Palette className="h-4 w-4" />
                           Accent Theme
+                          <HelpHint text="Changes the visual mood of the simulations page." />
                         </Label>
                         <div className="grid grid-cols-3 gap-2">
                           {(Object.keys(ACCENT_STYLES) as AccentTheme[]).map((accent) => (
@@ -1059,6 +1110,7 @@ export default function SimulationsPage() {
                       <Button className="w-full gap-2" onClick={runAiCoach} disabled={isAiRunning || masteryData.length === 0}>
                         {isAiRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
                         Run AI Deck Coach
+                        <HelpHint text="Analyzes deck risk/priority and suggests next actions. It does not create tests." />
                       </Button>
                       <div className="rounded-lg border p-3 text-sm">
                         {aiSummary || "AI coach qualifies deck risk and recommends what to attack first. It does not generate tests."}
@@ -1088,7 +1140,10 @@ export default function SimulationsPage() {
 
               <Card className="border-muted/60">
                 <CardHeader>
-                  <CardTitle className="text-lg">Deck Selection</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Deck Selection
+                    <HelpHint text="Choose exactly which decks are eligible for the next simulation run." />
+                  </CardTitle>
                   <CardDescription>
                     {selectedDeckCount > 0
                       ? `${selectedDeckCount} deck(s) selected • ${selectedDeckCards} cards`
@@ -1097,9 +1152,9 @@ export default function SimulationsPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={selectDueDecks}>Select Due</Button>
-                    <Button variant="outline" size="sm" onClick={selectAllDecksWithCards}>Select All With Cards</Button>
-                    <Button variant="ghost" size="sm" onClick={clearDeckSelection}>Clear</Button>
+                    <Button variant="outline" size="sm" onClick={selectDueDecks}>Select Due <HelpHint text="Keeps only currently due decks selected." /></Button>
+                    <Button variant="outline" size="sm" onClick={selectAllDecksWithCards}>Select All With Cards <HelpHint text="Selects every deck that has at least one card." /></Button>
+                    <Button variant="ghost" size="sm" onClick={clearDeckSelection}>Clear <HelpHint text="Removes manual selection. Simulator will fallback to all eligible decks." /></Button>
                   </div>
 
                   <div className="max-h-[280px] space-y-2 overflow-y-auto rounded-lg border p-2">
@@ -1174,19 +1229,19 @@ export default function SimulationsPage() {
               <div className={`mt-8 grid grid-cols-4 gap-3 transition-opacity duration-300 ${isFlipped ? "opacity-100" : "pointer-events-none opacity-0"}`}>
                 <Button variant="outline" className="h-16 flex-col gap-1 border-red-200 hover:bg-red-50 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleRate(1); }}>
                   <X className="h-5 w-5" />
-                  <span className="font-semibold">Again</span>
+                  <span className="font-semibold inline-flex items-center gap-1">Again <HelpHint text="You did not recall it. Card counts as incorrect for this simulation." /></span>
                 </Button>
                 <Button variant="outline" className="h-16 flex-col gap-1 border-orange-200 hover:bg-orange-50 hover:text-orange-600" onClick={(e) => { e.stopPropagation(); handleRate(2); }}>
                   <Target className="h-5 w-5" />
-                  <span className="font-semibold">Hard</span>
+                  <span className="font-semibold inline-flex items-center gap-1">Hard <HelpHint text="You recalled with difficulty. Counts as not passed for deck scoring." /></span>
                 </Button>
                 <Button variant="outline" className="h-16 flex-col gap-1 border-green-200 hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); handleRate(3); }}>
                   <Check className="h-5 w-5" />
-                  <span className="font-semibold">Good</span>
+                  <span className="font-semibold inline-flex items-center gap-1">Good <HelpHint text="Correct recall. Counts as success for deck accuracy." /></span>
                 </Button>
                 <Button variant="outline" className="h-16 flex-col gap-1 border-blue-200 hover:bg-blue-50 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); handleRate(4); }}>
                   <BookOpenCheck className="h-5 w-5" />
-                  <span className="font-semibold">Easy</span>
+                  <span className="font-semibold inline-flex items-center gap-1">Easy <HelpHint text="Strong and fast recall. Also counts as success." /></span>
                 </Button>
               </div>
             </div>
@@ -1194,7 +1249,10 @@ export default function SimulationsPage() {
             {showLivePanel ? (
               <Card className="h-fit">
                 <CardHeader>
-                  <CardTitle className="text-lg">Live Session Data</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Live Session Data
+                    <HelpHint text="Real-time metrics before finishing the session." />
+                  </CardTitle>
                   <CardDescription>
                     Progress updates instantly while you answer cards.
                   </CardDescription>
@@ -1202,15 +1260,15 @@ export default function SimulationsPage() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
                     <div className="rounded-lg border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Cards Reviewed</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">Cards Reviewed <HelpHint text="How many cards you have already rated in this simulation." /></p>
                       <p className="text-2xl font-bold">{liveReviewedCards}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Current Accuracy</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">Current Accuracy <HelpHint text="Based on Good/Easy as successful recalls." /></p>
                       <p className="text-2xl font-bold">{liveAccuracy}%</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Pass Target</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">Pass Target <HelpHint text="Minimum accuracy required for a deck to pass the expansion step." /></p>
                       <p className="text-2xl font-bold">{EXPANSION_PASS_THRESHOLD}%</p>
                     </div>
                   </div>
@@ -1226,7 +1284,12 @@ export default function SimulationsPage() {
                           <TableRow>
                             <TableHead>Deck</TableHead>
                             <TableHead>Accuracy</TableHead>
-                            <TableHead>Projection</TableHead>
+                            <TableHead>
+                              <span className="inline-flex items-center gap-1">
+                                Projection
+                                <HelpHint text="Predicted R-level transition if session ended now." />
+                              </span>
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
