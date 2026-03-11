@@ -70,7 +70,7 @@ type ManualEntryRow = {
   updated_at: string;
 };
 
-const QUICK_FIELDS = ["R10", "R30", "R60", "R90", "Tiempo", "Tema", "Energía", "Dificultad"] as const;
+const QUICK_FIELDS = ["R10", "R30", "R60", "R90", "Time", "Topic", "Energy", "Difficulty"] as const;
 
 const createId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -168,8 +168,8 @@ export default function SimulationsPage() {
       if (entriesError) {
         toast({
           variant: "destructive",
-          title: "No se pudieron cargar las entradas",
-          description: "Intenta recargar la página.",
+          title: "Could not load entries",
+          description: "Try reloading the page.",
         });
       }
 
@@ -218,7 +218,7 @@ export default function SimulationsPage() {
       if (error) {
         toast({
           variant: "destructive",
-          title: "No se pudo guardar el objetivo",
+          title: "Could not save the goal",
         });
       }
       setProfileSaving(false);
@@ -274,8 +274,8 @@ export default function SimulationsPage() {
       setSavingIds((prev) => ({ ...prev, [entry.id]: "error" }));
       toast({
         variant: "destructive",
-        title: "No se pudo guardar",
-        description: "Revisa tu conexión y vuelve a intentarlo.",
+        title: "Could not save",
+        description: "Check your connection and try again.",
       });
       return;
     }
@@ -337,7 +337,7 @@ export default function SimulationsPage() {
     if (error) {
       toast({
         variant: "destructive",
-        title: "No se pudo eliminar",
+        title: "Could not delete",
       });
     }
   };
@@ -443,7 +443,7 @@ export default function SimulationsPage() {
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
-          Cargando tu espacio manual...
+          Loading your manual space...
         </div>
       </div>
     );
@@ -457,30 +457,30 @@ export default function SimulationsPage() {
           <CardHeader className="relative space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-3xl font-black tracking-tight">Simulación Manual</CardTitle>
+                <CardTitle className="text-3xl font-black tracking-tight">Manual Simulation</CardTitle>
                 <CardDescription className="text-base text-muted-foreground">
-                  Un espacio tipo Notion para registrar sesiones a tu manera: calificaciones, notas, R30 o lo que quieras.
+                  A Notion-style space to log sessions your way: ratings, notes, R30, or anything you want.
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
                 <Badge className="gap-1 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
                   <Sparkles className="h-3.5 w-3.5" />
-                  Guardado en tu cuenta
+                  Saved to your account
                 </Badge>
                 <Button onClick={handleCreate} className="gap-2">
                   <Plus className="h-4 w-4" />
-                  Nueva entrada
+                  New entry
                 </Button>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                {entries.length} entradas
+                {entries.length} entries
               </span>
               <span className="inline-flex items-center gap-2">
                 <ListChecks className="h-4 w-4" />
-                100% manual y autónomo
+                100% manual and independent
               </span>
             </div>
           </CardHeader>
@@ -491,16 +491,16 @@ export default function SimulationsPage() {
             <CardHeader className="space-y-1">
               <CardDescription className="flex items-center gap-2">
                 <Flame className="h-4 w-4 text-amber-500" />
-                Racha actual
+                Current streak
               </CardDescription>
-              <CardTitle className="text-3xl font-black">{currentStreak} días</CardTitle>
+              <CardTitle className="text-3xl font-black">{currentStreak} days</CardTitle>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader className="space-y-1">
               <CardDescription className="flex items-center gap-2">
                 <Timer className="h-4 w-4 text-sky-500" />
-                Sesiones últimos 7 días
+                Sessions in the last 7 days
               </CardDescription>
               <CardTitle className="text-3xl font-black">{sessionsThisWeek}</CardTitle>
             </CardHeader>
@@ -509,19 +509,19 @@ export default function SimulationsPage() {
             <CardHeader className="space-y-1">
               <CardDescription className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
-                Calificación media
+                Average rating
               </CardDescription>
-              <CardTitle className="text-3xl font-black">{averageRating ? averageRating.toFixed(1) : "—"}</CardTitle>
-              <CardDescription className="text-xs">Solo valores numéricos</CardDescription>
+              <CardTitle className="text-3xl font-black">{averageRating ? averageRating.toFixed(1) : "-"}</CardTitle>
+              <CardDescription className="text-xs">Numeric values only</CardDescription>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader className="space-y-1">
               <CardDescription className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4 text-rose-500" />
-                Última sesión
+                Last session
               </CardDescription>
-              <CardTitle className="text-2xl font-black">{lastSessionDate ?? "—"}</CardTitle>
+              <CardTitle className="text-2xl font-black">{lastSessionDate ?? "-"}</CardTitle>
             </CardHeader>
           </Card>
         </div>
@@ -532,13 +532,13 @@ export default function SimulationsPage() {
               <CardHeader className="space-y-1">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4" />
-                  Objetivo semanal
+                  Weekly goal
                 </CardTitle>
-                <CardDescription>Define tu meta y observa el progreso.</CardDescription>
+                <CardDescription>Set your goal and track your progress.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Sesiones por semana</Label>
+                  <Label>Sessions per week</Label>
                   <Input
                     type="number"
                     min={1}
@@ -553,7 +553,7 @@ export default function SimulationsPage() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span>Progreso</span>
+                    <span>Progress</span>
                     <span>
                       {sessionsThisWeek}/{weeklyGoal}
                     </span>
@@ -561,38 +561,38 @@ export default function SimulationsPage() {
                   <Progress value={goalProgress} className="h-2" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Enfoque de la semana</Label>
+                  <Label>Weekly focus ?</Label>
                   <Input
                     value={profile.focusArea}
                     onChange={(event) => setProfile((prev) => ({ ...prev, focusArea: event.target.value }))}
-                    placeholder="Ej. Anatomía, verbos irregulares, etc."
+                    placeholder="e.g. Anatomy, irregular verbs, etc."
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Ritual / Preparación</Label>
+                  <Label>Ritual / Prep ?</Label>
                   <Textarea
                     rows={3}
                     value={profile.ritual}
                     onChange={(event) => setProfile((prev) => ({ ...prev, ritual: event.target.value }))}
-                    placeholder="Ej. 10 min de repaso, agua, temporizador 25/5."
+                    placeholder="e.g. 10 min review, water, 25/5 timer."
                   />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {profileSaving ? "Guardando objetivo..." : "Guardado automático en tu cuenta"}
+                  {profileSaving ? "Saving goal..." : "Auto-saved to your account"}
                 </div>
               </CardContent>
             </Card>
 
             <Card className="h-fit">
               <CardHeader className="space-y-2">
-                <CardTitle className="text-lg">Tu base personal</CardTitle>
-                <CardDescription>Filtra, busca y elige qué editar.</CardDescription>
+                <CardTitle className="text-lg">Your personal hub</CardTitle>
+                <CardDescription>Filter, search, and choose what to edit.</CardDescription>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Buscar por título, notas, R30…"
+                    placeholder="Search by title, notes, R30..."
                     className="pl-9"
                   />
                 </div>
@@ -600,7 +600,7 @@ export default function SimulationsPage() {
               <CardContent className="space-y-3">
                 {filteredEntries.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                    Aún no hay entradas. Crea una para empezar tu sistema manual.
+                    No entries yet. Create one to start your manual system.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -616,9 +616,9 @@ export default function SimulationsPage() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <p className="text-sm font-semibold">{entry.title.trim() ? entry.title : "Sin título"}</p>
+                            <p className="text-sm font-semibold">{entry.title.trim() ? entry.title : "Untitled"}</p>
                             <p className="text-xs text-muted-foreground">
-                              {entry.sessionDate ? `Fecha: ${entry.sessionDate}` : "Sin fecha"}
+                              {entry.sessionDate ? `Date: ${entry.sessionDate}` : "No date"}
                             </p>
                           </div>
                           <div className="flex flex-col items-end gap-1">
@@ -658,15 +658,15 @@ export default function SimulationsPage() {
               <CardHeader className="space-y-1">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Tag className="h-4 w-4" />
-                  Señales rápidas
+                  Quick signals ?
                 </CardTitle>
-                <CardDescription>Etiquetas y R-level más usados.</CardDescription>
+                <CardDescription>Most used tags and R-levels.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Top etiquetas</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Top tags</p>
                   {tagStats.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Aún sin etiquetas.</p>
+                    <p className="text-sm text-muted-foreground">No tags yet.</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {tagStats.map(([tag, count]) => (
@@ -680,14 +680,14 @@ export default function SimulationsPage() {
                 </div>
                 <Separator />
                 <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">R-level</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">R-level ?</p>
                   {rLevelStats.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Aún sin R-levels.</p>
+                    <p className="text-sm text-muted-foreground">No R-levels yet.</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {rLevelStats.map(([level, count]) => (
                         <Badge key={level} className="bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
-                          {level} · {count}
+                          {level} - {count}
                         </Badge>
                       ))}
                     </div>
@@ -701,33 +701,33 @@ export default function SimulationsPage() {
             <CardHeader className="space-y-1">
               <CardTitle className="text-lg flex items-center gap-2">
                 <PencilLine className="h-4 w-4" />
-                Editor manual
+                Manual editor
               </CardTitle>
-              <CardDescription>Todo se guarda en tu cuenta. Ajusta el contenido como quieras.</CardDescription>
+              <CardDescription>Everything is saved to your account. Edit the content however you want.</CardDescription>
               {activeEntry ? (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>
                     {activeSaveState === "saving"
-                      ? "Guardando cambios..."
+                      ? "Saving changes..."
                       : activeSaveState === "error"
-                      ? "Error al guardar"
-                      : "Guardado"}
+                      ? "Save error"
+                      : "Saved"}
                   </span>
-                  <span>·</span>
-                  <span>Última edición: {new Date(activeEntry.updatedAt).toLocaleString()}</span>
+                  <span>-</span>
+                  <span>Last edited: {new Date(activeEntry.updatedAt).toLocaleString()}</span>
                 </div>
               ) : null}
             </CardHeader>
             <CardContent>
               {!activeEntry ? (
                 <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                  Selecciona una entrada para editarla o crea una nueva.
+                  Select an entry to edit it or create a new one.
                 </div>
               ) : (
                 <div className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Título</Label>
+                      <Label>Title</Label>
                       <Input
                         value={activeEntry.title}
                         onChange={(event) =>
@@ -736,13 +736,13 @@ export default function SimulationsPage() {
                             title: event.target.value,
                           }))
                         }
-                        placeholder="Ej. Sesión de Biología - Repaso final"
+                        placeholder="e.g. Biology session - Final review"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2">
                         <CalendarClock className="h-4 w-4" />
-                        Fecha
+                        Date
                       </Label>
                       <Input
                         type="date"
@@ -759,7 +759,7 @@ export default function SimulationsPage() {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Calificación</Label>
+                      <Label>Rating</Label>
                       <Input
                         value={activeEntry.rating}
                         onChange={(event) =>
@@ -768,7 +768,7 @@ export default function SimulationsPage() {
                             rating: event.target.value,
                           }))
                         }
-                        placeholder="Ej. 4/5, A, 85%"
+                        placeholder="e.g. 4/5, A, 85%"
                       />
                       <div className="flex flex-wrap gap-2">
                         {"12345".split("").map((value) => (
@@ -798,12 +798,12 @@ export default function SimulationsPage() {
                             }))
                           }
                         >
-                          Limpiar
+                          Clear
                         </Button>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>R-level / R30 / Nivel</Label>
+                      <Label>R-level / R30 / Level ?</Label>
                       <Input
                         value={activeEntry.rLevel}
                         onChange={(event) =>
@@ -812,7 +812,7 @@ export default function SimulationsPage() {
                             rLevel: event.target.value,
                           }))
                         }
-                        placeholder="Ej. R30, R60, Nivel 2"
+                        placeholder="e.g. R30, R60, Level 2"
                       />
                     </div>
                   </div>
@@ -820,7 +820,7 @@ export default function SimulationsPage() {
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Tag className="h-4 w-4" />
-                      Etiquetas
+                      Tags
                     </Label>
                     <Input
                       value={activeEntry.tags.join(", ")}
@@ -833,12 +833,12 @@ export default function SimulationsPage() {
                             .filter(Boolean),
                         }))
                       }
-                      placeholder="Ej. biología, examen, focus"
+                      placeholder="e.g. biology, exam, focus"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Notas libres</Label>
+                    <Label>Notes</Label>
                     <Textarea
                       value={activeEntry.notes}
                       onChange={(event) =>
@@ -847,7 +847,7 @@ export default function SimulationsPage() {
                           notes: event.target.value,
                         }))
                       }
-                      placeholder="Escribe tus observaciones, recordatorios o próximos pasos."
+                      placeholder="Write your observations, reminders, or next steps."
                       rows={6}
                     />
                   </div>
@@ -857,20 +857,20 @@ export default function SimulationsPage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-sm font-semibold">Campos personalizados</h3>
+                        <h3 className="text-sm font-semibold">Custom fields ?</h3>
                         <p className="text-xs text-muted-foreground">
-                          Agrega tus propios campos tipo Notion: R30, tiempo, esfuerzo, etc.
+                          Add your own Notion-style fields: R30, time, effort, etc.
                         </p>
                       </div>
                       <Button type="button" size="sm" onClick={() => handleAddField(activeEntry.id)} className="gap-2">
                         <Plus className="h-4 w-4" />
-                        Nuevo campo
+                        New field
                       </Button>
                     </div>
 
                     {activeEntry.fields.length === 0 ? (
                       <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                        No hay campos personalizados. Añade uno para comenzar.
+                        No custom fields yet. Add one to get started.
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -879,12 +879,12 @@ export default function SimulationsPage() {
                             <Input
                               value={field.label}
                               onChange={(event) => handleUpdateField(activeEntry.id, field.id, { label: event.target.value })}
-                              placeholder="Nombre del campo"
+                              placeholder="Field name"
                             />
                             <Input
                               value={field.value}
                               onChange={(event) => handleUpdateField(activeEntry.id, field.id, { value: event.target.value })}
-                              placeholder="Valor"
+                              placeholder="Value"
                             />
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleDeleteField(activeEntry.id, field.id)}>
                               <Trash2 className="h-4 w-4" />
@@ -907,7 +907,7 @@ export default function SimulationsPage() {
 
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-xs text-muted-foreground">
-                      Última edición: {new Date(activeEntry.updatedAt).toLocaleString()}
+                      Last edited: {new Date(activeEntry.updatedAt).toLocaleString()}
                     </div>
                     <Button
                       type="button"
@@ -917,7 +917,7 @@ export default function SimulationsPage() {
                       className="gap-2"
                     >
                       <Trash2 className="h-4 w-4" />
-                      Eliminar entrada
+                      Delete entry
                     </Button>
                   </div>
                 </div>
