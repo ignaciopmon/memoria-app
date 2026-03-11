@@ -1,1386 +1,931 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
-import { format } from "date-fns";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import {
-  EXPANSION_HAND_BRAKE_INTERVAL,
-  EXPANSION_INITIAL_INTERVAL,
-  EXPANSION_MASTERED_FROM,
-  EXPANSION_PASS_THRESHOLD,
-  toReviewLevel,
-  type ExpansionStatus,
-} from "@/lib/expansion-cycle";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  AlertTriangle,
-  BookOpenCheck,
-  Bot,
-  BrainCircuit,
-  Check,
-  CircleHelp,
-  ChevronsRight,
+  CalendarClock,
+  CheckCircle2,
+  FileText,
   Flame,
-  Infinity as InfinityIcon,
-  Layers,
+  ListChecks,
   Loader2,
-  Palette,
-  Play,
-  Rocket,
-  RotateCcw,
-  ShieldAlert,
+  PencilLine,
+  Plus,
+  Search,
   Sparkles,
-  Target,
-  X,
+  Star,
+  Tag,
+  Timer,
+  Trash2,
+  TrendingUp,
 } from "lucide-react";
 
-type DeckMastery = {
-  deck_id: string;
-  deck_name: string;
-  current_interval: number;
-  status: ExpansionStatus;
-  last_score: number;
-  next_review_date: string;
-  isDue: boolean;
-  card_count: number;
-};
-
-type Flashcard = {
+type ManualField = {
   id: string;
-  deck_id: string;
-  deck_name: string;
-  front: string;
-  back: string;
+  label: string;
+  value: string;
 };
 
-type DeckSessionResult = {
-  score: number;
-  total: number;
-  name: string;
-  previousInterval: number;
-  previousStatus: ExpansionStatus;
+type ManualEntry = {
+  id: string;
+  title: string;
+  rating: string;
+  rLevel: string;
+  notes: string;
+  tags: string[];
+  sessionDate: string;
+  fields: ManualField[];
+  createdAt: string;
+  updatedAt: string;
 };
 
-type DeckOutcome = {
-  deckId: string;
-  score: number;
-  total: number;
-  percentage: number;
-  passed: boolean;
-  previousInterval: number;
-  previousStatus: ExpansionStatus;
-  newInterval: number;
-  newStatus: ExpansionStatus;
-  nextReviewDate: string;
+type ManualProfile = {
+  weeklyGoal: number;
+  focusArea: string;
+  ritual: string;
 };
 
-type AppState = "hub" | "loading_cards" | "studying" | "results";
-type SimulationMode = "due" | "all";
-type AccentTheme = "ocean" | "forest" | "sunset";
-type SimulationProfile = "focus" | "balanced" | "sprint";
-type DeckInsightTier = "critical" | "watch" | "strong";
-type DeckInsight = {
-  deckId: string;
-  tier: DeckInsightTier;
-  headline: string;
-  reason: string;
-  nextAction: string;
-  priority: number;
-};
-type SamplingSettings = {
-  minPerDeck: number;
-  maxPerDeck: number;
-  sessionCap: number;
+type ManualEntryRow = {
+  id: string;
+  user_id: string;
+  title: string | null;
+  rating: string | null;
+  r_level: string | null;
+  notes: string | null;
+  tags: string[] | null;
+  session_date: string | null;
+  fields: ManualField[] | null;
+  created_at: string;
+  updated_at: string;
 };
 
-const PREFERENCES_KEY = "simulations-page-preferences-v2";
+const QUICK_FIELDS = ["R10", "R30", "R60", "R90", "Tiempo", "Tema", "Energía", "Dificultad"] as const;
 
-const PROFILE_PRESETS: Record<
-  SimulationProfile,
-  {
-    label: string;
-    hint: string;
-    settings: SamplingSettings;
-    icon: ComponentType<{ className?: string }>;
+const createId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
   }
-> = {
-  focus: {
-    label: "Focus Recovery",
-    hint: "Smaller session, quick signal for weaker decks.",
-    settings: { minPerDeck: 2, maxPerDeck: 5, sessionCap: 24 },
-    icon: ShieldAlert,
-  },
-  balanced: {
-    label: "Balanced Study",
-    hint: "Recommended baseline for consistent progress.",
-    settings: { minPerDeck: 2, maxPerDeck: 8, sessionCap: 48 },
-    icon: BrainCircuit,
-  },
-  sprint: {
-    label: "Exam Sprint",
-    hint: "Large mixed session with higher pressure.",
-    settings: { minPerDeck: 3, maxPerDeck: 12, sessionCap: 72 },
-    icon: Rocket,
-  },
+  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const ACCENT_STYLES: Record<
-  AccentTheme,
-  {
-    label: string;
-    heroGradient: string;
-    heroGlow: string;
-    chip: string;
-    primaryButton: string;
-  }
-> = {
-  ocean: {
-    label: "Ocean",
-    heroGradient: "from-cyan-500/20 via-blue-500/15 to-indigo-500/20",
-    heroGlow: "bg-cyan-500/30",
-    chip: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
-    primaryButton: "from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600",
-  },
-  forest: {
-    label: "Forest",
-    heroGradient: "from-emerald-500/20 via-green-500/15 to-lime-500/20",
-    heroGlow: "bg-emerald-500/30",
-    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    primaryButton: "from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600",
-  },
-  sunset: {
-    label: "Sunset",
-    heroGradient: "from-orange-500/20 via-rose-500/15 to-amber-500/20",
-    heroGlow: "bg-orange-500/30",
-    chip: "bg-orange-500/10 text-orange-700 dark:text-orange-300",
-    primaryButton: "from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600",
-  },
+const createEntry = (): ManualEntry => {
+  const now = new Date().toISOString();
+  return {
+    id: createId(),
+    title: "",
+    rating: "",
+    rLevel: "",
+    notes: "",
+    tags: [],
+    sessionDate: now.slice(0, 10),
+    fields: [],
+    createdAt: now,
+    updatedAt: now,
+  };
 };
 
-const shuffleArray = <T,>(items: T[]): T[] => {
-  const next = [...items];
-  for (let i = next.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [next[i], next[j]] = [next[j], next[i]];
-  }
-  return next;
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
-const buildBalancedCards = (
-  deckIds: string[],
-  cardsByDeck: Record<string, Flashcard[]>,
-  settings: SamplingSettings,
-) => {
-  const minPerDeck = Math.max(1, Math.min(settings.minPerDeck, settings.maxPerDeck));
-  const maxPerDeck = Math.max(minPerDeck, settings.maxPerDeck);
-  const sessionCap = Math.max(maxPerDeck, settings.sessionCap);
-
-  const selected: Flashcard[] = [];
-  const usedByDeck = new Map<string, number>();
-  const queue = shuffleArray(deckIds);
-
-  for (const deckId of queue) {
-    cardsByDeck[deckId] = shuffleArray(cardsByDeck[deckId] || []);
-    usedByDeck.set(deckId, 0);
+const parseNumericRating = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+    return Number(trimmed);
   }
-
-  for (const deckId of queue) {
-    const deckCards = cardsByDeck[deckId] || [];
-    const seedCount = Math.min(deckCards.length, minPerDeck);
-    for (let i = 0; i < seedCount && selected.length < sessionCap; i += 1) {
-      selected.push(deckCards[i]);
-      usedByDeck.set(deckId, i + 1);
-    }
-  }
-
-  let added = true;
-  while (selected.length < sessionCap && added) {
-    added = false;
-    for (const deckId of queue) {
-      const deckCards = cardsByDeck[deckId] || [];
-      const used = usedByDeck.get(deckId) ?? 0;
-      if (used >= deckCards.length || used >= maxPerDeck) {
-        continue;
-      }
-      selected.push(deckCards[used]);
-      usedByDeck.set(deckId, used + 1);
-      added = true;
-      if (selected.length >= sessionCap) {
-        break;
-      }
-    }
-  }
-
-  return selected;
+  return null;
 };
 
-const statusBadge = (status: ExpansionStatus) => {
-  if (status === "Mastered") {
-    return <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20 border-none shadow-none">Mastered</Badge>;
-  }
-  if (status === "Reviewing") {
-    return <Badge className="bg-blue-500/10 text-blue-600 border-none shadow-none">Reviewing</Badge>;
-  }
-  if (status === "Needs Focus") {
-    return (
-      <Badge variant="destructive" className="border-none shadow-none flex w-fit items-center gap-1">
-        <AlertTriangle className="h-3 w-3" />
-        Needs Focus
-      </Badge>
-    );
-  }
-  return <Badge variant="secondary" className="border-none shadow-none">Learning</Badge>;
-};
-
-const getInsightBadge = (tier: DeckInsightTier) => {
-  if (tier === "critical") {
-    return <Badge className="bg-red-500/10 text-red-700 dark:text-red-300 border-none">Critical</Badge>;
-  }
-  if (tier === "watch") {
-    return <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-none">Watch</Badge>;
-  }
-  return <Badge className="bg-green-500/10 text-green-700 dark:text-green-300 border-none">Strong</Badge>;
-};
-
-const HelpHint = ({
-  text,
-  side = "top",
-}: {
-  text: string;
-  side?: "top" | "right" | "bottom" | "left";
-}) => {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition-colors hover:text-foreground"
-          aria-label="Help"
-        >
-          <CircleHelp className="h-3.5 w-3.5" />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side={side} sideOffset={6} className="max-w-[260px] leading-relaxed">
-        {text}
-      </TooltipContent>
-    </Tooltip>
-  );
+const mapRowToEntry = (row: ManualEntryRow): ManualEntry => {
+  return {
+    id: row.id,
+    title: row.title ?? "",
+    rating: row.rating ?? "",
+    rLevel: row.r_level ?? "",
+    notes: row.notes ?? "",
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    sessionDate: row.session_date ?? "",
+    fields: Array.isArray(row.fields) ? row.fields : [],
+    createdAt: row.created_at ?? new Date().toISOString(),
+    updatedAt: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+  };
 };
 
 export default function SimulationsPage() {
-  const router = useRouter();
-  const [state, setState] = useState<AppState>("hub");
-  const [masteryData, setMasteryData] = useState<DeckMastery[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const [cards, setCards] = useState<Flashcard[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false);
-  const [sessionResults, setSessionResults] = useState<Record<string, DeckSessionResult>>({});
-  const [savingResults, setSavingResults] = useState(false);
-  const [outcomes, setOutcomes] = useState<DeckOutcome[]>([]);
-
-  const [controlTab, setControlTab] = useState<"mission" | "style" | "ai">("mission");
-  const [accentTheme, setAccentTheme] = useState<AccentTheme>("ocean");
-  const [profile, setProfile] = useState<SimulationProfile>("balanced");
-  const [sampling, setSampling] = useState<SamplingSettings>(PROFILE_PRESETS.balanced.settings);
-  const [includeMastered, setIncludeMastered] = useState(true);
-  const [showLivePanel, setShowLivePanel] = useState(true);
-  const [selectedDeckIds, setSelectedDeckIds] = useState<string[]>([]);
-  const [preferencesReady, setPreferencesReady] = useState(false);
-
-  const [aiInsights, setAiInsights] = useState<Record<string, DeckInsight>>({});
-  const [aiSummary, setAiSummary] = useState("");
-  const [isAiRunning, setIsAiRunning] = useState(false);
-
   const supabase = createClient();
+  const router = useRouter();
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchHubData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState<ManualEntry[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [savingIds, setSavingIds] = useState<Record<string, "idle" | "saving" | "error">>({});
+  const [profile, setProfile] = useState<ManualProfile>({ weeklyGoal: 4, focusArea: "", ritual: "" });
+  const [profileReady, setProfileReady] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    let isMounted = true;
 
-    const raw = localStorage.getItem(PREFERENCES_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as Partial<{
-          accentTheme: AccentTheme;
-          profile: SimulationProfile;
-          sampling: SamplingSettings;
-          includeMastered: boolean;
-          showLivePanel: boolean;
-          selectedDeckIds: string[];
-        }>;
-        if (parsed.accentTheme && ACCENT_STYLES[parsed.accentTheme]) {
-          setAccentTheme(parsed.accentTheme);
-        }
-        if (parsed.profile && PROFILE_PRESETS[parsed.profile]) {
-          setProfile(parsed.profile);
-        }
-        if (parsed.sampling) {
-          setSampling({
-            minPerDeck: Math.max(1, parsed.sampling.minPerDeck ?? PROFILE_PRESETS.balanced.settings.minPerDeck),
-            maxPerDeck: Math.max(1, parsed.sampling.maxPerDeck ?? PROFILE_PRESETS.balanced.settings.maxPerDeck),
-            sessionCap: Math.max(8, parsed.sampling.sessionCap ?? PROFILE_PRESETS.balanced.settings.sessionCap),
-          });
-        }
-        if (typeof parsed.includeMastered === "boolean") {
-          setIncludeMastered(parsed.includeMastered);
-        }
-        if (typeof parsed.showLivePanel === "boolean") {
-          setShowLivePanel(parsed.showLivePanel);
-        }
-        if (Array.isArray(parsed.selectedDeckIds)) {
-          setSelectedDeckIds(parsed.selectedDeckIds);
-        }
-      } catch {
-        // ignore invalid local state
+    const load = async () => {
+      setLoading(true);
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+
+      if (!user) {
+        router.push("/auth/login");
+        return;
       }
-    }
 
-    setPreferencesReady(true);
-  }, []);
+      if (!isMounted) return;
+      setUserId(user.id);
 
-  useEffect(() => {
-    if (!preferencesReady || typeof window === "undefined") {
-      return;
-    }
+      const { data: entryRows, error: entriesError } = await supabase
+        .from("manual_simulation_entries")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false });
 
-    localStorage.setItem(
-      PREFERENCES_KEY,
-      JSON.stringify({
-        accentTheme,
-        profile,
-        sampling,
-        includeMastered,
-        showLivePanel,
-        selectedDeckIds,
-      }),
-    );
-  }, [accentTheme, includeMastered, preferencesReady, profile, sampling, selectedDeckIds, showLivePanel]);
-
-  useEffect(() => {
-    if (masteryData.length === 0) {
-      return;
-    }
-
-    setSelectedDeckIds((prev) => {
-      const valid = prev.filter((deckId) => masteryData.some((deck) => deck.deck_id === deckId && deck.card_count > 0));
-      if (valid.length > 0) {
-        return valid;
+      if (entriesError) {
+        toast({
+          variant: "destructive",
+          title: "No se pudieron cargar las entradas",
+          description: "Intenta recargar la página.",
+        });
       }
-      return masteryData.filter((deck) => deck.card_count > 0).map((deck) => deck.deck_id);
-    });
-  }, [masteryData]);
 
-  const outcomeByDeck = useMemo(() => {
-    return outcomes.reduce((acc, item) => {
-      acc[item.deckId] = item;
-      return acc;
-    }, {} as Record<string, DeckOutcome>);
-  }, [outcomes]);
+      const nextEntries = (entryRows ?? []).map((row) => mapRowToEntry(row as ManualEntryRow));
+      setEntries(nextEntries);
+      setActiveId(nextEntries[0]?.id ?? null);
 
-  const dueDecksCount = masteryData.filter((d) => d.isDue).length;
-  const focusDecksCount = masteryData.filter((d) => d.status === "Needs Focus").length;
-  const masteredDecksCount = masteryData.filter((d) => d.status === "Mastered").length;
-  const selectedDeckCount = selectedDeckIds.length;
-  const selectedDeckCards = masteryData
-    .filter((deck) => selectedDeckIds.includes(deck.deck_id))
-    .reduce((sum, deck) => sum + deck.card_count, 0);
-  const accentStyle = ACCENT_STYLES[accentTheme];
-  const ProfileIcon = PROFILE_PRESETS[profile].icon;
-  const liveDeckRows = useMemo(() => {
-    return Object.entries(sessionResults)
-      .filter(([, result]) => result.total > 0)
-      .map(([deckId, result]) => {
-        const accuracy = Math.round((result.score / result.total) * 100);
-        const passed = accuracy >= EXPANSION_PASS_THRESHOLD;
-        const projectedInterval = passed
-          ? result.previousInterval === 0
-            ? EXPANSION_INITIAL_INTERVAL
-            : result.previousInterval * 2
-          : EXPANSION_HAND_BRAKE_INTERVAL;
-        const projectedStatus: ExpansionStatus = passed
-          ? projectedInterval >= EXPANSION_MASTERED_FROM
-            ? "Mastered"
-            : "Reviewing"
-          : "Needs Focus";
+      const { data: profileRows } = await supabase
+        .from("manual_simulation_profile")
+        .select("*")
+        .eq("user_id", user.id);
 
-        return {
-          deckId,
-          ...result,
-          accuracy,
-          passed,
-          projectedInterval,
-          projectedStatus,
-        };
-      })
-      .sort((a, b) => b.total - a.total);
-  }, [sessionResults]);
-  const liveReviewedCards = liveDeckRows.reduce((sum, row) => sum + row.total, 0);
-  const liveCorrectCards = liveDeckRows.reduce((sum, row) => sum + row.score, 0);
-  const liveAccuracy = liveReviewedCards > 0 ? Math.round((liveCorrectCards / liveReviewedCards) * 100) : 0;
+      const profileRow = profileRows?.[0];
+      if (profileRow) {
+        setProfile({
+          weeklyGoal: profileRow.weekly_goal ?? 4,
+          focusArea: profileRow.focus_area ?? "",
+          ritual: profileRow.ritual ?? "",
+        });
+      }
 
-  const fetchHubData = async () => {
-    setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+      setProfileReady(true);
       setLoading(false);
-      return;
-    }
+    };
 
-    const { data: decks } = await supabase
-      .from("decks")
-      .select("id, name")
-      .eq("is_folder", false)
-      .is("deleted_at", null);
+    load();
 
-    if (!decks || decks.length === 0) {
-      setMasteryData([]);
-      setLoading(false);
-      return;
-    }
+    return () => {
+      isMounted = false;
+    };
+  }, [router, supabase, toast]);
 
-    const deckIds = decks.map((deck) => deck.id);
+  useEffect(() => {
+    if (!profileReady || !userId) return;
 
-    const [{ data: mastery }, { data: deckCards }] = await Promise.all([
-      supabase.from("deck_mastery").select("*").eq("user_id", user.id).in("deck_id", deckIds),
-      supabase.from("cards").select("deck_id").in("deck_id", deckIds).is("deleted_at", null),
-    ]);
-
-    const cardCountByDeck = (deckCards || []).reduce((acc, card) => {
-      acc[card.deck_id] = (acc[card.deck_id] ?? 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const now = Date.now();
-    const merged: DeckMastery[] = decks
-      .map((deck) => {
-        const masteryRow = mastery?.find((row) => row.deck_id === deck.id);
-        const cardCount = cardCountByDeck[deck.id] ?? 0;
-        const nextReviewDate = masteryRow?.next_review_date ?? new Date().toISOString();
-        const dueByDate = !masteryRow || new Date(nextReviewDate).getTime() <= now;
-        const needsFocus = masteryRow?.status === "Needs Focus";
-
-        return {
-          deck_id: deck.id,
-          deck_name: deck.name,
-          current_interval: masteryRow?.current_interval ?? 0,
-          status: (masteryRow?.status as ExpansionStatus) ?? "Learning",
-          last_score: masteryRow?.last_score ?? 0,
-          next_review_date: nextReviewDate,
-          isDue: cardCount > 0 && (dueByDate || needsFocus),
-          card_count: cardCount,
-        };
-      })
-      .sort((a, b) => {
-        if (a.isDue !== b.isDue) {
-          return a.isDue ? -1 : 1;
-        }
-        return new Date(a.next_review_date).getTime() - new Date(b.next_review_date).getTime();
+    const timer = setTimeout(async () => {
+      setProfileSaving(true);
+      const { error } = await supabase.from("manual_simulation_profile").upsert({
+        user_id: userId,
+        weekly_goal: Math.max(1, profile.weeklyGoal || 1),
+        focus_area: profile.focusArea,
+        ritual: profile.ritual,
+        updated_at: new Date().toISOString(),
       });
 
-    setMasteryData(merged);
-    setLoading(false);
-  };
-
-  const applyProfile = (nextProfile: SimulationProfile) => {
-    setProfile(nextProfile);
-    setSampling(PROFILE_PRESETS[nextProfile].settings);
-  };
-
-  const toggleDeckSelection = (deckId: string, checked: boolean) => {
-    setSelectedDeckIds((prev) => {
-      if (checked) {
-        if (prev.includes(deckId)) {
-          return prev;
-        }
-        return [...prev, deckId];
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "No se pudo guardar el objetivo",
+        });
       }
-      return prev.filter((id) => id !== deckId);
+      setProfileSaving(false);
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [profile, profileReady, supabase, toast, userId]);
+
+  const sortedEntries = useMemo(() => {
+    return [...entries].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }, [entries]);
+
+  const filteredEntries = useMemo(() => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) return sortedEntries;
+
+    return sortedEntries.filter((entry) => {
+      const haystack = [
+        entry.title,
+        entry.notes,
+        entry.rating,
+        entry.rLevel,
+        entry.tags.join(" "),
+        entry.fields.map((field) => `${field.label} ${field.value}`).join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(trimmed);
     });
-  };
+  }, [query, sortedEntries]);
 
-  const selectDueDecks = () => {
-    setSelectedDeckIds(masteryData.filter((deck) => deck.isDue).map((deck) => deck.deck_id));
-  };
+  const activeEntry = entries.find((entry) => entry.id === activeId) ?? null;
+  const activeSaveState = activeEntry ? savingIds[activeEntry.id] ?? "idle" : "idle";
 
-  const selectAllDecksWithCards = () => {
-    setSelectedDeckIds(masteryData.filter((deck) => deck.card_count > 0).map((deck) => deck.deck_id));
-  };
+  const persistEntry = async (entry: ManualEntry) => {
+    if (!userId) return;
+    setSavingIds((prev) => ({ ...prev, [entry.id]: "saving" }));
 
-  const clearDeckSelection = () => {
-    setSelectedDeckIds([]);
-  };
-
-  const runAiCoach = async () => {
-    if (masteryData.length === 0) {
-      toast({ title: "No decks found", description: "Create decks first, then run AI Deck Coach." });
-      return;
-    }
-
-    setIsAiRunning(true);
-    try {
-      const response = await fetch("/api/qualify-decks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          decks: masteryData.map((deck) => ({
-            deckId: deck.deck_id,
-            name: deck.deck_name,
-            status: deck.status,
-            currentInterval: deck.current_interval,
-            lastScore: deck.last_score,
-            nextReviewDate: deck.next_review_date,
-            isDue: deck.isDue,
-            cardCount: deck.card_count,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("AI Deck Coach failed");
-      }
-
-      const payload = (await response.json()) as {
-        summary?: string;
-        insights?: DeckInsight[];
-      };
-
-      const insightMap = (payload.insights || []).reduce((acc, insight) => {
-        acc[insight.deckId] = insight;
-        return acc;
-      }, {} as Record<string, DeckInsight>);
-
-      setAiInsights(insightMap);
-      setAiSummary(payload.summary || "AI coach updated.");
-      toast({ title: "AI Deck Coach updated", description: "Deck signals and actions are now available." });
-    } catch {
-      toast({ variant: "destructive", title: "AI Deck Coach unavailable" });
-    } finally {
-      setIsAiRunning(false);
-    }
-  };
-
-  const startSimulation = async (mode: SimulationMode) => {
-    setState("loading_cards");
-
-    const selectionSet = new Set(selectedDeckIds);
-    const candidates = masteryData.filter((deck) => {
-      const isSelected = selectionSet.size === 0 || selectionSet.has(deck.deck_id);
-      if (!isSelected) {
-        return false;
-      }
-
-      if (mode === "all") {
-        return deck.card_count > 0 && (includeMastered || deck.status !== "Mastered");
-      }
-      return deck.isDue && (includeMastered || deck.status !== "Mastered");
+    const { error } = await supabase.from("manual_simulation_entries").upsert({
+      id: entry.id,
+      user_id: userId,
+      title: entry.title || null,
+      rating: entry.rating || null,
+      r_level: entry.rLevel || null,
+      notes: entry.notes || null,
+      tags: entry.tags,
+      session_date: entry.sessionDate || null,
+      fields: entry.fields,
+      updated_at: entry.updatedAt,
     });
 
-    if (candidates.length === 0) {
-      toast({
-        title: "No eligible decks",
-        description: "Adjust selection or profile settings and try again.",
-      });
-      setState("hub");
-      return;
-    }
-
-    const targetDeckIds = candidates.map((deck) => deck.deck_id);
-    const deckNameById = candidates.reduce((acc, deck) => {
-      acc[deck.deck_id] = deck.deck_name;
-      return acc;
-    }, {} as Record<string, string>);
-
-    const { data: fetchedCards } = await supabase
-      .from("cards")
-      .select("id, deck_id, front, back")
-      .in("deck_id", targetDeckIds)
-      .is("deleted_at", null);
-
-    if (!fetchedCards || fetchedCards.length === 0) {
+    if (error) {
+      setSavingIds((prev) => ({ ...prev, [entry.id]: "error" }));
       toast({
         variant: "destructive",
-        title: "No cards found",
-        description: "Add cards to your decks before running a simulation.",
+        title: "No se pudo guardar",
+        description: "Revisa tu conexión y vuelve a intentarlo.",
       });
-      setState("hub");
       return;
     }
 
-    const formattedCards: Flashcard[] = fetchedCards.map((card) => ({
-      id: card.id,
-      deck_id: card.deck_id,
-      deck_name: deckNameById[card.deck_id] ?? "Unknown deck",
-      front: card.front,
-      back: card.back,
+    setSavingIds((prev) => ({ ...prev, [entry.id]: "idle" }));
+  };
+
+  const queueSave = (entry: ManualEntry) => {
+    if (!userId) return;
+
+    const existing = saveTimers.current[entry.id];
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    saveTimers.current[entry.id] = setTimeout(() => {
+      persistEntry(entry);
+    }, 500);
+  };
+
+  const updateEntry = (id: string, updater: (entry: ManualEntry) => ManualEntry) => {
+    setEntries((prev) => {
+      let nextEntry: ManualEntry | null = null;
+      const next = prev.map((entry) => {
+        if (entry.id !== id) return entry;
+        nextEntry = {
+          ...updater(entry),
+          updatedAt: new Date().toISOString(),
+        };
+        return nextEntry;
+      });
+
+      if (nextEntry) {
+        queueSave(nextEntry);
+      }
+
+      return next;
+    });
+  };
+
+  const handleCreate = () => {
+    const next = createEntry();
+    setEntries((prev) => [next, ...prev]);
+    setActiveId(next.id);
+    persistEntry(next);
+  };
+
+  const handleDelete = async (id: string) => {
+    setEntries((prev) => {
+      const next = prev.filter((entry) => entry.id !== id);
+      if (activeId === id) {
+        setActiveId(next[0]?.id ?? null);
+      }
+      return next;
+    });
+
+    if (!userId) return;
+    const { error } = await supabase.from("manual_simulation_entries").delete().eq("id", id);
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo eliminar",
+      });
+    }
+  };
+
+  const handleAddField = (id: string, label = "") => {
+    updateEntry(id, (entry) => ({
+      ...entry,
+      fields: [...entry.fields, { id: createId(), label, value: "" }],
     }));
-
-    const cardsByDeck = formattedCards.reduce((acc, card) => {
-      if (!acc[card.deck_id]) {
-        acc[card.deck_id] = [];
-      }
-      acc[card.deck_id].push(card);
-      return acc;
-    }, {} as Record<string, Flashcard[]>);
-
-    const decksWithCards = candidates.filter((deck) => (cardsByDeck[deck.deck_id]?.length ?? 0) > 0);
-
-    if (decksWithCards.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "No cards available",
-        description: "All selected decks are empty.",
-      });
-      setState("hub");
-      return;
-    }
-
-    if (decksWithCards.length < candidates.length) {
-      toast({
-        title: "Some decks were skipped",
-        description: "Only decks with at least one card were included in this simulation.",
-      });
-    }
-
-    const selectedCards = buildBalancedCards(
-      decksWithCards.map((deck) => deck.deck_id),
-      cardsByDeck,
-      sampling,
-    );
-
-    if (selectedCards.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Unable to build simulation",
-        description: "Please check that your selected decks contain cards.",
-      });
-      setState("hub");
-      return;
-    }
-
-    const initialResults = decksWithCards.reduce((acc, deck) => {
-      acc[deck.deck_id] = {
-        score: 0,
-        total: 0,
-        name: deck.deck_name,
-        previousInterval: deck.current_interval,
-        previousStatus: deck.status,
-      };
-      return acc;
-    }, {} as Record<string, DeckSessionResult>);
-
-    setCards(selectedCards);
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setSessionResults(initialResults);
-    setOutcomes([]);
-    setState("studying");
   };
 
-  const handleRate = (rating: number) => {
-    const card = cards[currentIndex];
-    if (!card) {
-      return;
-    }
-
-    const nextResults = { ...sessionResults };
-    if (nextResults[card.deck_id]) {
-      nextResults[card.deck_id].total += 1;
-      if (rating >= 3) {
-        nextResults[card.deck_id].score += 1;
-      }
-    }
-    setSessionResults(nextResults);
-
-    if (currentIndex < cards.length - 1) {
-      setIsFlipped(false);
-      setCurrentIndex((prev) => prev + 1);
-      return;
-    }
-
-    finishSimulation(nextResults);
+  const handleUpdateField = (entryId: string, fieldId: string, data: Partial<ManualField>) => {
+    updateEntry(entryId, (entry) => ({
+      ...entry,
+      fields: entry.fields.map((field) => (field.id === fieldId ? { ...field, ...data } : field)),
+    }));
   };
 
-  const finishSimulation = async (finalResults: Record<string, DeckSessionResult>) => {
-    setState("results");
-    setSavingResults(true);
+  const handleDeleteField = (entryId: string, fieldId: string) => {
+    updateEntry(entryId, (entry) => ({
+      ...entry,
+      fields: entry.fields.filter((field) => field.id !== fieldId),
+    }));
+  };
 
-    try {
-      const response = await fetch("/api/process-simulation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resultsByDeck: finalResults }),
+  const entriesWithDates = entries.filter((entry) => Boolean(entry.sessionDate));
+  const today = useMemo(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, []);
+
+  const sessionsThisWeek = useMemo(() => {
+    const start = new Date(today);
+    start.setDate(today.getDate() - 6);
+
+    return entriesWithDates.filter((entry) => {
+      const date = new Date(entry.sessionDate);
+      date.setHours(0, 0, 0, 0);
+      return date >= start && date <= today;
+    }).length;
+  }, [entriesWithDates, today]);
+
+  const currentStreak = useMemo(() => {
+    const dateSet = new Set(entriesWithDates.map((entry) => entry.sessionDate));
+    let count = 0;
+    const cursor = new Date(today);
+
+    while (dateSet.has(toDateKey(cursor))) {
+      count += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return count;
+  }, [entriesWithDates, today]);
+
+  const lastSessionDate = useMemo(() => {
+    if (entriesWithDates.length === 0) return null;
+    return [...entriesWithDates].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))[0]?.sessionDate ?? null;
+  }, [entriesWithDates]);
+
+  const averageRating = useMemo(() => {
+    const ratings = entries
+      .map((entry) => parseNumericRating(entry.rating))
+      .filter((value): value is number => value !== null);
+
+    if (ratings.length === 0) return null;
+    const sum = ratings.reduce((acc, value) => acc + value, 0);
+    return sum / ratings.length;
+  }, [entries]);
+
+  const tagStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    entries.forEach((entry) => {
+      entry.tags.forEach((tag) => {
+        const clean = tag.trim();
+        if (!clean) return;
+        counts.set(clean, (counts.get(clean) ?? 0) + 1);
       });
+    });
 
-      if (!response.ok) {
-        throw new Error("Failed to save simulation progress.");
-      }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+  }, [entries]);
 
-      const payload = (await response.json()) as { outcomes?: DeckOutcome[] };
-      setOutcomes(payload.outcomes || []);
-      await fetchHubData();
-    } catch (error) {
-      toast({ variant: "destructive", title: "Could not save results" });
-    } finally {
-      setSavingResults(false);
-    }
-  };
+  const rLevelStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    entries.forEach((entry) => {
+      const key = entry.rLevel.trim();
+      if (!key) return;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [entries]);
+
+  const weeklyGoal = Math.max(1, profile.weeklyGoal || 1);
+  const goalProgress = Math.min(100, Math.round((sessionsThisWeek / weeklyGoal) * 100));
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Cargando tu espacio manual...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container max-w-6xl py-8">
-      {state === "hub" && (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <Card className="relative overflow-hidden border-none shadow-xl">
-            <div className={cn("absolute inset-0 bg-gradient-to-br", accentStyle.heroGradient)} />
-            <div className={cn("absolute -top-20 right-16 h-56 w-56 rounded-full blur-3xl", accentStyle.heroGlow)} />
-            <CardContent className="relative z-10 flex flex-col gap-6 p-6 md:p-8 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-3">
-                <Badge className={cn("gap-1 border-none", accentStyle.chip)}>
+    <div className="min-h-screen bg-gradient-to-b from-amber-50 via-rose-50/40 to-sky-50/30 pb-16 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10">
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-r from-amber-100/80 via-rose-100/80 to-sky-100/80 shadow-xl dark:from-amber-500/10 dark:via-rose-500/10 dark:to-sky-500/10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.8),transparent_55%)] dark:bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.15),transparent_60%)]" />
+          <CardHeader className="relative space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-3xl font-black tracking-tight">Simulación Manual</CardTitle>
+                <CardDescription className="text-base text-muted-foreground">
+                  Un espacio tipo Notion para registrar sesiones a tu manera: calificaciones, notas, R30 o lo que quieras.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className="gap-1 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
                   <Sparkles className="h-3.5 w-3.5" />
-                  Student Mission Control
+                  Guardado en tu cuenta
                 </Badge>
-                <h1 className="flex items-center gap-2 text-3xl font-black tracking-tight md:text-4xl">
-                  <InfinityIcon className="h-8 w-8 text-primary" />
-                  Simulations Studio
-                  <HelpHint text="This page is your simulation control center: configure, run and review mixed-deck sessions." />
-                </h1>
-                <p className="max-w-2xl text-base text-muted-foreground md:text-lg">
-                  Build your own simulation style, choose which decks to include, and track R-level progression with clearer live feedback.
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="rounded-full border bg-background/80 px-3 py-1">Profile: {PROFILE_PRESETS[profile].label}</span>
-                  <span className="rounded-full border bg-background/80 px-3 py-1">
-                    Intensity: {sampling.minPerDeck}-{sampling.maxPerDeck} cards/deck
-                  </span>
-                  <span className="rounded-full border bg-background/80 px-3 py-1">Session cap: {sampling.sessionCap}</span>
-                </div>
-              </div>
-              <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto">
-                <Button
-                  size="lg"
-                  className={cn("gap-2 border-none bg-gradient-to-r text-white shadow-lg", accentStyle.primaryButton)}
-                  onClick={() => startSimulation("due")}
-                >
-                  <Play className="h-5 w-5 fill-current" />
-                  Run Due Decks
-                  <HelpHint text="Runs a simulation only with due decks (and your current deck filters)." />
-                </Button>
-                <Button size="lg" variant="outline" className="gap-2 bg-background/90" onClick={() => startSimulation("all")}>
-                  <Layers className="h-5 w-5" />
-                  Run Selected Decks
-                  <HelpHint text="Runs a simulation using your current deck selection, even if some are not due." />
+                <Button onClick={handleCreate} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Nueva entrada
                 </Button>
               </div>
-            </CardContent>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                {entries.length} entradas
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <ListChecks className="h-4 w-4" />
+                100% manual y autónomo
+              </span>
+            </div>
+          </CardHeader>
+        </Card>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardDescription className="flex items-center gap-2">
+                <Flame className="h-4 w-4 text-amber-500" />
+                Racha actual
+              </CardDescription>
+              <CardTitle className="text-3xl font-black">{currentStreak} días</CardTitle>
+            </CardHeader>
           </Card>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card className="border-muted/60">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-amber-500" />
-                  Due Decks
-                  <HelpHint text="Decks that should be reviewed now based on next review date or focus status." />
-                </CardDescription>
-                <CardTitle>{dueDecksCount}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-muted/60">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <ShieldAlert className="h-4 w-4 text-red-500" />
-                  Needs Focus
-                  <HelpHint text="Decks currently in recovery mode after recent low performance." />
-                </CardDescription>
-                <CardTitle>{focusDecksCount}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-muted/60">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-green-500" />
-                  Mastered
-                  <HelpHint text="Decks that reached higher intervals and stable retention." />
-                </CardDescription>
-                <CardTitle>{masteredDecksCount}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="border-muted/60">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <BrainCircuit className="h-4 w-4 text-blue-500" />
-                  Cards in Selection
-                  <HelpHint text="Total cards currently included by your deck selection filter." />
-                </CardDescription>
-                <CardTitle>{selectedDeckCards}</CardTitle>
-              </CardHeader>
-            </Card>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    How R-levels work
-                    <HelpHint text="R-level = days until next review. Passing doubles interval; failing sends deck to recovery." />
-                  </CardTitle>
-                  <CardDescription>Simple expansion cycle used by the simulator.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3 text-sm text-muted-foreground md:grid-cols-4">
-                  <div className="rounded-lg border p-3">
-                    <p className="font-semibold text-foreground flex items-center gap-2">R means days <HelpHint text="R30 means 30 days before next review." /></p>
-                    <p>{toReviewLevel(30)} means next review in 30 days.</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="font-semibold text-foreground flex items-center gap-2">Pass threshold <HelpHint text="A deck passes when session accuracy reaches 80% or more." /></p>
-                    <p>Score {EXPANSION_PASS_THRESHOLD}% or higher to pass.</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="font-semibold text-foreground flex items-center gap-2">Pass result <HelpHint text="Passing pushes interval to the next expansion step (x2)." /></p>
-                    <p>{toReviewLevel(30)} {String.fromCharCode(8594)} {toReviewLevel(60)} {String.fromCharCode(8594)} {toReviewLevel(120)} (interval doubles).</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="font-semibold text-foreground flex items-center gap-2">Fail result <HelpHint text="Failing applies a short handbrake interval to recover quickly." /></p>
-                    <p>Handbrake to {toReviewLevel(EXPANSION_HAND_BRAKE_INTERVAL)} for focused recovery.</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm border-muted">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    Deck Expansion Status
-                    <HelpHint text="Main table with current deck level, due status, AI signal and quick access to normal study mode." />
-                  </CardTitle>
-                  <CardDescription>Use Study Deck to open the original study flow for that deck.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-hidden rounded-xl border">
-                    <Table>
-                      <TableHeader className="bg-muted/50">
-                        <TableRow>
-                          <TableHead>Deck</TableHead>
-                          <TableHead>Cards</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Level</TableHead>
-                          <TableHead>Last Score</TableHead>
-                          <TableHead>
-                            <span className="inline-flex items-center gap-1">
-                              AI Signal
-                              <HelpHint text="Optional risk qualification generated by AI Deck Coach." />
-                            </span>
-                          </TableHead>
-                          <TableHead>Next Review</TableHead>
-                          <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {masteryData.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={8} className="py-8 text-center">
-                              No decks available yet.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          masteryData.map((deck) => {
-                            const insight = aiInsights[deck.deck_id];
-                            return (
-                              <TableRow key={deck.deck_id} className={deck.status === "Needs Focus" ? "bg-red-500/5 dark:bg-red-900/10" : ""}>
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center gap-2">
-                                    <Layers className="h-4 w-4 text-muted-foreground" />
-                                    {deck.deck_name}
-                                  </div>
-                                  {insight?.headline ? <p className="mt-1 text-xs text-muted-foreground">{insight.headline}</p> : null}
-                                </TableCell>
-                                <TableCell>{deck.card_count}</TableCell>
-                                <TableCell>{statusBadge(deck.status)}</TableCell>
-                                <TableCell className="font-mono font-bold text-primary">{toReviewLevel(deck.current_interval)}</TableCell>
-                                <TableCell>{deck.last_score > 0 ? `${deck.last_score}%` : "--"}</TableCell>
-                                <TableCell>{insight ? getInsightBadge(insight.tier) : <span className="text-xs text-muted-foreground">Not analyzed</span>}</TableCell>
-                                <TableCell>
-                                  {deck.card_count === 0 ? (
-                                    <span className="text-muted-foreground text-sm">No cards</span>
-                                  ) : deck.isDue ? (
-                                    <span className="text-amber-500 font-semibold text-sm">Due now</span>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm">{format(new Date(deck.next_review_date), "MMM dd, yyyy")}</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="rounded-lg"
-                                    disabled={deck.card_count === 0}
-                                    onClick={() => router.push(`/study/${deck.deck_id}`)}
-                                  >
-                                    Study Deck
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-6">
-              <Card className="border-muted/60">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    Control Console
-                    <HelpHint text="Customize simulation behavior, style and AI assistance before running." />
-                  </CardTitle>
-                  <CardDescription>Tune simulation behavior and visual style.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Tabs value={controlTab} onValueChange={(value) => setControlTab(value as "mission" | "style" | "ai")}>
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="mission">Mission</TabsTrigger>
-                      <TabsTrigger value="style">Style</TabsTrigger>
-                      <TabsTrigger value="ai">AI Coach</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="mission" className="space-y-5 pt-4">
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                          Simulation Profile
-                          <HelpHint text="Preset behavior for card sampling intensity and overall session size." />
-                        </Label>
-                        <Select value={profile} onValueChange={(value) => applyProfile(value as SimulationProfile)}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select profile" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="focus">Focus Recovery</SelectItem>
-                            <SelectItem value="balanced">Balanced Study</SelectItem>
-                            <SelectItem value="sprint">Exam Sprint</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground flex items-center gap-2">
-                          <ProfileIcon className="h-3.5 w-3.5" />
-                          {PROFILE_PRESETS[profile].hint}
-                        </p>
-                      </div>
-
-                      <div className="space-y-4 rounded-lg border p-3">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="inline-flex items-center gap-1">Min cards per deck <HelpHint text="Minimum number of cards each selected deck contributes." /></span>
-                            <span className="font-medium">{sampling.minPerDeck}</span>
-                          </div>
-                          <Slider
-                            min={1}
-                            max={6}
-                            step={1}
-                            value={[sampling.minPerDeck]}
-                            onValueChange={(value) =>
-                              setSampling((prev) => ({
-                                ...prev,
-                                minPerDeck: value[0],
-                                maxPerDeck: Math.max(value[0], prev.maxPerDeck),
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="inline-flex items-center gap-1">Max cards per deck <HelpHint text="Maximum cards taken from each deck in the simulation." /></span>
-                            <span className="font-medium">{sampling.maxPerDeck}</span>
-                          </div>
-                          <Slider
-                            min={sampling.minPerDeck}
-                            max={16}
-                            step={1}
-                            value={[sampling.maxPerDeck]}
-                            onValueChange={(value) =>
-                              setSampling((prev) => ({
-                                ...prev,
-                                maxPerDeck: Math.max(prev.minPerDeck, value[0]),
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="inline-flex items-center gap-1">Session cap <HelpHint text="Global maximum number of cards for the simulation session." /></span>
-                            <span className="font-medium">{sampling.sessionCap}</span>
-                          </div>
-                          <Slider
-                            min={12}
-                            max={96}
-                            step={4}
-                            value={[sampling.sessionCap]}
-                            onValueChange={(value) =>
-                              setSampling((prev) => ({
-                                ...prev,
-                                sessionCap: value[0],
-                              }))
-                            }
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between rounded-lg border p-3">
-                          <div>
-                            <p className="text-sm font-medium inline-flex items-center gap-1">Include mastered decks <HelpHint text="When enabled, mastered decks can still appear in mixed simulations." /></p>
-                            <p className="text-xs text-muted-foreground">Keep strong decks in mixed simulations.</p>
-                          </div>
-                          <Switch checked={includeMastered} onCheckedChange={setIncludeMastered} />
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg border p-3">
-                          <div>
-                            <p className="text-sm font-medium inline-flex items-center gap-1">Live data panel <HelpHint text="Shows running accuracy and projected transitions while studying." /></p>
-                            <p className="text-xs text-muted-foreground">Show live projections while answering cards.</p>
-                          </div>
-                          <Switch checked={showLivePanel} onCheckedChange={setShowLivePanel} />
-                        </div>
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="style" className="space-y-4 pt-4">
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                          <Palette className="h-4 w-4" />
-                          Accent Theme
-                          <HelpHint text="Changes the visual mood of the simulations page." />
-                        </Label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {(Object.keys(ACCENT_STYLES) as AccentTheme[]).map((accent) => (
-                            <button
-                              key={accent}
-                              type="button"
-                              onClick={() => setAccentTheme(accent)}
-                              className={cn(
-                                "rounded-lg border p-2 text-xs font-medium transition-all",
-                                accentTheme === accent ? "border-primary bg-primary/10" : "hover:bg-muted/60",
-                              )}
-                            >
-                              {ACCENT_STYLES[accent].label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg border p-3 text-sm text-muted-foreground">
-                        Theme and profile preferences are saved locally for this browser, so your simulation setup is always ready.
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="ai" className="space-y-4 pt-4">
-                      <Button className="w-full gap-2" onClick={runAiCoach} disabled={isAiRunning || masteryData.length === 0}>
-                        {isAiRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-                        Run AI Deck Coach
-                        <HelpHint text="Analyzes deck risk/priority and suggests next actions. It does not create tests." />
-                      </Button>
-                      <div className="rounded-lg border p-3 text-sm">
-                        {aiSummary || "AI coach qualifies deck risk and recommends what to attack first. It does not generate tests."}
-                      </div>
-                      <div className="space-y-2">
-                        {Object.values(aiInsights)
-                          .sort((a, b) => a.priority - b.priority)
-                          .slice(0, 4)
-                          .map((insight) => (
-                            <div key={insight.deckId} className="rounded-lg border p-3">
-                              <div className="mb-2 flex items-center justify-between">
-                                {getInsightBadge(insight.tier)}
-                                <span className="text-xs text-muted-foreground">P{insight.priority}</span>
-                              </div>
-                              <p className="text-sm font-medium">{insight.nextAction}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">{insight.reason}</p>
-                            </div>
-                          ))}
-                        {Object.keys(aiInsights).length === 0 ? (
-                          <p className="text-xs text-muted-foreground">No AI insights yet.</p>
-                        ) : null}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
-
-              <Card className="border-muted/60">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    Deck Selection
-                    <HelpHint text="Choose exactly which decks are eligible for the next simulation run." />
-                  </CardTitle>
-                  <CardDescription>
-                    {selectedDeckCount > 0
-                      ? `${selectedDeckCount} deck(s) selected • ${selectedDeckCards} cards`
-                      : "No explicit selection: all eligible decks will be used."}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={selectDueDecks}>Select Due <HelpHint text="Keeps only currently due decks selected." /></Button>
-                    <Button variant="outline" size="sm" onClick={selectAllDecksWithCards}>Select All With Cards <HelpHint text="Selects every deck that has at least one card." /></Button>
-                    <Button variant="ghost" size="sm" onClick={clearDeckSelection}>Clear <HelpHint text="Removes manual selection. Simulator will fallback to all eligible decks." /></Button>
-                  </div>
-
-                  <div className="max-h-[280px] space-y-2 overflow-y-auto rounded-lg border p-2">
-                    {masteryData
-                      .filter((deck) => deck.card_count > 0)
-                      .map((deck) => (
-                        <label
-                          key={deck.deck_id}
-                          className="flex cursor-pointer items-center justify-between rounded-md border px-2 py-2 hover:bg-muted/40"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              checked={selectedDeckIds.includes(deck.deck_id)}
-                              onCheckedChange={(checked) => toggleDeckSelection(deck.deck_id, checked === true)}
-                            />
-                            <div>
-                              <p className="text-sm font-medium">{deck.deck_name}</p>
-                              <p className="text-xs text-muted-foreground">{deck.card_count} cards · {toReviewLevel(deck.current_interval)}</p>
-                            </div>
-                          </div>
-                          {deck.isDue ? <Badge className="bg-amber-500/10 text-amber-700 border-none">Due</Badge> : null}
-                        </label>
-                      ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardDescription className="flex items-center gap-2">
+                <Timer className="h-4 w-4 text-sky-500" />
+                Sesiones últimos 7 días
+              </CardDescription>
+              <CardTitle className="text-3xl font-black">{sessionsThisWeek}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardDescription className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Calificación media
+              </CardDescription>
+              <CardTitle className="text-3xl font-black">{averageRating ? averageRating.toFixed(1) : "—"}</CardTitle>
+              <CardDescription className="text-xs">Solo valores numéricos</CardDescription>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardDescription className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-rose-500" />
+                Última sesión
+              </CardDescription>
+              <CardTitle className="text-2xl font-black">{lastSessionDate ?? "—"}</CardTitle>
+            </CardHeader>
+          </Card>
         </div>
-      )}
 
-      {state === "loading_cards" && (
-        <div className="flex h-[60vh] flex-col items-center justify-center gap-6">
-          <Loader2 className="h-16 w-16 animate-spin text-primary" />
-          <h2 className="text-2xl font-bold">Building your simulation...</h2>
-          <p className="text-muted-foreground">Balancing cards across selected decks.</p>
-        </div>
-      )}
-
-      {state === "studying" && cards.length > 0 && (
-        <div className="mx-auto max-w-5xl animate-in slide-in-from-bottom-8 py-4 duration-500">
-          <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-            <div>
-              <div className="mb-8 space-y-4">
-                <div className="flex items-center justify-between text-sm font-medium">
-                  <Badge variant="outline" className="rounded-full border-primary/30 bg-primary/5 px-3 py-1 text-primary">
-                    Deck: {cards[currentIndex].deck_name}
-                  </Badge>
-                  <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
-                    {currentIndex + 1} / {cards.length}
-                  </span>
+        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Objetivo semanal
+                </CardTitle>
+                <CardDescription>Define tu meta y observa el progreso.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Sesiones por semana</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={profile.weeklyGoal}
+                    onChange={(event) =>
+                      setProfile((prev) => ({
+                        ...prev,
+                        weeklyGoal: Number(event.target.value),
+                      }))
+                    }
+                  />
                 </div>
-                <Progress value={(currentIndex / cards.length) * 100} className="h-2 rounded-full" />
-              </div>
-
-              <div className="h-[380px] w-full cursor-pointer" onClick={() => !isFlipped && setIsFlipped(true)}>
-                {!isFlipped ? (
-                  <Card className="flex h-full flex-col items-center justify-center border-primary/20 p-8 shadow-xl transition-colors hover:border-primary/50">
-                    <p className="text-center text-3xl font-medium leading-relaxed">{cards[currentIndex].front}</p>
-                    <p className="absolute bottom-8 text-sm text-muted-foreground">Click to reveal answer</p>
-                  </Card>
-                ) : (
-                  <Card className="flex h-full flex-col items-center justify-center border-primary/20 p-8 shadow-xl animate-in fade-in zoom-in-95 duration-300">
-                    <div className="flex w-full flex-1 flex-col items-center justify-center">
-                      <p className="mb-6 w-full max-w-lg border-b pb-6 text-center text-xl text-muted-foreground">{cards[currentIndex].front}</p>
-                      <p className="text-center text-3xl font-bold leading-relaxed text-primary">{cards[currentIndex].back}</p>
-                    </div>
-                  </Card>
-                )}
-              </div>
-
-              <div className={`mt-8 grid grid-cols-4 gap-3 transition-opacity duration-300 ${isFlipped ? "opacity-100" : "pointer-events-none opacity-0"}`}>
-                <Button variant="outline" className="h-16 flex-col gap-1 border-red-200 hover:bg-red-50 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleRate(1); }}>
-                  <X className="h-5 w-5" />
-                  <span className="font-semibold inline-flex items-center gap-1">Again <HelpHint text="You did not recall it. Card counts as incorrect for this simulation." /></span>
-                </Button>
-                <Button variant="outline" className="h-16 flex-col gap-1 border-orange-200 hover:bg-orange-50 hover:text-orange-600" onClick={(e) => { e.stopPropagation(); handleRate(2); }}>
-                  <Target className="h-5 w-5" />
-                  <span className="font-semibold inline-flex items-center gap-1">Hard <HelpHint text="You recalled with difficulty. Counts as not passed for deck scoring." /></span>
-                </Button>
-                <Button variant="outline" className="h-16 flex-col gap-1 border-green-200 hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); handleRate(3); }}>
-                  <Check className="h-5 w-5" />
-                  <span className="font-semibold inline-flex items-center gap-1">Good <HelpHint text="Correct recall. Counts as success for deck accuracy." /></span>
-                </Button>
-                <Button variant="outline" className="h-16 flex-col gap-1 border-blue-200 hover:bg-blue-50 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); handleRate(4); }}>
-                  <BookOpenCheck className="h-5 w-5" />
-                  <span className="font-semibold inline-flex items-center gap-1">Easy <HelpHint text="Strong and fast recall. Also counts as success." /></span>
-                </Button>
-              </div>
-            </div>
-
-            {showLivePanel ? (
-              <Card className="h-fit">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    Live Session Data
-                    <HelpHint text="Real-time metrics before finishing the session." />
-                  </CardTitle>
-                  <CardDescription>
-                    Progress updates instantly while you answer cards.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">Cards Reviewed <HelpHint text="How many cards you have already rated in this simulation." /></p>
-                      <p className="text-2xl font-bold">{liveReviewedCards}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">Current Accuracy <HelpHint text="Based on Good/Easy as successful recalls." /></p>
-                      <p className="text-2xl font-bold">{liveAccuracy}%</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1">Pass Target <HelpHint text="Minimum accuracy required for a deck to pass the expansion step." /></p>
-                      <p className="text-2xl font-bold">{EXPANSION_PASS_THRESHOLD}%</p>
-                    </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Progreso</span>
+                    <span>
+                      {sessionsThisWeek}/{weeklyGoal}
+                    </span>
                   </div>
+                  <Progress value={goalProgress} className="h-2" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Enfoque de la semana</Label>
+                  <Input
+                    value={profile.focusArea}
+                    onChange={(event) => setProfile((prev) => ({ ...prev, focusArea: event.target.value }))}
+                    placeholder="Ej. Anatomía, verbos irregulares, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ritual / Preparación</Label>
+                  <Textarea
+                    rows={3}
+                    value={profile.ritual}
+                    onChange={(event) => setProfile((prev) => ({ ...prev, ritual: event.target.value }))}
+                    placeholder="Ej. 10 min de repaso, agua, temporizador 25/5."
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {profileSaving ? "Guardando objetivo..." : "Guardado automático en tu cuenta"}
+                </div>
+              </CardContent>
+            </Card>
 
-                  {liveDeckRows.length === 0 ? (
-                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                      Rate at least one card to see per-deck projections.
-                    </p>
+            <Card className="h-fit">
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-lg">Tu base personal</CardTitle>
+                <CardDescription>Filtra, busca y elige qué editar.</CardDescription>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Buscar por título, notas, R30…"
+                    className="pl-9"
+                  />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {filteredEntries.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    Aún no hay entradas. Crea una para empezar tu sistema manual.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredEntries.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => setActiveId(entry.id)}
+                        className={cn(
+                          "w-full rounded-lg border px-3 py-3 text-left transition hover:bg-muted/40",
+                          activeId === entry.id ? "border-primary/60 bg-primary/5" : "border-border/60",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold">{entry.title.trim() ? entry.title : "Sin título"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {entry.sessionDate ? `Fecha: ${entry.sessionDate}` : "Sin fecha"}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            {entry.rating ? (
+                              <Badge variant="secondary" className="gap-1">
+                                <Star className="h-3 w-3" />
+                                {entry.rating}
+                              </Badge>
+                            ) : null}
+                            {entry.rLevel ? (
+                              <Badge className="bg-sky-500/10 text-sky-700 dark:text-sky-300">{entry.rLevel}</Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                        {entry.tags.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {entry.tags.slice(0, 3).map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-[10px]">
+                                {tag}
+                              </Badge>
+                            ))}
+                            {entry.tags.length > 3 ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                +{entry.tags.length - 3}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  Señales rápidas
+                </CardTitle>
+                <CardDescription>Etiquetas y R-level más usados.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Top etiquetas</p>
+                  {tagStats.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aún sin etiquetas.</p>
                   ) : (
-                    <div className="max-h-[300px] overflow-y-auto rounded-lg border">
-                      <Table>
-                        <TableHeader className="bg-muted/50">
-                          <TableRow>
-                            <TableHead>Deck</TableHead>
-                            <TableHead>Accuracy</TableHead>
-                            <TableHead>
-                              <span className="inline-flex items-center gap-1">
-                                Projection
-                                <HelpHint text="Predicted R-level transition if session ended now." />
-                              </span>
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {liveDeckRows.map((row) => (
-                            <TableRow key={row.deckId}>
-                              <TableCell className="font-medium">{row.name}</TableCell>
-                              <TableCell>{row.accuracy}%</TableCell>
-                              <TableCell className="font-mono">
-                                {toReviewLevel(row.previousInterval)} {String.fromCharCode(8594)} {toReviewLevel(row.projectedInterval)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                    <div className="flex flex-wrap gap-2">
+                      {tagStats.map(([tag, count]) => (
+                        <Badge key={tag} variant="secondary" className="gap-1">
+                          {tag}
+                          <span className="text-[10px] text-muted-foreground">{count}</span>
+                        </Badge>
+                      ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            ) : null}
-          </div>
-        </div>
-      )}
-
-      {state === "results" && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8">
-          <div className="space-y-3 py-6 text-center">
-            <div className="mb-2 inline-flex rounded-full bg-primary/10 p-4">
-              {savingResults ? <Loader2 className="h-12 w-12 animate-spin text-primary" /> : <Check className="h-12 w-12 text-primary" />}
-            </div>
-            <h1 className="text-4xl font-black">Simulation completed</h1>
-            <p className="text-lg text-muted-foreground">
-              {savingResults ? "Saving Expansion Cycle updates..." : "Your R-level transitions are ready."}
-            </p>
-          </div>
-
-          <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
-            {Object.entries(sessionResults).map(([deckId, result]) => {
-              if (result.total === 0) {
-                return null;
-              }
-
-              const percentage = Math.round((result.score / result.total) * 100);
-              const passed = percentage >= EXPANSION_PASS_THRESHOLD;
-              const outcome = outcomeByDeck[deckId];
-
-              return (
-                <Card key={deckId} className={`overflow-hidden border-2 ${passed ? "border-green-500/20" : "border-red-500/20"}`}>
-                  <div className={`p-4 ${passed ? "bg-green-50 dark:bg-green-950/20" : "bg-red-50 dark:bg-red-950/20"}`}>
-                    <h3 className="mb-2 truncate text-lg font-bold">{result.name}</h3>
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <p className="text-3xl font-black">
-                          {percentage}% <span className="text-base font-normal text-muted-foreground">accuracy</span>
-                        </p>
-                        <p className="text-sm text-muted-foreground">{result.score}/{result.total} cards rated Good/Easy</p>
-                      </div>
-                      <Badge className={passed ? "bg-green-600 text-white" : "bg-red-600 text-white"}>
-                        {passed ? "Pass" : "Fail"}
-                      </Badge>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">R-level</p>
+                  {rLevelStats.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aún sin R-levels.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {rLevelStats.map(([level, count]) => (
+                        <Badge key={level} className="bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
+                          {level} · {count}
+                        </Badge>
+                      ))}
                     </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-                    <div className="mt-4 space-y-2 text-sm">
-                      <div className="flex items-center gap-2 text-foreground">
-                        <span className="font-semibold">Transition:</span>
-                        <span className="font-mono">{toReviewLevel(outcome?.previousInterval ?? result.previousInterval)}</span>
-                        <ChevronsRight className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-mono">{toReviewLevel(outcome?.newInterval ?? (passed ? result.previousInterval * 2 || EXPANSION_INITIAL_INTERVAL : EXPANSION_HAND_BRAKE_INTERVAL))}</span>
-                      </div>
-                      <p className="text-muted-foreground">
-                        Status: {outcome?.previousStatus ?? result.previousStatus} {String.fromCharCode(8594)} {outcome?.newStatus ?? (passed ? "Reviewing" : "Needs Focus")}
-                      </p>
-                      {outcome?.nextReviewDate ? (
-                        <p className="text-muted-foreground">Next review: {format(new Date(outcome.nextReviewDate), "MMM dd, yyyy")}</p>
-                      ) : (
-                        <p className="text-muted-foreground">Next review date will sync after save.</p>
-                      )}
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <PencilLine className="h-4 w-4" />
+                Editor manual
+              </CardTitle>
+              <CardDescription>Todo se guarda en tu cuenta. Ajusta el contenido como quieras.</CardDescription>
+              {activeEntry ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {activeSaveState === "saving"
+                      ? "Guardando cambios..."
+                      : activeSaveState === "error"
+                      ? "Error al guardar"
+                      : "Guardado"}
+                  </span>
+                  <span>·</span>
+                  <span>Última edición: {new Date(activeEntry.updatedAt).toLocaleString()}</span>
+                </div>
+              ) : null}
+            </CardHeader>
+            <CardContent>
+              {!activeEntry ? (
+                <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                  Selecciona una entrada para editarla o crea una nueva.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Título</Label>
+                      <Input
+                        value={activeEntry.title}
+                        onChange={(event) =>
+                          updateEntry(activeEntry.id, (entry) => ({
+                            ...entry,
+                            title: event.target.value,
+                          }))
+                        }
+                        placeholder="Ej. Sesión de Biología - Repaso final"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <CalendarClock className="h-4 w-4" />
+                        Fecha
+                      </Label>
+                      <Input
+                        type="date"
+                        value={activeEntry.sessionDate}
+                        onChange={(event) =>
+                          updateEntry(activeEntry.id, (entry) => ({
+                            ...entry,
+                            sessionDate: event.target.value,
+                          }))
+                        }
+                      />
                     </div>
                   </div>
-                </Card>
-              );
-            })}
-          </div>
 
-          <div className="flex justify-center pt-8">
-            <Button size="lg" disabled={savingResults} onClick={() => setState("hub")} className="h-14 rounded-xl px-10 text-lg">
-              {savingResults ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <RotateCcw className="mr-2 h-5 w-5" />}
-              Back to simulator hub
-            </Button>
-          </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Calificación</Label>
+                      <Input
+                        value={activeEntry.rating}
+                        onChange={(event) =>
+                          updateEntry(activeEntry.id, (entry) => ({
+                            ...entry,
+                            rating: event.target.value,
+                          }))
+                        }
+                        placeholder="Ej. 4/5, A, 85%"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        {"12345".split("").map((value) => (
+                          <Button
+                            key={value}
+                            type="button"
+                            size="sm"
+                            variant={activeEntry.rating === value ? "default" : "outline"}
+                            onClick={() =>
+                              updateEntry(activeEntry.id, (entry) => ({
+                                ...entry,
+                                rating: value,
+                              }))
+                            }
+                          >
+                            {value}
+                          </Button>
+                        ))}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            updateEntry(activeEntry.id, (entry) => ({
+                              ...entry,
+                              rating: "",
+                            }))
+                          }
+                        >
+                          Limpiar
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>R-level / R30 / Nivel</Label>
+                      <Input
+                        value={activeEntry.rLevel}
+                        onChange={(event) =>
+                          updateEntry(activeEntry.id, (entry) => ({
+                            ...entry,
+                            rLevel: event.target.value,
+                          }))
+                        }
+                        placeholder="Ej. R30, R60, Nivel 2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Tag className="h-4 w-4" />
+                      Etiquetas
+                    </Label>
+                    <Input
+                      value={activeEntry.tags.join(", ")}
+                      onChange={(event) =>
+                        updateEntry(activeEntry.id, (entry) => ({
+                          ...entry,
+                          tags: event.target.value
+                            .split(",")
+                            .map((tag) => tag.trim())
+                            .filter(Boolean),
+                        }))
+                      }
+                      placeholder="Ej. biología, examen, focus"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Notas libres</Label>
+                    <Textarea
+                      value={activeEntry.notes}
+                      onChange={(event) =>
+                        updateEntry(activeEntry.id, (entry) => ({
+                          ...entry,
+                          notes: event.target.value,
+                        }))
+                      }
+                      placeholder="Escribe tus observaciones, recordatorios o próximos pasos."
+                      rows={6}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold">Campos personalizados</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Agrega tus propios campos tipo Notion: R30, tiempo, esfuerzo, etc.
+                        </p>
+                      </div>
+                      <Button type="button" size="sm" onClick={() => handleAddField(activeEntry.id)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Nuevo campo
+                      </Button>
+                    </div>
+
+                    {activeEntry.fields.length === 0 ? (
+                      <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                        No hay campos personalizados. Añade uno para comenzar.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {activeEntry.fields.map((field) => (
+                          <div key={field.id} className="grid gap-2 md:grid-cols-[1fr_1.5fr_auto]">
+                            <Input
+                              value={field.label}
+                              onChange={(event) => handleUpdateField(activeEntry.id, field.id, { label: event.target.value })}
+                              placeholder="Nombre del campo"
+                            />
+                            <Input
+                              value={field.value}
+                              onChange={(event) => handleUpdateField(activeEntry.id, field.id, { value: event.target.value })}
+                              placeholder="Valor"
+                            />
+                            <Button type="button" variant="ghost" size="icon" onClick={() => handleDeleteField(activeEntry.id, field.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      {QUICK_FIELDS.map((label) => (
+                        <Button key={label} type="button" size="sm" variant="outline" onClick={() => handleAddField(activeEntry.id, label)}>
+                          + {label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-muted-foreground">
+                      Última edición: {new Date(activeEntry.updatedAt).toLocaleString()}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(activeEntry.id)}
+                      className="gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Eliminar entrada
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      )}
+      </div>
     </div>
   );
 }
